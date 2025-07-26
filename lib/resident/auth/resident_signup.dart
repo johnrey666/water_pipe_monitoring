@@ -1,17 +1,28 @@
 import 'package:flutter/material.dart';
 
-class ResidentSignupPage extends StatelessWidget {
+class ResidentSignupPage extends StatefulWidget {
   const ResidentSignupPage({super.key});
+
+  @override
+  State<ResidentSignupPage> createState() => _ResidentSignupPageState();
+}
+
+class _ResidentSignupPageState extends State<ResidentSignupPage> {
+  bool _passwordVisible = false;
+  bool _confirmPasswordVisible = false;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
         children: [
-          const Positioned(
+          Positioned(
             top: 40,
             left: 16,
-            child: BackButtonStyled(),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),
+              onPressed: () => Navigator.pop(context), // Go back to login
+            ),
           ),
           Center(
             child: SingleChildScrollView(
@@ -21,10 +32,14 @@ class ResidentSignupPage extends StatelessWidget {
                 children: [
                   const Icon(Icons.group_outlined,
                       size: 80, color: Colors.deepPurple),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   const Text(
                     'Resident Sign Up',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
                   ),
                   const SizedBox(height: 32),
                   const TextField(
@@ -32,28 +47,69 @@ class ResidentSignupPage extends StatelessWidget {
                       prefixIcon: Icon(Icons.person_outline),
                       hintText: 'Full Name',
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
-                      ),
+                          borderRadius: BorderRadius.all(Radius.circular(12))),
                     ),
                   ),
                   const SizedBox(height: 16),
                   const TextField(
+                    decoration: InputDecoration(
+                      prefixIcon: Icon(Icons.location_on_outlined),
+                      hintText: 'Address',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(12))),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const TextField(
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      prefixIcon: Icon(Icons.phone_outlined),
+                      hintText: 'Contact Number',
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(12))),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const TextField(
+                    keyboardType: TextInputType.emailAddress,
                     decoration: InputDecoration(
                       prefixIcon: Icon(Icons.email_outlined),
                       hintText: 'Email Address',
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                          borderRadius: BorderRadius.all(Radius.circular(12))),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    obscureText: !_passwordVisible,
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      hintText: 'Password',
+                      border: const OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(12))),
+                      suffixIcon: IconButton(
+                        icon: Icon(_passwordVisible
+                            ? Icons.visibility
+                            : Icons.visibility_off),
+                        onPressed: () => setState(
+                            () => _passwordVisible = !_passwordVisible),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const TextField(
-                    obscureText: true,
+                  TextField(
+                    obscureText: !_confirmPasswordVisible,
                     decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.lock_outline),
-                      hintText: 'Password',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      hintText: 'Confirm Password',
+                      border: const OutlineInputBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(12))),
+                      suffixIcon: IconButton(
+                        icon: Icon(_confirmPasswordVisible
+                            ? Icons.visibility
+                            : Icons.visibility_off),
+                        onPressed: () => setState(() =>
+                            _confirmPasswordVisible = !_confirmPasswordVisible),
                       ),
                     ),
                   ),
@@ -65,12 +121,13 @@ class ResidentSignupPage extends StatelessWidget {
                           color: Colors.white),
                       label: const Text('Sign Up',
                           style: TextStyle(color: Colors.white)),
-                      onPressed: () {},
+                      onPressed: () {
+                        // handle sign up
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.black,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                            borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                     ),
@@ -81,18 +138,6 @@ class ResidentSignupPage extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class BackButtonStyled extends StatelessWidget {
-  const BackButtonStyled({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),
-      onPressed: () => Navigator.pop(context),
     );
   }
 }
