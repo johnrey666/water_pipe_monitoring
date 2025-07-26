@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "911247332711",
+    "project_id": "water-piping",
+    "storage_bucket": "water-piping.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:911247332711:android:725df71a9470ea9dda0bc2",
+        "android_client_info": {
+          "package_name": "com.example.water_pipe_monitoring"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6O7zuCyFvbT3V3VkOWYKxJ2_eBeBuzp0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,8 +1,41 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'plumber_signup.dart';
+import '../plumber_home.dart';
 
-class PlumberLoginPage extends StatelessWidget {
+class PlumberLoginPage extends StatefulWidget {
   const PlumberLoginPage({super.key});
+
+  @override
+  State<PlumberLoginPage> createState() => _PlumberLoginPageState();
+}
+
+class _PlumberLoginPageState extends State<PlumberLoginPage> {
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+
+  bool isLoading = false;
+
+  Future<void> _login() async {
+    setState(() => isLoading = true);
+
+    try {
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: emailController.text.trim(),
+        password: passwordController.text.trim(),
+      );
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const PlumberHomePage()),
+      );
+    } on FirebaseAuthException catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? 'Login failed')),
+      );
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,8 +60,9 @@ class PlumberLoginPage extends StatelessWidget {
                     style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 32),
-                  const TextField(
-                    decoration: InputDecoration(
+                  TextField(
+                    controller: emailController,
+                    decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.email_outlined),
                       hintText: 'Email Address',
                       border: OutlineInputBorder(
@@ -37,9 +71,10 @@ class PlumberLoginPage extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const TextField(
+                  TextField(
+                    controller: passwordController,
                     obscureText: true,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       prefixIcon: Icon(Icons.lock_outline),
                       hintText: 'Password',
                       border: OutlineInputBorder(
@@ -52,9 +87,13 @@ class PlumberLoginPage extends StatelessWidget {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.login, color: Colors.white),
-                      label: const Text('Log In',
-                          style: TextStyle(color: Colors.white)),
-                      onPressed: () {},
+                      label: isLoading
+                          ? const CircularProgressIndicator(
+                              color: Colors.white,
+                            )
+                          : const Text('Log In',
+                              style: TextStyle(color: Colors.white)),
+                      onPressed: isLoading ? null : _login,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.black,
                         shape: RoundedRectangleBorder(
@@ -68,9 +107,10 @@ class PlumberLoginPage extends StatelessWidget {
                   TextButton(
                     onPressed: () {
                       Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const PlumberSignupPage()));
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const PlumberSignupPage()),
+                      );
                     },
                     child:
                         const Text('Sign Up', style: TextStyle(fontSize: 16)),

@@ -1,4 +1,7 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class PlumberSignupPage extends StatefulWidget {
   const PlumberSignupPage({super.key});
@@ -8,147 +11,172 @@ class PlumberSignupPage extends StatefulWidget {
 }
 
 class _PlumberSignupPageState extends State<PlumberSignupPage> {
+  final _auth = FirebaseAuth.instance;
+  final _firestore = FirebaseFirestore.instance;
+
+  final _fullNameController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _contactController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+
   bool _passwordVisible = false;
   bool _confirmPasswordVisible = false;
+  bool _loading = false;
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  void _signUp() async {
+    final name = _fullNameController.text.trim();
+    final address = _addressController.text.trim();
+    final contact = _contactController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final confirmPassword = _confirmPasswordController.text;
+
+    if (name.isEmpty ||
+        address.isEmpty ||
+        contact.isEmpty ||
+        email.isEmpty ||
+        password.isEmpty ||
+        confirmPassword.isEmpty) {
+      _showSnackBar('Please fill all fields');
+      return;
+    }
+
+    if (password != confirmPassword) {
+      _showSnackBar('Passwords do not match');
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    try {
+      final userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      await _firestore.collection('users').doc(userCredential.user!.uid).set({
+        'fullName': name,
+        'address': address,
+        'contactNumber': contact,
+        'email': email,
+        'role': 'plumber',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      _showSnackBar('Signup successful!');
+      Navigator.pop(context);
+    } on FirebaseAuthException catch (e) {
+      _showSnackBar(e.message ?? 'Signup failed');
+    } finally {
+      setState(() => _loading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          // Back Button at the top
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),
-                onPressed: () => Navigator.pop(context),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(''),
+        elevation: 0,
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Plumber Sign Up',
+                style: GoogleFonts.poppins(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-            ),
-          ),
-
-          // Form Centered
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.plumbing_outlined,
-                      size: 80, color: Colors.teal),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Plumber Sign Up',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              const SizedBox(height: 32),
+              _buildTextField(_fullNameController, 'Full Name', Icons.person),
+              _buildTextField(_addressController, 'Address', Icons.home),
+              _buildTextField(
+                  _contactController, 'Contact Number', Icons.phone),
+              _buildTextField(_emailController, 'Email', Icons.email,
+                  keyboardType: TextInputType.emailAddress),
+              const SizedBox(height: 16),
+              _buildPasswordField(
+                  _passwordController, 'Password', _passwordVisible, () {
+                setState(() => _passwordVisible = !_passwordVisible);
+              }),
+              _buildPasswordField(_confirmPasswordController,
+                  'Confirm Password', _confirmPasswordVisible, () {
+                setState(
+                    () => _confirmPasswordVisible = !_confirmPasswordVisible);
+              }),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _loading ? null : _signUp,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.black,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                   ),
-                  const SizedBox(height: 32),
-
-                  // Full Name
-                  const TextField(
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.person_outline),
-                      hintText: 'Full Name',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12))),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Address
-                  const TextField(
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.location_on_outlined),
-                      hintText: 'Address',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12))),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Contact Number
-                  const TextField(
-                    keyboardType: TextInputType.phone,
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.phone_outlined),
-                      hintText: 'Contact Number',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12))),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Email Address
-                  const TextField(
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.email_outlined),
-                      hintText: 'Email Address',
-                      border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12))),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Password
-                  TextField(
-                    obscureText: !_passwordVisible,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      hintText: 'Password',
-                      border: const OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12))),
-                      suffixIcon: IconButton(
-                        icon: Icon(_passwordVisible
-                            ? Icons.visibility
-                            : Icons.visibility_off),
-                        onPressed: () => setState(
-                            () => _passwordVisible = !_passwordVisible),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Confirm Password
-                  TextField(
-                    obscureText: !_confirmPasswordVisible,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      hintText: 'Confirm Password',
-                      border: const OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(12))),
-                      suffixIcon: IconButton(
-                        icon: Icon(_confirmPasswordVisible
-                            ? Icons.visibility
-                            : Icons.visibility_off),
-                        onPressed: () => setState(() =>
-                            _confirmPasswordVisible = !_confirmPasswordVisible),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Sign Up Button
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.person_add_alt_1,
-                          color: Colors.white),
-                      label: const Text('Sign Up',
-                          style: TextStyle(color: Colors.white)),
-                      onPressed: () {},
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.teal,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                    ),
-                  ),
-                ],
+                  child: _loading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text('Sign Up', style: TextStyle(fontSize: 16)),
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(
+      TextEditingController controller, String label, IconData icon,
+      {TextInputType keyboardType = TextInputType.text}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPasswordField(TextEditingController controller, String label,
+      bool isVisible, VoidCallback toggleVisibility) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: TextField(
+        controller: controller,
+        obscureText: !isVisible,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: const Icon(Icons.lock),
+          suffixIcon: IconButton(
+            icon: Icon(isVisible ? Icons.visibility : Icons.visibility_off),
+            onPressed: toggleVisibility,
+          ),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
       ),
     );
   }
