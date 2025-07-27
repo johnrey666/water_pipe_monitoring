@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'plumber_signup.dart';
 import '../plumber_home.dart';
+import '../../landing_page.dart';
 
 class PlumberLoginPage extends StatefulWidget {
   const PlumberLoginPage({super.key});
@@ -131,8 +132,12 @@ class BackButtonStyled extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),
-      onPressed: () => Navigator.pop(context),
-    );
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),
+        onPressed: () {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LandingPage()),
+          );
+        });
   }
 }

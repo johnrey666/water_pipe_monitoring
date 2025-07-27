@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'resident_signup.dart';
 import '../resident_home.dart';
+import '../../landing_page.dart';
 
 class ResidentLoginPage extends StatefulWidget {
   const ResidentLoginPage({super.key});
@@ -116,8 +117,8 @@ class _ResidentLoginPageState extends State<ResidentLoginPage> {
                             builder: (_) => const ResidentSignupPage()),
                       );
                     },
-                    child: const Text('Sign Up',
-                        style: TextStyle(fontSize: 16)),
+                    child:
+                        const Text('Sign Up', style: TextStyle(fontSize: 16)),
                   ),
                 ],
               ),
@@ -135,8 +136,12 @@ class BackButtonStyled extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),
-      onPressed: () => Navigator.pop(context),
-    );
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),
+        onPressed: () {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const LandingPage()),
+          );
+        });
   }
 }
