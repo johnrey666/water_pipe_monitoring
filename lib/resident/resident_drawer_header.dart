@@ -1,28 +1,62 @@
 import 'package:flutter/material.dart';
 
 class ResidentDrawerHeader extends StatelessWidget {
-  const ResidentDrawerHeader({super.key});
+  const ResidentDrawerHeader({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
       decoration: const BoxDecoration(
-        color: Color(0xFF4A2C6F),
+        gradient: LinearGradient(
+          colors: [Color(0xFF6E4A9E), Color(0xFF4A2C6F)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: BorderRadius.only(
-          topRight: Radius.circular(12),
+          bottomRight: Radius.circular(24),
         ),
       ),
-      child: const Row(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(Icons.account_circle, color: Colors.white, size: 50),
-          SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Hello, Resident!',
-              style: TextStyle(color: Colors.white, fontSize: 20),
+          CircleAvatar(
+            radius: 28,
+            backgroundColor: Colors.white.withOpacity(0.15),
+            child: const Icon(
+              Icons.person,
+              size: 30,
+              color: Colors.white,
             ),
           ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Welcome,',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Resident User',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_left, color: Colors.white70),
         ],
       ),
     );

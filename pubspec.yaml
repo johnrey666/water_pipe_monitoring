@@ -48,7 +48,9 @@ dependencies:
   flutter_map: ^7.0.2
   http: ^1.2.2
   latlong2: ^0.9.1
-
+  flutter_blur: 0.0.2
+  percent_indicator: ^4.2.5
+  
 dev_dependencies:
   flutter_test:
     sdk: flutter
