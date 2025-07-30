@@ -160,6 +160,34 @@ class ReportDetailsModal extends StatefulWidget {
 
 class _ReportDetailsModalState extends State<ReportDetailsModal> {
   bool _showLocation = false;
+  bool _isUpdating = false;
+
+  Future<void> _updateStatus(String newStatus) async {
+    if (_isUpdating) return;
+
+    setState(() {
+      _isUpdating = true;
+    });
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('reports')
+          .doc(widget.report.id)
+          .update({'status': newStatus});
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Report status updated to $newStatus')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error updating status: $e')),
+      );
+    } finally {
+      setState(() {
+        _isUpdating = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -170,6 +198,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
     final dateTime = widget.report['dateTime']?.toDate();
     final location = widget.report['location'];
     final imageBase64 = widget.report['image'];
+    final currentStatus = widget.report['status'] ?? 'Unfixed Reports';
 
     final formattedDate = dateTime != null
         ? DateFormat.yMMMd().add_jm().format(dateTime)
@@ -294,7 +323,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                   });
                 },
                 child: Text(
-                  "View Location",
+                  _showLocation ? "Hide Location" : "View Location",
                   style: TextStyle(
                     fontSize: 13,
                     color: const Color(0xFF4A2C6F),
@@ -362,30 +391,93 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                 ),
               ),
               const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.center,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4A2C6F),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed:
+                        _isUpdating ? null : () => _updateStatus('Monitored'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2F8E2F),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      minimumSize: const Size(120, 40),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 10,
-                    ),
-                    minimumSize: const Size(120, 40),
+                    child: _isUpdating
+                        ? const CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          )
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (currentStatus == 'Monitored')
+                                const Icon(
+                                  Icons.check_circle,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
+                              if (currentStatus == 'Monitored')
+                                const SizedBox(width: 6),
+                              const Text(
+                                "Monitoring",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
-                  child: const Text(
-                    "Close",
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
+                  const SizedBox(width: 12),
+                  ElevatedButton(
+                    onPressed:
+                        _isUpdating ? null : () => _updateStatus('Fixed'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF0288D1),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
+                      minimumSize: const Size(120, 40),
                     ),
+                    child: _isUpdating
+                        ? const CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          )
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (currentStatus == 'Fixed')
+                                const Icon(
+                                  Icons.check_circle,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
+                              if (currentStatus == 'Fixed')
+                                const SizedBox(width: 6),
+                              const Text(
+                                "Fixed",
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
-                ),
+                ],
               ),
             ],
           ),

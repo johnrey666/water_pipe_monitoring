@@ -200,6 +200,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         'placeName': _selectedPlaceName ?? 'Unknown location',
         'dateTime': Timestamp.fromDate(_selectedDateTime!),
         'createdAt': Timestamp.now(),
+        'status': 'Unfixed Reports', // Set default status
       };
 
       // Optionally include base64 image
@@ -379,6 +380,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
@@ -387,7 +389,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(
@@ -398,52 +400,76 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Report a Water Issue',
-                            style: TextStyle(
-                                fontSize: 24, fontWeight: FontWeight.w600)),
+                        const Text(
+                          'Report a Water Issue',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Please provide details below:',
+                          style: TextStyle(fontSize: 13, color: Colors.black54),
+                        ),
                         const SizedBox(height: 16),
-                        const Text('Please provide details below:',
-                            style:
-                                TextStyle(fontSize: 16, color: Colors.black54)),
-                        const SizedBox(height: 20),
                         TextFormField(
                           controller: _issueController,
                           decoration: const InputDecoration(
                             labelText: 'Issue Description *',
-                            border: OutlineInputBorder(),
+                            border: OutlineInputBorder(
+                              borderRadius:
+                                  BorderRadius.all(Radius.circular(8)),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
                           ),
+                          style: const TextStyle(fontSize: 13),
                           validator: (value) =>
                               value?.isEmpty ?? true ? 'Required' : null,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         TextFormField(
                           readOnly: true,
                           controller: _locationController,
                           decoration: const InputDecoration(
                             labelText: 'Location *',
-                            border: OutlineInputBorder(),
-                            suffixIcon: Icon(Icons.map),
+                            border: OutlineInputBorder(
+                              borderRadius:
+                                  BorderRadius.all(Radius.circular(8)),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            suffixIcon: Icon(Icons.map, size: 20),
                             hintText: 'Tap to select or search location',
                           ),
+                          style: const TextStyle(fontSize: 13),
                           onTap: _openMapPicker,
                           validator: (value) =>
                               _selectedLocation == null ? 'Required' : null,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         TextFormField(
                           readOnly: true,
                           controller: _dateTimeController,
                           decoration: const InputDecoration(
                             labelText: 'Date & Time *',
-                            border: OutlineInputBorder(),
-                            suffixIcon: Icon(Icons.calendar_today),
+                            border: OutlineInputBorder(
+                              borderRadius:
+                                  BorderRadius.all(Radius.circular(8)),
+                            ),
+                            contentPadding: EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            suffixIcon: Icon(Icons.calendar_today, size: 20),
                             hintText: 'Tap to select date and time',
                           ),
+                          style: const TextStyle(fontSize: 13),
                           onTap: _selectDateTime,
                           validator: (value) =>
                               _selectedDateTime == null ? 'Required' : null,
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
                         Row(
                           children: [
                             Expanded(
@@ -451,9 +477,15 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                                 readOnly: true,
                                 decoration: const InputDecoration(
                                   labelText: 'Upload Image (Optional)',
-                                  border: OutlineInputBorder(),
-                                  suffixIcon: Icon(Icons.image),
+                                  border: OutlineInputBorder(
+                                    borderRadius:
+                                        BorderRadius.all(Radius.circular(8)),
+                                  ),
+                                  contentPadding: EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10),
+                                  suffixIcon: Icon(Icons.image, size: 20),
                                 ),
+                                style: const TextStyle(fontSize: 13),
                                 controller: TextEditingController(
                                     text: _imageFile?.name ?? ''),
                               ),
@@ -465,42 +497,50 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                                 backgroundColor: const Color(0xFF4A2C6F),
                                 shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(8)),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 10),
                               ),
-                              child: const Text('Upload',
-                                  style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.white)),
+                              child: const Text(
+                                'Upload',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
                           ],
                         ),
                         if (_imageFile != null)
                           Padding(
-                            padding: const EdgeInsets.only(top: 16.0),
+                            padding: const EdgeInsets.only(top: 12.0),
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(8),
                               child: Image.file(
                                 File(_imageFile!.path),
-                                height: 180,
+                                height: 120,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
                               ),
                             ),
                           ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 16),
                         const Align(
                           alignment: Alignment.center,
-                          child: Text('Fields marked with * are required',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.red,
-                                  fontStyle: FontStyle.italic)),
+                          child: Text(
+                            'Fields marked with * are required',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.red,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 Card(
                   elevation: 2,
                   shape: RoundedRectangleBorder(
@@ -511,26 +551,36 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Submit Report',
-                            style: TextStyle(
-                                fontSize: 24, fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 16),
+                        const Text(
+                          'Submit Report',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         ElevatedButton(
                           onPressed: _isSubmitting ? null : _submitReport,
                           style: ElevatedButton.styleFrom(
-                            minimumSize: const Size(double.infinity, 50),
+                            minimumSize: const Size(double.infinity, 40),
                             backgroundColor: const Color(0xFF4A2C6F),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8)),
                           ),
                           child: _isSubmitting
                               ? const CircularProgressIndicator(
-                                  color: Colors.white)
-                              : const Text('Submit',
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                )
+                              : const Text(
+                                  'Submit',
                                   style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.white)),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
                         ),
                       ],
                     ),
