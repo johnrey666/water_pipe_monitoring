@@ -45,81 +45,120 @@ class MonitorPage extends StatelessWidget {
                       child: GestureDetector(
                         onTap: () => showDialog(
                           context: context,
-                          builder: (context) => AlertDialog(
+                          builder: (context) => Dialog(
+                            insetPadding: const EdgeInsets.all(16),
+                            backgroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+                              borderRadius: BorderRadius.circular(20),
                             ),
-                            title: const Text('Report Details'),
-                            content: SingleChildScrollView(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 24,
-                                        backgroundColor: Colors.blueAccent,
-                                        backgroundImage: avatarUrl != null &&
-                                                avatarUrl is String
-                                            ? NetworkImage(avatarUrl)
-                                            : null,
-                                        child: avatarUrl == null ||
-                                                avatarUrl is! String
-                                            ? const Icon(Icons.person,
-                                                color: Colors.white)
-                                            : null,
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          fullName,
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
+                            child: SingleChildScrollView(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 28,
+                                          backgroundColor: Colors.blueAccent,
+                                          backgroundImage: avatarUrl != null &&
+                                                  avatarUrl is String
+                                              ? NetworkImage(avatarUrl)
+                                              : null,
+                                          child: avatarUrl == null ||
+                                                  avatarUrl is! String
+                                              ? const Icon(Icons.person,
+                                                  color: Colors.white, size: 28)
+                                              : null,
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                fullName,
+                                                style: const TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                data['contact'] ?? 'No contact',
+                                                style: const TextStyle(
+                                                  fontSize: 14,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                _formatTimestamp(
+                                                    data['dateTime']),
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  color: Colors.grey,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text("Contact: ${data['contact'] ?? 'N/A'}"),
-                                  Text("Status: ${data['status'] ?? 'N/A'}"),
-                                  const SizedBox(height: 8),
-                                  Text("Place: ${data['placeName'] ?? 'N/A'}"),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                      "Issue: ${data['issueDescription'] ?? 'N/A'}"),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                      "Reported: ${_formatTimestamp(data['createdAt'])}"),
-                                  Text(
-                                      "Incident Time: ${_formatTimestamp(data['dateTime'])}"),
-                                  if (data['image'] != null &&
-                                      data['image'] is String)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 12),
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(8),
+                                        IconButton(
+                                          icon: const Icon(Icons.close),
+                                          onPressed: () =>
+                                              Navigator.of(context).pop(),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 20),
+                                    if (data['image'] != null &&
+                                        data['image'] is String)
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
                                         child: Image.network(
                                           data['image'],
-                                          height: 160,
+                                          height: 200,
                                           width: double.infinity,
                                           fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) =>
+                                                  const Text(
+                                                      'Image failed to load'),
                                         ),
                                       ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      data['issueDescription'] ??
+                                          'No issue description',
+                                      style: const TextStyle(fontSize: 15),
+                                      textAlign: TextAlign.left,
                                     ),
-                                ],
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.start,
+                                      children: [
+                                        Chip(
+                                          label: Text(
+                                            data['status'] ?? 'Unknown',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          backgroundColor: Colors.blue.shade50,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.of(context).pop(),
-                                child: const Text('Close'),
-                              ),
-                            ],
                           ),
                         ),
                         child: Column(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(
