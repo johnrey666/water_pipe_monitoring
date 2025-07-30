@@ -64,31 +64,63 @@ class _PlumberHomePageState extends State<PlumberHomePage> {
         child: SafeArea(
           child: Column(
             children: [
+              // Custom Drawer Header (Copied UI)
               Container(
+                width: double.infinity,
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Color(0xFF1F618D), Color(0xFF2980B9)],
+                    colors: [Color(0xFF6E4A9E), Color(0xFF4A2C6F)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius:
-                      BorderRadius.only(topRight: Radius.circular(24)),
+                      BorderRadius.only(bottomRight: Radius.circular(24)),
                 ),
                 child: Row(
-                  children: const [
-                    Icon(Icons.plumbing, color: Colors.white, size: 48),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Hello, Plumber!',
-                        style: TextStyle(color: Colors.white, fontSize: 18),
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    CircleAvatar(
+                      radius: 28,
+                      backgroundColor: Colors.white.withOpacity(0.15),
+                      child: const Icon(
+                        Icons.plumbing,
+                        size: 30,
+                        color: Colors.white,
                       ),
                     ),
+                    const SizedBox(width: 16),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Welcome,',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Plumber User',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const Icon(Icons.chevron_left, color: Colors.white70),
                   ],
                 ),
               ),
+
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.symmetric(vertical: 16),

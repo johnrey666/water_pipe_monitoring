@@ -50,6 +50,9 @@ dependencies:
   latlong2: ^0.9.1
   flutter_blur: 0.0.2
   percent_indicator: ^4.2.5
+  table_calendar: ^3.2.0
+  animate_do: ^4.2.0
+  intl: ^0.20.2
   
 dev_dependencies:
   flutter_test:
