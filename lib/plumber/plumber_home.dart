@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'view_schedule_page.dart';
 import 'view_reports_page.dart';
 import 'geographic_mapping_page.dart';
 import 'auth/plumber_login.dart';
 
-enum PlumberPage { home, schedule, reports, mapping }
+enum PlumberPage { schedule, reports, mapping }
 
 class PlumberHomePage extends StatefulWidget {
   const PlumberHomePage({super.key});
@@ -15,8 +16,45 @@ class PlumberHomePage extends StatefulWidget {
   State<PlumberHomePage> createState() => _PlumberHomePageState();
 }
 
-class _PlumberHomePageState extends State<PlumberHomePage> {
-  PlumberPage _selectedPage = PlumberPage.home;
+class _PlumberHomePageState extends State<PlumberHomePage>
+    with TickerProviderStateMixin {
+  PlumberPage _selectedPage = PlumberPage.schedule;
+  List<Map<String, dynamic>> _notifications = [];
+  Set<String> _readNotifications = Set<String>();
+  bool _isDropdownOpen = false;
+  final GlobalKey _bellKey = GlobalKey();
+  String? _initialReportId;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchNotifications();
+  }
+
+  Future<void> _fetchNotifications() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('reports')
+          .where('assignedPlumber', isEqualTo: user.uid)
+          .where('status', isEqualTo: 'Monitoring')
+          .get();
+      setState(() {
+        _notifications = querySnapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          final residentName = data['fullName'] ?? 'Unknown Resident';
+          return {
+            'id': doc.id,
+            'message': 'You have a new $residentName Monitoring!',
+          };
+        }).toList();
+      });
+    } catch (e) {
+      print('Error fetching notifications: $e');
+    }
+  }
 
   void _onSelectPage(PlumberPage page) {
     Navigator.of(context).pop();
@@ -25,22 +63,24 @@ class _PlumberHomePageState extends State<PlumberHomePage> {
     });
   }
 
+  void _openReportFromNotification(String reportId) {
+    setState(() {
+      _initialReportId = reportId;
+      _selectedPage = PlumberPage.reports;
+      _isDropdownOpen = false;
+    });
+  }
+
   Widget _getPageContent() {
     switch (_selectedPage) {
       case PlumberPage.schedule:
         return const ViewSchedulePage();
       case PlumberPage.reports:
-        return const ViewReportsPage();
+        return ViewReportsPage(initialReportId: _initialReportId);
       case PlumberPage.mapping:
         return const GeographicMappingPage();
-      case PlumberPage.home:
       default:
-        return const Center(
-          child: Text(
-            'Welcome, Plumber!',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-        );
+        return const ViewSchedulePage();
     }
   }
 
@@ -54,8 +94,32 @@ class _PlumberHomePageState extends State<PlumberHomePage> {
     );
   }
 
+  void _toggleDropdown() {
+    setState(() {
+      _isDropdownOpen = !_isDropdownOpen;
+    });
+  }
+
+  void _markAsRead(String notificationId) {
+    setState(() {
+      _readNotifications.add(notificationId);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final unreadCount = _notifications.length - _readNotifications.length;
+    final RenderBox? bellBox =
+        _bellKey.currentContext?.findRenderObject() as RenderBox?;
+    final Offset? bellPosition = bellBox?.localToGlobal(Offset.zero);
+    final double screenWidth = MediaQuery.of(context).size.width;
+    final double dropdownWidth = 300;
+    final double dropdownTop = (bellPosition?.dy ?? kToolbarHeight) + -15;
+    final double dropdownLeft = bellPosition != null
+        ? (bellPosition.dx - dropdownWidth + 48)
+            .clamp(16, screenWidth - dropdownWidth - 16)
+        : (screenWidth - dropdownWidth - 16);
+
     return Scaffold(
       drawer: Drawer(
         shape: const RoundedRectangleBorder(
@@ -64,7 +128,6 @@ class _PlumberHomePageState extends State<PlumberHomePage> {
         child: SafeArea(
           child: Column(
             children: [
-              // Custom Drawer Header (Copied UI)
               Container(
                 width: double.infinity,
                 padding:
@@ -120,7 +183,6 @@ class _PlumberHomePageState extends State<PlumberHomePage> {
                   ],
                 ),
               ),
-
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -167,26 +229,138 @@ class _PlumberHomePageState extends State<PlumberHomePage> {
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_none),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("No new notifications"),
-                  behavior: SnackBarBehavior.floating,
+          Stack(
+            children: [
+              IconButton(
+                key: _bellKey,
+                icon: const Icon(Icons.notifications_none),
+                onPressed: _toggleDropdown,
+              ),
+              if (unreadCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      unreadCount.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 ),
-              );
-            },
+            ],
           ),
         ],
       ),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: child,
-        ),
-        child: _getPageContent(),
+      body: Stack(
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: child,
+            ),
+            child: _getPageContent(),
+          ),
+          if (_isDropdownOpen && bellBox != null)
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeInOut,
+              top: dropdownTop,
+              left: dropdownLeft,
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  width: 300,
+                  constraints: const BoxConstraints(maxHeight: 400),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.blue[50]!, Colors.white],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.2),
+                        spreadRadius: 2,
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: _notifications.isEmpty
+                      ? const Padding(
+                          padding: EdgeInsets.all(16.0),
+                          child: Center(
+                            child: Text(
+                              'No Notifications',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.all(8),
+                          shrinkWrap: true,
+                          itemCount: _notifications.length,
+                          itemBuilder: (context, index) {
+                            final notification = _notifications[index];
+                            final isRead =
+                                _readNotifications.contains(notification['id']);
+                            return Card(
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              color: isRead ? Colors.white : Colors.grey[200],
+                              elevation: 2,
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.all(12),
+                                leading: const Icon(Icons.notifications,
+                                    color: Colors.blueAccent),
+                                title: Text(
+                                  notification['message'],
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: isRead
+                                        ? FontWeight.normal
+                                        : FontWeight.bold,
+                                    color: isRead
+                                        ? Colors.black54
+                                        : Colors.black87,
+                                  ),
+                                ),
+                                onTap: () {
+                                  _markAsRead(notification['id']);
+                                  _openReportFromNotification(
+                                      notification['id']);
+                                },
+                              ),
+                            );
+                          },
+                        ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -152,7 +152,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
       return {
         'userId': user.uid,
         'fullName': userDoc.data()?['fullName'] ?? 'Unknown',
-        'contact': userDoc.data()?['contact'] ?? 'Unknown',
+        'contactNumber': userDoc.data()?['contactNumber'] ?? 'Unknown',
       };
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -191,7 +191,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
       final reportData = {
         'userId': userInfo['userId'],
         'fullName': userInfo['fullName'],
-        'contact': userInfo['contact'],
+        'contactNumber': userInfo['contactNumber'],
         'issueDescription': _issueController.text,
         'location': GeoPoint(
           _selectedLocation!.latitude,

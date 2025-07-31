@@ -37,7 +37,9 @@ class MyApp extends StatelessWidget {
       home: kIsWeb ? const AdminLoginPage() : const LandingPage(),
       routes: {
         '/dashboard': (context) => const AdminHomePage(),
-        '/monitor': (context) => const MonitorPage(),
+        '/monitor': (context) => const MonitorPage(
+              reportId: '',
+            ),
         '/reports': (context) => const ViewReportsPage(),
         '/users': (context) => const UsersPage(),
         '/bills': (context) => const BillsPage(),

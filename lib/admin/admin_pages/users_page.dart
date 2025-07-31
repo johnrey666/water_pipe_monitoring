@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../components/admin_layout.dart';
 
 class UsersPage extends StatefulWidget {
@@ -17,6 +18,7 @@ class _UsersPageState extends State<UsersPage> {
   final int _pageSize = 5;
   String _selectedRole = 'All';
   DocumentSnapshot? _lastDocument;
+  OverlayEntry? _successOverlay;
 
   Color _getRoleColor(String role) {
     switch (role.toLowerCase()) {
@@ -38,18 +40,107 @@ class _UsersPageState extends State<UsersPage> {
     Query query = FirebaseFirestore.instance.collection('users');
 
     if (_selectedRole == 'All') {
-      query = query.where('role', whereIn: ['plumber', 'resident']);
+      query = query.where('role', whereIn: ['Plumber', 'Resident']);
     } else {
-      query = query.where('role', isEqualTo: _selectedRole.toLowerCase());
+      query = query.where('role', isEqualTo: _selectedRole);
     }
 
     query = query.orderBy('createdAt', descending: true).limit(_pageSize);
 
-    if (_lastDocument != null) {
+    if (_lastDocument != null && _currentPage > 0) {
       query = query.startAfterDocument(_lastDocument!);
     }
 
     return query.snapshots();
+  }
+
+  Future<void> _deleteUser(String userId, String email) async {
+    try {
+      // Delete from Firestore
+      await FirebaseFirestore.instance.collection('users').doc(userId).delete();
+      // Show success overlay immediately after Firestore deletion
+      _showSuccessOverlay('User Successfully deleted!');
+
+      // Delete from Firebase Authentication
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        List<String> signInMethods =
+            await FirebaseAuth.instance.fetchSignInMethodsForEmail(email);
+        if (signInMethods.isNotEmpty) {
+          // Attempt to delete the user; requires admin privileges or re-auth
+          try {
+            User? userToDelete = await FirebaseAuth.instance.currentUser!.uid ==
+                    userId
+                ? currentUser
+                : null; // Only delete self directly; otherwise, need admin SDK
+            if (userToDelete != null) {
+              await userToDelete.delete();
+              _successOverlay?.remove();
+              _showSuccessOverlay('User deleted successfully!');
+            } else {
+              // This is a placeholder; client-side can't delete other users without re-auth or admin SDK
+              throw FirebaseAuthException(
+                code: 'permission-denied',
+                message:
+                    'Cannot delete other users. Use Admin SDK or set admin claims.',
+              );
+            }
+          } catch (authError) {
+            print('Auth deletion error: $authError');
+            _successOverlay?.remove();
+            _showSuccessOverlay(
+                'Deleted from Firestore only. Authentication failed. Ensure admin privileges.');
+            return;
+          }
+        }
+      }
+    } catch (e) {
+      print('Error deleting user: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting user: $e. Check admin setup.')),
+      );
+    }
+  }
+
+  void _showSuccessOverlay(String message) {
+    _successOverlay?.remove();
+    _successOverlay = OverlayEntry(
+      builder: (context) => Positioned(
+        right: 16,
+        bottom: 16,
+        child: FadeOut(
+          duration: const Duration(seconds: 5),
+          animate: true,
+          child: Material(
+            color: Colors.green.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    message,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_successOverlay!);
+    Future.delayed(const Duration(seconds: 3), () {
+      _successOverlay?.remove();
+      _successOverlay = null;
+    });
   }
 
   @override
@@ -62,15 +153,6 @@ class _UsersPageState extends State<UsersPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Manage Residents and Plumbers',
-              style: GoogleFonts.poppins(
-                fontSize: 24,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade800,
-              ),
-            ),
-            const SizedBox(height: 16),
             Row(
               children: [
                 _buildFilterButton('All'),
@@ -86,10 +168,35 @@ class _UsersPageState extends State<UsersPage> {
                 stream: _getUsersStream(),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
-                    return const Center(
-                      child: Text(
-                        'Error loading users',
-                        style: TextStyle(fontSize: 16, color: Colors.redAccent),
+                    print('StreamBuilder error: ${snapshot.error}');
+                    return Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Error loading users: ${snapshot.error}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              color: Colors.redAccent,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () => setState(() {
+                              _currentPage = 0;
+                              _lastDocument = null;
+                            }),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4A2C6F),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: const Text('Retry'),
+                          ),
+                        ],
                       ),
                     );
                   }
@@ -99,6 +206,8 @@ class _UsersPageState extends State<UsersPage> {
                   }
 
                   final users = snapshot.data?.docs ?? [];
+                  print(
+                      'Fetched users roles: ${users.map((doc) => doc['role']).toList()}');
 
                   if (users.isEmpty) {
                     return Center(
@@ -115,10 +224,7 @@ class _UsersPageState extends State<UsersPage> {
                     );
                   }
 
-                  DocumentSnapshot? newLastDocument;
-                  if (users.isNotEmpty) {
-                    newLastDocument = users.last;
-                  }
+                  _lastDocument = users.isNotEmpty ? users.last : null;
 
                   return Column(
                     children: [
@@ -127,10 +233,11 @@ class _UsersPageState extends State<UsersPage> {
                           itemCount: users.length,
                           itemBuilder: (context, index) {
                             final user = users[index];
+                            final userId = user.id;
                             final fullName = user['fullName'] ?? 'Unknown';
                             final email = user['email'] ?? 'No email';
                             final contact = user['contactNumber'] ??
-                                user['contact'] ??
+                                user['contactNumber'] ??
                                 'No contact';
                             final address = user['address'] ?? 'No address';
                             final role = (user['role'] ?? 'Unknown').toString();
@@ -224,6 +331,13 @@ class _UsersPageState extends State<UsersPage> {
                                           ],
                                         ),
                                       ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete,
+                                            color: Colors.red),
+                                        onPressed: () =>
+                                            _showDeleteConfirmationDialog(
+                                                userId, email),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -263,11 +377,10 @@ class _UsersPageState extends State<UsersPage> {
                           ),
                           TextButton(
                             onPressed: users.length == _pageSize &&
-                                    newLastDocument != null
+                                    _lastDocument != null
                                 ? () {
                                     setState(() {
                                       _currentPage++;
-                                      _lastDocument = newLastDocument;
                                     });
                                   }
                                 : null,
@@ -276,7 +389,7 @@ class _UsersPageState extends State<UsersPage> {
                               style: GoogleFonts.poppins(
                                 fontSize: 12,
                                 color: users.length == _pageSize &&
-                                        newLastDocument != null
+                                        _lastDocument != null
                                     ? const Color(0xFF4A2C6F)
                                     : Colors.grey,
                               ),
@@ -291,6 +404,34 @@ class _UsersPageState extends State<UsersPage> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmationDialog(String userId, String email) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Confirm Delete',
+            style:
+                GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w500)),
+        content: Text('Are you sure you want to delete $email?',
+            style: GoogleFonts.poppins(fontSize: 14)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancel',
+                style: GoogleFonts.poppins(color: const Color(0xFF4A2C6F))),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _deleteUser(userId, email);
+            },
+            child:
+                Text('Delete', style: GoogleFonts.poppins(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }

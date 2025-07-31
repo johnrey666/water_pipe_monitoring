@@ -6,9 +6,46 @@ import 'package:intl/intl.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as latlong;
 import 'package:animate_do/animate_do.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-class ViewReportsPage extends StatelessWidget {
-  const ViewReportsPage({super.key});
+class ViewReportsPage extends StatefulWidget {
+  final String? initialReportId;
+
+  const ViewReportsPage({super.key, this.initialReportId});
+
+  @override
+  State<ViewReportsPage> createState() => _ViewReportsPageState();
+}
+
+class _ViewReportsPageState extends State<ViewReportsPage> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialReportId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showReportModal(widget.initialReportId!);
+      });
+    }
+  }
+
+  void _showReportModal(String reportId) async {
+    final doc = await FirebaseFirestore.instance
+        .collection('reports')
+        .doc(reportId)
+        .get();
+    if (doc.exists) {
+      showDialog(
+        context: context,
+        builder: (_) => Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          backgroundColor: Colors.white,
+          child: ReportDetailsModal(report: doc),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +57,8 @@ class ViewReportsPage extends StatelessWidget {
           child: StreamBuilder<QuerySnapshot>(
             stream: FirebaseFirestore.instance
                 .collection('reports')
+                .where('assignedPlumber',
+                    isEqualTo: FirebaseAuth.instance.currentUser?.uid ?? '')
                 .orderBy('createdAt', descending: true)
                 .snapshots(),
             builder: (context, snapshot) {
@@ -150,7 +189,7 @@ class ViewReportsPage extends StatelessWidget {
 }
 
 class ReportDetailsModal extends StatefulWidget {
-  final QueryDocumentSnapshot report;
+  final DocumentSnapshot report;
 
   const ReportDetailsModal({super.key, required this.report});
 
@@ -192,7 +231,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
   @override
   Widget build(BuildContext context) {
     final fullName = widget.report['fullName'] ?? '';
-    final contact = widget.report['contact'] ?? '';
+    final contactNumber = widget.report['contactNumber'] ?? '';
     final issueDescription = widget.report['issueDescription'] ?? '';
     final placeName = widget.report['placeName'] ?? '';
     final dateTime = widget.report['dateTime']?.toDate();
@@ -238,7 +277,6 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Header
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -268,7 +306,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              contact,
+                              contactNumber,
                               style: const TextStyle(
                                 fontSize: 13,
                                 color: Colors.black54,
@@ -295,7 +333,6 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                 ],
               ),
               const SizedBox(height: 12),
-              // Body
               if (imageBytes != null)
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),

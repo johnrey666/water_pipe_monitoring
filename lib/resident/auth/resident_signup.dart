@@ -52,7 +52,7 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
           .set({
         'fullName': _nameController.text.trim(),
         'address': _addressController.text.trim(),
-        'contact': _contactController.text.trim(),
+        'contactNumber': _contactController.text.trim(), // Correct field name
         'email': _emailController.text.trim(),
         'role': 'Resident',
         'createdAt': FieldValue.serverTimestamp(),

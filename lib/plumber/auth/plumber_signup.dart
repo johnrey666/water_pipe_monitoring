@@ -68,7 +68,7 @@ class _PlumberSignupPageState extends State<PlumberSignupPage> {
         'address': address,
         'contactNumber': contact,
         'email': email,
-        'role': 'plumber',
+        'role': 'Plumber',
         'createdAt': FieldValue.serverTimestamp(),
       });
 
