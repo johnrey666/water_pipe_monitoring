@@ -16,6 +16,7 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   Map<DateTime, List<Map<String, dynamic>>> _events = {};
+  Map<String, int> _reportCounts = {'Unfixed': 0, 'Monitoring': 0, 'Fixed': 0};
 
   @override
   void initState() {
@@ -40,6 +41,19 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
     }
   }
 
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case 'Monitoring':
+        return Icons.visibility;
+      case 'Unfixed':
+        return Icons.warning;
+      case 'Fixed':
+        return Icons.check_circle;
+      default:
+        return Icons.info;
+    }
+  }
+
   void _showReportsDialog(
       BuildContext context, List<Map<String, dynamic>> reports) {
     showDialog(
@@ -49,7 +63,7 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
         child: Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxWidth: 600,
+              maxWidth: 550,
               maxHeight: MediaQuery.of(context).size.height * 0.6,
             ),
             child: Dialog(
@@ -71,7 +85,7 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
                   ),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -129,7 +143,7 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 12),
                       Flexible(
                         child: ListView.separated(
                           shrinkWrap: true,
@@ -218,12 +232,12 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
         child: SafeArea(
           child: Padding(
             padding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
             child: Center(
               child: FadeIn(
                 duration: const Duration(milliseconds: 400),
                 child: Container(
-                  constraints: const BoxConstraints(maxWidth: 600),
+                  constraints: const BoxConstraints(maxWidth: 550),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.95),
                     borderRadius: BorderRadius.circular(16),
@@ -239,7 +253,7 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
                       width: 1,
                     ),
                   ),
-                  padding: const EdgeInsets.all(20),
+                  padding: const EdgeInsets.all(16),
                   child: StreamBuilder<QuerySnapshot>(
                     stream: FirebaseFirestore.instance
                         .collection('reports')
@@ -262,12 +276,18 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
                         return const Center(child: CircularProgressIndicator());
                       }
 
-                      // Build events map from Firestore data
+                      // Build events map and report counts from Firestore data
                       _events = {};
+                      _reportCounts = {
+                        'Unfixed': 0,
+                        'Monitoring': 0,
+                        'Fixed': 0
+                      };
                       for (var doc in snapshot.data!.docs) {
                         final data = doc.data() as Map<String, dynamic>;
                         final monitoringDate =
                             data['monitoringDate'] as Timestamp?;
+                        final status = data['status'] as String?;
                         if (monitoringDate != null) {
                           final date = DateTime.utc(
                             monitoringDate.toDate().year,
@@ -277,8 +297,13 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
                           _events[date] = _events[date] ?? [];
                           _events[date]!.add({
                             'fullName': data['fullName'] ?? 'Unknown',
-                            'status': data['status'] ?? 'Unknown',
+                            'status': status ?? 'Unknown',
                           });
+                        }
+                        if (status != null &&
+                            _reportCounts.containsKey(status)) {
+                          _reportCounts[status] =
+                              (_reportCounts[status] ?? 0) + 1;
                         }
                       }
 
@@ -301,7 +326,7 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
                               ],
                             ),
                           ),
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 4),
                           Text(
                             DateFormat.yMMMM().format(_focusedDay),
                             style: GoogleFonts.poppins(
@@ -310,7 +335,7 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
                               color: Colors.grey[600],
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           TableCalendar<Map<String, dynamic>>(
                             firstDay: DateTime.utc(2020, 1, 1),
                             lastDay: DateTime.utc(2030, 12, 31),
@@ -415,8 +440,31 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
                             ),
                             eventLoader: _getEventsForDay,
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           const Divider(color: Colors.grey),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Report Summary',
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              _buildReportCard('Monitoring',
+                                  _reportCounts['Monitoring'] ?? 0),
+                              const SizedBox(width: 8),
+                              _buildReportCard(
+                                  'Unfixed', _reportCounts['Unfixed'] ?? 0),
+                              const SizedBox(width: 8),
+                              _buildReportCard(
+                                  'Fixed', _reportCounts['Fixed'] ?? 0),
+                            ],
+                          ),
                           const SizedBox(height: 12),
                           Text(
                             'Legend',
@@ -444,6 +492,60 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
                 ),
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReportCard(String status, int count) {
+    return Expanded(
+      child: ZoomIn(
+        duration: const Duration(milliseconds: 400),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+            border: Border.all(
+              color: _getMarkerColor(status).withOpacity(0.2),
+              width: 1,
+            ),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _getStatusIcon(status),
+                color: _getMarkerColor(status),
+                size: 24,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                count.toString(),
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                status,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
           ),
         ),
       ),
