@@ -118,11 +118,19 @@ class _MonitorPageState extends State<MonitorPage> {
   void _showReportModal(
       BuildContext context, Map<String, dynamic> data, String reportId) async {
     String? selectedPlumberUid = data['assignedPlumber'] as String?;
+    DateTime? selectedDate = data['monitoringDate'] is Timestamp
+        ? (data['monitoringDate'] as Timestamp).toDate()
+        : null;
+    bool isButtonDisabled = data['assignedPlumber'] != null;
     List<Map<String, dynamic>> plumbers = await _fetchPlumbers();
 
     void _assignPlumber() async {
       if (selectedPlumberUid == null) {
         _showErrorOverlay('Please select a plumber first.');
+        return;
+      }
+      if (selectedDate == null) {
+        _showErrorOverlay('Please select a monitoring date.');
         return;
       }
       try {
@@ -134,44 +142,65 @@ class _MonitorPageState extends State<MonitorPage> {
         }
         await docRef.update({
           'assignedPlumber': selectedPlumberUid,
-          'status': 'Monitoring' // Update status to Monitoring
+          'monitoringDate': Timestamp.fromDate(selectedDate!),
+          'status': 'Monitoring',
         });
-        _showErrorOverlay(
-            'Plumber assigned successfully.'); // Reuse error overlay for success
+        _showErrorOverlay('Plumber assigned successfully.');
+        setState(() {
+          isButtonDisabled = true;
+        });
         Navigator.of(context).pop();
       } catch (e) {
         print('Error assigning plumber: $e');
         _showErrorOverlay('Failed to assign plumber: $e');
       }
-
-      
     }
-
-    
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
+            constraints: BoxConstraints(
+              maxWidth: 450,
+              maxHeight: MediaQuery.of(context).size.height * 0.90,
+            ),
             child: Dialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: Colors.grey[200]!),
               ),
-              elevation: 0,
+              elevation: 4,
+              backgroundColor: Colors.white,
               child: Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.all(16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Report Details',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close,
+                              color: Colors.grey, size: 20),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         CircleAvatar(
-                          radius: 28,
+                          radius: 24,
                           backgroundColor: const Color(0xFF4A2C6F),
                           backgroundImage: data['avatarUrl'] != null &&
                                   data['avatarUrl'] is String
@@ -180,10 +209,10 @@ class _MonitorPageState extends State<MonitorPage> {
                           child: data['avatarUrl'] == null ||
                                   data['avatarUrl'] is! String
                               ? const Icon(Icons.person,
-                                  color: Colors.white, size: 28)
+                                  color: Colors.white, size: 24)
                               : null,
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,37 +220,33 @@ class _MonitorPageState extends State<MonitorPage> {
                               Text(
                                 data['fullName'] ?? 'Unknown',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w500,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
                                   color: Colors.black87,
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 3),
                               Text(
                                 data['contactNumber'] ?? 'No contact',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 14,
+                                  fontSize: 12,
                                   color: Colors.grey[600],
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 3),
                               Text(
                                 _formatTimestamp(data['createdAt']),
                                 style: GoogleFonts.poppins(
-                                  fontSize: 12,
+                                  fontSize: 10,
                                   color: Colors.grey[500],
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: Colors.grey),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
                       ],
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 12),
                     if (data['image'] != null &&
                         data['image'] is String &&
                         data['image'].isNotEmpty)
@@ -230,116 +255,231 @@ class _MonitorPageState extends State<MonitorPage> {
                         child: Image.memory(
                           base64Decode(data['image']),
                           width: double.infinity,
-                          height: 180,
+                          height: 140,
                           fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) =>
                               Container(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(10),
                             alignment: Alignment.center,
-                            height: 180,
+                            height: 140,
                             color: Colors.grey[100],
-                            child: const Text('Unable to load image'),
+                            child: Text(
+                              'Unable to load image',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 12),
                     Text(
                       data['issueDescription'] ?? 'No issue description',
                       style: GoogleFonts.poppins(
-                          fontSize: 14, color: Colors.black87),
+                        fontSize: 13,
+                        color: Colors.black87,
+                        height: 1.4,
+                      ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 10),
                     Chip(
                       label: Text(
                         data['status'] ?? 'Unknown',
                         style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
                           color: Colors.white,
                         ),
                       ),
                       backgroundColor:
                           _getStatusColor(data['status'] ?? 'Unknown')
                               .withOpacity(0.2),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
                     ),
                     if (data['assignedPlumber'] != null)
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 8),
                     if (data['assignedPlumber'] != null)
                       Text(
-                        plumbers.firstWhere(
-                            (p) => p['uid'] == data['assignedPlumber'],
-                            orElse: () => {'fullName': 'Unknown'})['fullName'],
+                        'Assigned: ${plumbers.firstWhere(
+                          (p) => p['uid'] == data['assignedPlumber'],
+                          orElse: () => {'fullName': 'Unknown'},
+                        )['fullName']}',
                         style: GoogleFonts.poppins(
-                          fontSize: 14,
+                          fontSize: 12,
                           color: const Color(0xFF4A2C6F),
-                          fontWeight: FontWeight.w500,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      decoration: InputDecoration(
-                        labelText: 'Assign Plumber',
-                        labelStyle: GoogleFonts.poppins(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide:
-                              const BorderSide(color: Color(0xFF4A2C6F)),
-                        ),
-                      ),
-                      value: selectedPlumberUid,
-                      dropdownColor: Colors.white,
-                      items: plumbers.isNotEmpty
-                          ? plumbers.map((plumber) {
-                              return DropdownMenuItem<String>(
-                                value: plumber['uid'],
-                                child: Text(
-                                  plumber['fullName'],
-                                  style: GoogleFonts.poppins(fontSize: 14),
-                                ),
-                              );
-                            }).toList()
-                          : [
-                              const DropdownMenuItem<String>(
-                                value: null,
-                                child: Text('No plumbers available',
-                                    style: TextStyle(color: Colors.grey)),
+                    const SizedBox(height: 12),
+                    const Divider(height: 1, color: Colors.grey),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            decoration: InputDecoration(
+                              labelText: 'Assign Plumber',
+                              labelStyle: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: Colors.grey[700],
                               ),
-                            ],
-                      onChanged: plumbers.isNotEmpty
-                          ? (value) {
-                              setState(() {
-                                selectedPlumberUid = value;
-                              });
-                            }
-                          : null,
+                              filled: true,
+                              fillColor: Colors.grey[50],
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[300]!, width: 1),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(
+                                    color: Color(0xFF5E35B1), width: 1.5),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[300]!, width: 1),
+                              ),
+                            ),
+                            value: selectedPlumberUid,
+                            dropdownColor: Colors.white,
+                            items: plumbers.isNotEmpty
+                                ? plumbers.map((plumber) {
+                                    return DropdownMenuItem<String>(
+                                      value: plumber['uid'],
+                                      child: Text(
+                                        plumber['fullName'],
+                                        style:
+                                            GoogleFonts.poppins(fontSize: 12),
+                                      ),
+                                    );
+                                  }).toList()
+                                : [
+                                    const DropdownMenuItem<String>(
+                                      value: null,
+                                      child: Text(
+                                        'No plumbers available',
+                                        style: TextStyle(
+                                          color: Colors.grey,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                            onChanged: plumbers.isNotEmpty
+                                ? (value) {
+                                    setState(() {
+                                      selectedPlumberUid = value;
+                                      isButtonDisabled = false;
+                                    });
+                                  }
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            readOnly: true,
+                            decoration: InputDecoration(
+                              labelText: 'Monitoring Date',
+                              labelStyle: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: Colors.grey[700],
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey[50],
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[300]!, width: 1),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: const BorderSide(
+                                    color: Color(0xFF5E35B1), width: 1.5),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[300]!, width: 1),
+                              ),
+                              suffixIcon: const Icon(
+                                Icons.calendar_today,
+                                color: Color(0xFF5E35B1),
+                                size: 18,
+                              ),
+                            ),
+                            controller: TextEditingController(
+                              text: selectedDate != null
+                                  ? DateFormat.yMMMd().format(selectedDate!)
+                                  : '',
+                            ),
+                            onTap: () async {
+                              final pickedDate = await showDatePicker(
+                                context: context,
+                                initialDate: selectedDate ?? DateTime.now(),
+                                firstDate: DateTime.now(),
+                                lastDate: DateTime.now()
+                                    .add(const Duration(days: 365)),
+                                builder: (context, child) {
+                                  return Theme(
+                                    data: Theme.of(context).copyWith(
+                                      colorScheme: const ColorScheme.light(
+                                        primary: Color(0xFF5E35B1),
+                                        onPrimary: Colors.white,
+                                        onSurface: Colors.black87,
+                                      ),
+                                      textButtonTheme: TextButtonThemeData(
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: Color(0xFF5E35B1),
+                                        ),
+                                      ),
+                                    ),
+                                    child: child!,
+                                  );
+                                },
+                              );
+                              if (pickedDate != null) {
+                                setState(() {
+                                  selectedDate = pickedDate;
+                                });
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: _assignPlumber,
+                        onPressed: isButtonDisabled ? null : _assignPlumber,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4A2C6F),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          backgroundColor: isButtonDisabled
+                              ? Colors.grey[400]
+                              : const Color(0xFF5E35B1),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
                           ),
+                          elevation: isButtonDisabled ? 0 : 2,
+                          shadowColor: isButtonDisabled ? null : Colors.black12,
                         ),
                         child: Text(
-                          data['assignedPlumber'] != null
-                              ? 'Re-assign Plumber'
-                              : 'Assign Plumber for Monitoring',
+                          isButtonDisabled
+                              ? 'Plumber Assigned!'
+                              : (data['assignedPlumber'] != null
+                                  ? 'Re-assign Plumber'
+                                  : 'Assign Plumber for Monitoring'),
                           style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
                           ),
                         ),
                       ),
