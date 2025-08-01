@@ -5,6 +5,7 @@ import 'auth/resident_login.dart';
 import 'report_problem_page.dart';
 import 'view_billing_page.dart';
 import 'resident_drawer_header.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 void main() {
   runApp(const ResidentialPortalApp());
@@ -115,12 +116,61 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
     return Scaffold(
       drawer: Drawer(
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.horizontal(right: Radius.circular(12)),
+          borderRadius: BorderRadius.horizontal(right: Radius.circular(16)),
         ),
         child: SafeArea(
           child: Column(
             children: [
-              const ResidentDrawerHeader(),
+              // User Info at the top
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF4A2C6F), Color(0xFF6B46C1)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.only(
+                    topRight: Radius.circular(16),
+                    bottomRight: Radius.circular(32),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const CircleAvatar(
+                      radius: 28,
+                      backgroundColor: Colors.white,
+                      child: Icon(Icons.person, size: 36, color: Color(0xFF4A2C6F)),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Welcome!',
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            'Resident',
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
               Expanded(
                 child: ListView(
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -148,30 +198,75 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                 padding: const EdgeInsets.symmetric(horizontal: 8.0),
                 child: ListTile(
                   leading: const Icon(Icons.logout, color: Colors.red),
-                  title: const Text('Logout',
-                      style: TextStyle(color: Colors.red, fontSize: 16)),
+                  title: Text('Logout',
+                      style: GoogleFonts.poppins(
+                        color: Colors.red,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      )),
                   onTap: () => _logout(context),
                 ),
               ),
+              const SizedBox(height: 8),
             ],
           ),
         ),
       ),
       appBar: AppBar(
-        title: const Text('Resident Portal'),
+        title: Text(
+          'Resident Portal',
+          style: GoogleFonts.poppins(
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+            color: const Color(0xFF4A2C6F),
+            letterSpacing: 1.2,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 2,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined, size: 24),
-            onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text("No new notifications"),
-                  behavior: SnackBarBehavior.floating,
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined, size: 24, color: Color(0xFF4A2C6F)),
+                onPressed: () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("No new notifications"),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+              ),
+              // Notification badge (example, always 0)
+              Positioned(
+                right: 10,
+                top: 10,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: Colors.redAccent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: const Text(
+                    '0',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
                 ),
-              );
-            },
+              ),
+            ],
           ),
         ],
+        iconTheme: const IconThemeData(color: Color(0xFF4A2C6F)),
       ),
       body: SafeArea(
         child: AnimatedSwitcher(
@@ -268,9 +363,25 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
     required Color color,
     double? progress,
   }) {
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          colors: [color.withOpacity(0.12), Colors.white],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.10),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+        border: Border.all(color: color.withOpacity(0.18), width: 1.2),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -279,31 +390,43 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: color.withOpacity(0.95),
+                  ),
                 ),
-                Icon(icon, size: 24, color: color),
+                Container(
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.13),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(icon, size: 24, color: color.withOpacity(0.85)),
+                ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             if (progress != null)
               Center(
                 child: SizedBox(
-                  width: 100,
-                  height: 100,
+                  width: 80,
+                  height: 80,
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       CircularProgressIndicator(
                         value: progress,
-                        strokeWidth: 10,
-                        backgroundColor: Colors.grey.shade300,
+                        strokeWidth: 8,
+                        backgroundColor: color.withOpacity(0.08),
                         valueColor: AlwaysStoppedAnimation<Color>(color),
                       ),
                       Text(
                         value,
-                        style: const TextStyle(
+                        style: GoogleFonts.poppins(
                           fontSize: 18,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.bold,
+                          color: color.withOpacity(0.95),
                         ),
                       ),
                     ],
@@ -314,17 +437,22 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
               Center(
                 child: Text(
                   value,
-                  style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w600,
+                  style: GoogleFonts.poppins(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: color.withOpacity(0.95),
                   ),
                 ),
               ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Center(
               child: Text(
                 description,
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: color.withOpacity(0.7),
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ],
@@ -335,28 +463,44 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
 
   Widget _buildWeeklyUsageChart() {
     final List<BarChartGroupData> barGroups = [
-      _buildBarGroup(0, 150, 'Mon', const Color(0xFF00796B)),
-      _buildBarGroup(1, 200, 'Tue', const Color(0xFF00838F)),
-      _buildBarGroup(2, 180, 'Wed', const Color(0xFF0097A7)),
-      _buildBarGroup(3, 220, 'Thu', const Color(0xFF00ACC1)),
-      _buildBarGroup(4, 190, 'Fri', const Color(0xFF26C6DA)),
-      _buildBarGroup(5, 160, 'Sat', const Color(0xFF4DD0E1)),
-      _buildBarGroup(6, 170, 'Sun', const Color(0xFF80DEEA)),
+      _buildBarGroup(0, 150, 'Mon', const Color(0xFF4A2C6F)),
+      _buildBarGroup(1, 200, 'Tue', const Color(0xFF6B46C1)),
+      _buildBarGroup(2, 180, 'Wed', const Color(0xFF7C3AED)),
+      _buildBarGroup(3, 220, 'Thu', const Color(0xFF4F46E5)),
+      _buildBarGroup(4, 190, 'Fri', const Color(0xFF6366F1)),
+      _buildBarGroup(5, 160, 'Sat', const Color(0xFF818CF8)),
+      _buildBarGroup(6, 170, 'Sun', const Color(0xFFEEF2FF)),
     ];
 
-    return Card(
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4A2C6F).withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+        border: Border.all(color: const Color(0xFF4A2C6F).withOpacity(0.10), width: 1.2),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Weekly Water Usage',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF4A2C6F),
+              ),
             ),
             const SizedBox(height: 16),
             SizedBox(
-              height: 300,
+              height: 240,
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
@@ -370,8 +514,8 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                       getTooltipItem: (group, groupIndex, rod, rodIndex) {
                         return BarTooltipItem(
                           '${rod.toY.toStringAsFixed(0)} gal',
-                          TextStyle(
-                            color: Theme.of(context).colorScheme.primary,
+                          GoogleFonts.poppins(
+                            color: const Color(0xFF4A2C6F),
                             fontWeight: FontWeight.w600,
                           ),
                         );
@@ -391,7 +535,11 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                             space: 4,
                             child: Text(
                               days[value.toInt()],
-                              style: Theme.of(context).textTheme.bodyMedium,
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: const Color(0xFF4A2C6F),
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           );
                         },
@@ -408,7 +556,11 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                             space: 4,
                             child: Text(
                               value.toInt().toString(),
-                              style: Theme.of(context).textTheme.bodyMedium,
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           );
                         },
@@ -426,7 +578,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                     drawVerticalLine: false,
                     getDrawingHorizontalLine: (value) {
                       return FlLine(
-                        color: Colors.grey.shade300,
+                        color: Colors.grey.shade200,
                         strokeWidth: 1,
                       );
                     },
@@ -435,6 +587,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                     show: false,
                   ),
                   barGroups: barGroups,
+                  groupsSpace: 8,
                 ),
               ),
             ),
