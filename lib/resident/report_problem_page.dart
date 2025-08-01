@@ -19,31 +19,34 @@ class ReportProblemPage extends StatefulWidget {
 
 class _ReportProblemPageState extends State<ReportProblemPage> {
   final _formKey = GlobalKey<FormState>();
-  final ImagePicker _picker = ImagePicker();
+  final _picker = ImagePicker();
   XFile? _imageFile;
   latlong.LatLng? _selectedLocation;
   String? _selectedPlaceName;
-  final TextEditingController _issueController = TextEditingController();
-  final TextEditingController _locationController = TextEditingController();
-  final TextEditingController _dateTimeController = TextEditingController();
+  final _issueController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _dateTimeController = TextEditingController();
   MapController? _mapController;
   DateTime? _selectedDateTime;
   bool _isSubmitting = false;
 
+  // Pagination for recent reports
+  int _recentPage = 0;
+  static const int _reportsPerPage = 3;
+
+  Color get accentColor => const Color(0xFF4A2C6F);
+
   Future<void> _pickImage() async {
     final androidInfo = await DeviceInfoPlugin().androidInfo;
     final sdkInt = androidInfo.version.sdkInt;
-
     final permission = sdkInt >= 33 ? Permission.photos : Permission.storage;
     final status = await permission.request();
-
     if (!status.isGranted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Permission denied to access gallery')),
       );
       return;
     }
-
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       setState(() {
@@ -70,8 +73,6 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
             _selectedPlaceName = placeName;
             _locationController.text = placeName;
           });
-          print(
-              'Searched location: $_selectedLocation, Place: $_selectedPlaceName');
           if (_mapController != null) {
             _mapController!.move(_selectedLocation!, 14);
           }
@@ -177,17 +178,14 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
 
   Future<void> _submitReport() async {
     if (!_formKey.currentState!.validate() || _isSubmitting) return;
-
     setState(() {
       _isSubmitting = true;
     });
-
     try {
       final userInfo = await _getUserInfo();
       if (userInfo == null) {
         throw Exception('Failed to fetch user info');
       }
-
       final reportData = {
         'userId': userInfo['userId'],
         'fullName': userInfo['fullName'],
@@ -200,22 +198,16 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         'placeName': _selectedPlaceName ?? 'Unknown location',
         'dateTime': Timestamp.fromDate(_selectedDateTime!),
         'createdAt': Timestamp.now(),
-        'status': 'Unfixed Reports', // Set default status
+        'status': 'Unfixed Reports',
       };
-
-      // Optionally include base64 image
       final base64Image = await _convertImageToBase64(_imageFile);
       if (base64Image != null) {
         reportData['image'] = base64Image;
       }
-
       await FirebaseFirestore.instance.collection('reports').add(reportData);
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Report submitted successfully')),
       );
-
-      // Clear form
       setState(() {
         _issueController.clear();
         _locationController.clear();
@@ -236,358 +228,476 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
     }
   }
 
-  void _onMapCreated(MapController controller) {
-    _mapController = controller;
-    if (_selectedLocation != null) {
-      _mapController!.move(_selectedLocation!, 14);
-    }
-    print('Map created, controller initialized');
-  }
-
   void _openMapPicker() {
     latlong.LatLng initial = _selectedLocation ??
         const latlong.LatLng(13.1486, 123.7156); // Daraga, Albay
+    latlong.LatLng? tempLocation = _selectedLocation;
+    String? tempPlaceName = _selectedPlaceName;
+    MapController tempMapController = MapController();
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.85,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        builder: (context, scrollController) => StatefulBuilder(
-          builder: (context, modalSetState) => Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: TextField(
-                  decoration: const InputDecoration(
-                    labelText: 'Search Location',
-                    border: OutlineInputBorder(),
-                    hintText: 'e.g., Daraga, Albay',
-                    suffixIcon: Icon(Icons.search),
-                  ),
-                  onSubmitted: (value) {
-                    if (value.isNotEmpty) {
-                      _searchLocation(value);
-                      modalSetState(() {});
-                    }
-                  },
-                ),
-              ),
-              Expanded(
-                child: FlutterMap(
-                  mapController: _mapController ??= MapController(),
-                  options: MapOptions(
-                    initialCenter: initial,
-                    initialZoom: 14,
-                    onTap: (tapPosition, position) async {
-                      final placeName = await _getPlaceName(position);
-                      modalSetState(() {
-                        _selectedLocation = position;
-                        _selectedPlaceName = placeName;
-                      });
-                      print(
-                          'Tapped location: $_selectedLocation, Place: $_selectedPlaceName');
-                      _mapController?.move(position, 14);
-                    },
-                    onPositionChanged: (position, hasGesture) {
-                      if (hasGesture && _selectedLocation != null) {
-                        modalSetState(() {
-                          _selectedLocation = position.center;
-                        });
-                        print('Marker dragged to: $_selectedLocation');
+      backgroundColor: Colors.transparent,
+      builder: (context) => FractionallySizedBox(
+        heightFactor: 0.95,
+        child: Material(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          clipBehavior: Clip.antiAlias,
+          child: StatefulBuilder(
+            builder: (context, modalSetState) => Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: TextField(
+                    decoration: const InputDecoration(
+                      labelText: 'Search Location',
+                      border: OutlineInputBorder(),
+                      hintText: 'e.g., Daraga, Albay',
+                      suffixIcon: Icon(Icons.search),
+                      isDense: true,
+                    ),
+                    onSubmitted: (value) async {
+                      if (value.isNotEmpty) {
+                        final response = await http.get(
+                          Uri.parse(
+                              'https://nominatim.openstreetmap.org/search?q=$value&format=json&limit=1'),
+                          headers: {'User-Agent': 'WaterPipeMonitoring/1.0'},
+                        );
+                        if (response.statusCode == 200) {
+                          final data = jsonDecode(response.body);
+                          if (data.isNotEmpty) {
+                            final lat = double.parse(data[0]['lat']);
+                            final lon = double.parse(data[0]['lon']);
+                            final placeName = data[0]['display_name'];
+                            modalSetState(() {
+                              tempLocation = latlong.LatLng(lat, lon);
+                              tempPlaceName = placeName;
+                            });
+                            tempMapController.move(tempLocation!, 14);
+                          }
+                        }
                       }
                     },
                   ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      subdomains: ['a', 'b', 'c'],
-                      userAgentPackageName: 'com.example.water_pipe_monitoring',
+                ),
+                Expanded(
+                  child: FlutterMap(
+                    mapController: tempMapController,
+                    options: MapOptions(
+                      initialCenter: tempLocation ?? initial,
+                      initialZoom: 14,
+                      onTap: (tapPosition, position) async {
+                        final placeName = await _getPlaceName(position);
+                        modalSetState(() {
+                          tempLocation = position;
+                          tempPlaceName = placeName;
+                        });
+                        tempMapController.move(position, 14);
+                      },
                     ),
-                    if (_selectedLocation != null)
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: _selectedLocation!,
-                            width: 40,
-                            height: 40,
-                            child: GestureDetector(
-                              onPanUpdate: (details) async {
-                                final newPosition =
-                                    _mapController!.camera.center;
-                                final placeName =
-                                    await _getPlaceName(newPosition);
-                                modalSetState(() {
-                                  _selectedLocation = newPosition;
-                                  _selectedPlaceName = placeName;
-                                });
-                                print(
-                                    'Marker dragged to: $_selectedLocation, Place: $_selectedPlaceName');
-                              },
+                    children: [
+                      TileLayer(
+                        urlTemplate:
+                            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        subdomains: ['a', 'b', 'c'],
+                        userAgentPackageName: 'com.example.water_pipe_monitoring',
+                      ),
+                      if (tempLocation != null)
+                        MarkerLayer(
+                          markers: [
+                            Marker(
+                              point: tempLocation!,
+                              width: 36,
+                              height: 36,
                               child: const Icon(
                                 Icons.location_pin,
                                 color: Colors.red,
-                                size: 40,
+                                size: 36,
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (_selectedLocation != null) {
-                      setState(() {
-                        _locationController.text = _selectedPlaceName ?? '';
-                      });
-                      Navigator.pop(context);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4A2C6F),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+                          ],
+                        ),
+                    ],
                   ),
-                  child: const Text('Confirm Location',
-                      style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white)),
                 ),
-              ),
-            ],
+                Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 40,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (tempLocation != null) {
+                          setState(() {
+                            _selectedLocation = tempLocation;
+                            _selectedPlaceName = tempPlaceName;
+                            _locationController.text = tempPlaceName ?? '';
+                          });
+                          Navigator.pop(context);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accentColor,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: const Text('Confirm Location',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _issueController.dispose();
-    _locationController.dispose();
-    _dateTimeController.dispose();
-    _mapController?.dispose();
-    super.dispose();
+  Widget _modernField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    bool readOnly = false,
+    VoidCallback? onTap,
+    String? hint,
+    String? Function(String?)? validator,
+    Widget? suffixIcon,
+    int maxLines = 1,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: TextFormField(
+        controller: controller,
+        readOnly: readOnly,
+        onTap: onTap,
+        maxLines: maxLines,
+        validator: validator,
+        style: const TextStyle(fontSize: 15),
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: hint,
+          prefixIcon: Icon(icon, size: 22, color: accentColor),
+          suffixIcon: suffixIcon,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: accentColor, width: 2),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        ),
+      ),
+    );
+  }
+
+  Widget _recentReports() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return const SizedBox();
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('reports')
+          .where('userId', isEqualTo: user.uid)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Text('Error loading recent reports', style: TextStyle(color: Colors.red)),
+          );
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const SizedBox();
+        }
+        final docs = snapshot.data!.docs;
+        final totalPages = (docs.length / _reportsPerPage).ceil();
+        final start = _recentPage * _reportsPerPage;
+        final end = (start + _reportsPerPage) > docs.length ? docs.length : (start + _reportsPerPage);
+        final pageDocs = docs.sublist(start, end);
+
+        return Container(
+          margin: const EdgeInsets.only(top: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.07),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.history, color: accentColor, size: 22),
+                  const SizedBox(width: 8),
+                  const Text('Recent Reports', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const Spacer(),
+                  if (totalPages > 1)
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left),
+                          onPressed: _recentPage > 0
+                              ? () => setState(() => _recentPage--)
+                              : null,
+                        ),
+                        Text('${_recentPage + 1}/$totalPages', style: const TextStyle(fontSize: 13)),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right),
+                          onPressed: _recentPage < totalPages - 1
+                              ? () => setState(() => _recentPage++)
+                              : null,
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+              ...pageDocs.map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return Container(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.report, color: accentColor, size: 22),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              data['issueDescription'] ?? '',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            if (data['placeName'] != null)
+                              Text(
+                                data['placeName'],
+                                style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Chip(
+                        label: Text(
+                          (data['status'] ?? '').toString().replaceAll('Reports', ''),
+                          style: TextStyle(
+                            color: data['status'] == 'Fixed'
+                                ? Colors.green[700]
+                                : (data['status'] == 'Unfixed Reports'
+                                    ? Colors.red[700]
+                                    : Colors.orange[800]),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        backgroundColor: Colors.grey[100],
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey[50],
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 12),
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+    return Material(
+      color: Colors.grey[50],
+      child: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            children: [
+              const SizedBox(height: 10),
+              Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.water_drop, color: Color(0xFF4A2C6F), size: 38),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Report a Water Issue',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22,
+                        color: Color(0xFF4A2C6F),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+              Container(
+                decoration: BoxDecoration(
                   color: Colors.white,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.07),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                child: Column(
+                  children: [
+                    _modernField(
+                      controller: _issueController,
+                      label: 'Issue Description *',
+                      icon: Icons.report_problem_outlined,
+                      maxLines: 2,
+                      validator: (v) => v!.isEmpty ? 'Required' : null,
+                    ),
+                    _modernField(
+                      controller: _locationController,
+                      label: 'Location *',
+                      icon: Icons.location_on_outlined,
+                      readOnly: true,
+                      onTap: _openMapPicker,
+                      hint: 'Tap to select or search location',
+                      validator: (v) => _selectedLocation == null ? 'Required' : null,
+                      suffixIcon: IconButton(
+                        icon: Icon(Icons.map, color: accentColor),
+                        onPressed: _openMapPicker,
+                      ),
+                    ),
+                    _modernField(
+                      controller: _dateTimeController,
+                      label: 'Date & Time *',
+                      icon: Icons.calendar_today,
+                      readOnly: true,
+                      onTap: _selectDateTime,
+                      hint: 'Tap to select date and time',
+                      validator: (v) => _selectedDateTime == null ? 'Required' : null,
+                    ),
+                    Row(
                       children: [
-                        const Text(
-                          'Report a Water Issue',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black87,
+                        Expanded(
+                          child: _modernField(
+                            controller: TextEditingController(text: _imageFile?.name ?? ''),
+                            label: 'Upload Image',
+                            icon: Icons.image_outlined,
+                            readOnly: true,
                           ),
                         ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Please provide details below:',
-                          style: TextStyle(fontSize: 13, color: Colors.black54),
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: _issueController,
-                          decoration: const InputDecoration(
-                            labelText: 'Issue Description *',
-                            border: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.all(Radius.circular(8)),
-                            ),
-                            contentPadding: EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
+                        const SizedBox(width: 6),
+                        ElevatedButton.icon(
+                          onPressed: _pickImage,
+                          icon: const Icon(Icons.upload, size: 18),
+                          label: const Text('Upload', style: TextStyle(fontSize: 13)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accentColor,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            minimumSize: const Size(0, 40),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
                           ),
-                          style: const TextStyle(fontSize: 13),
-                          validator: (value) =>
-                              value?.isEmpty ?? true ? 'Required' : null,
                         ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          readOnly: true,
-                          controller: _locationController,
-                          decoration: const InputDecoration(
-                            labelText: 'Location *',
-                            border: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.all(Radius.circular(8)),
-                            ),
-                            contentPadding: EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
-                            suffixIcon: Icon(Icons.map, size: 20),
-                            hintText: 'Tap to select or search location',
-                          ),
-                          style: const TextStyle(fontSize: 13),
-                          onTap: _openMapPicker,
-                          validator: (value) =>
-                              _selectedLocation == null ? 'Required' : null,
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          readOnly: true,
-                          controller: _dateTimeController,
-                          decoration: const InputDecoration(
-                            labelText: 'Date & Time *',
-                            border: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.all(Radius.circular(8)),
-                            ),
-                            contentPadding: EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
-                            suffixIcon: Icon(Icons.calendar_today, size: 20),
-                            hintText: 'Tap to select date and time',
-                          ),
-                          style: const TextStyle(fontSize: 13),
-                          onTap: _selectDateTime,
-                          validator: (value) =>
-                              _selectedDateTime == null ? 'Required' : null,
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
+                      ],
+                    ),
+                    if (_imageFile != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0, bottom: 2),
+                        child: Stack(
                           children: [
-                            Expanded(
-                              child: TextFormField(
-                                readOnly: true,
-                                decoration: const InputDecoration(
-                                  labelText: 'Upload Image (Optional)',
-                                  border: OutlineInputBorder(
-                                    borderRadius:
-                                        BorderRadius.all(Radius.circular(8)),
-                                  ),
-                                  contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 10),
-                                  suffixIcon: Icon(Icons.image, size: 20),
-                                ),
-                                style: const TextStyle(fontSize: 13),
-                                controller: TextEditingController(
-                                    text: _imageFile?.name ?? ''),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.file(
+                                File(_imageFile!.path),
+                                height: 110,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            ElevatedButton(
-                              onPressed: _pickImage,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF4A2C6F),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8)),
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 10),
-                              ),
-                              child: const Text(
-                                'Upload',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
+                            Positioned(
+                              top: 4,
+                              right: 4,
+                              child: GestureDetector(
+                                onTap: () => setState(() => _imageFile = null),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.white70,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: const Icon(Icons.close, size: 20, color: Colors.red),
                                 ),
                               ),
                             ),
                           ],
                         ),
-                        if (_imageFile != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12.0),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.file(
-                                File(_imageFile!.path),
-                                height: 120,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                        const SizedBox(height: 16),
-                        const Align(
-                          alignment: Alignment.center,
-                          child: Text(
-                            'Fields marked with * are required',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.red,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
+                      ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton(
+                        onPressed: _isSubmitting ? null : _submitReport,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentColor,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          padding: EdgeInsets.zero,
                         ),
-                      ],
+                        child: _isSubmitting
+                            ? const SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Text('Submit Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  color: Colors.white,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Submit Report',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.black87,
-                          ),
+                    const SizedBox(height: 8),
+                    Center(
+                      child: Text(
+                        'Fields marked with * are required',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.red[700],
+                          fontStyle: FontStyle.italic,
+                          fontWeight: FontWeight.w500,
+                          shadows: [
+                            Shadow(
+                              color: Colors.white,
+                              offset: Offset(0.5, 0.5),
+                              blurRadius: 1,
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 12),
-                        ElevatedButton(
-                          onPressed: _isSubmitting ? null : _submitReport,
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: const Size(double.infinity, 40),
-                            backgroundColor: const Color(0xFF4A2C6F),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                          ),
-                          child: _isSubmitting
-                              ? const CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                )
-                              : const Text(
-                                  'Submit',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              _recentReports(),
+            ],
           ),
         ),
       ),

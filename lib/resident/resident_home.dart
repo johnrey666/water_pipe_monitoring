@@ -1,11 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'auth/resident_login.dart';
 import 'report_problem_page.dart';
 import 'view_billing_page.dart';
-import 'resident_drawer_header.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 void main() {
   runApp(const ResidentialPortalApp());
@@ -27,16 +26,16 @@ class ResidentialPortalApp extends StatelessWidget {
         ),
         scaffoldBackgroundColor: const Color(0xFFF5F5F5),
         cardTheme: CardTheme(
-          elevation: 4,
+          elevation: 3,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
           ),
           color: Colors.white,
           margin: const EdgeInsets.all(8),
         ),
         appBarTheme: const AppBarTheme(
           centerTitle: true,
-          elevation: 4,
+          elevation: 3,
           backgroundColor: Colors.white,
           iconTheme: IconThemeData(color: Colors.black87),
           titleTextStyle: TextStyle(
@@ -45,24 +44,26 @@ class ResidentialPortalApp extends StatelessWidget {
             color: Colors.black87,
           ),
         ),
-        textTheme: const TextTheme(
-          titleLarge: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-          ),
-          titleMedium: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w500,
-            color: Colors.black87,
-          ),
-          bodyLarge: TextStyle(
-            fontSize: 16,
-            color: Colors.black87,
-          ),
-          bodyMedium: TextStyle(
-            fontSize: 14,
-            color: Colors.black54,
+        textTheme: GoogleFonts.poppinsTextTheme(
+          const TextTheme(
+            titleLarge: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+            titleMedium: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w500,
+              color: Colors.black87,
+            ),
+            bodyLarge: TextStyle(
+              fontSize: 16,
+              color: Colors.black87,
+            ),
+            bodyMedium: TextStyle(
+              fontSize: 14,
+              color: Colors.black54,
+            ),
           ),
         ),
       ),
@@ -90,6 +91,11 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
       MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
       (route) => false,
     );
+  }
+
+  Future<void> _refreshDashboard() async {
+    await Future.delayed(const Duration(seconds: 1));
+    setState(() {});
   }
 
   Widget _getPageContent() {
@@ -121,7 +127,6 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
         child: SafeArea(
           child: Column(
             children: [
-              // User Info at the top
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
@@ -198,12 +203,14 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                 padding: const EdgeInsets.symmetric(horizontal: 8.0),
                 child: ListTile(
                   leading: const Icon(Icons.logout, color: Colors.red),
-                  title: Text('Logout',
-                      style: GoogleFonts.poppins(
-                        color: Colors.red,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      )),
+                  title: Text(
+                    'Logout',
+                    style: GoogleFonts.poppins(
+                      color: Colors.red,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                   onTap: () => _logout(context),
                 ),
               ),
@@ -223,7 +230,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
           ),
         ),
         backgroundColor: Colors.white,
-        elevation: 2,
+        elevation: 3,
         actions: [
           Stack(
             children: [
@@ -238,7 +245,6 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                   );
                 },
               ),
-              // Notification badge (example, always 0)
               Positioned(
                 right: 10,
                 top: 10,
@@ -304,7 +310,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
           ),
           title: Text(
             title,
-            style: TextStyle(
+            style: GoogleFonts.poppins(
               fontSize: 16,
               fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
               color: isSelected
@@ -320,37 +326,60 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
   }
 
   Widget _buildDashboard() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  title: 'Today\'s Usage',
-                  value: '185 gal',
-                  description: '40% of daily avg',
-                  icon: Icons.water,
-                  color: const Color(0xFF00796B),
-                  progress: 0.4,
+    return RefreshIndicator(
+      onRefresh: _refreshDashboard,
+      color: const Color(0xFF4A2C6F),
+      backgroundColor: Colors.white,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 24),
+                AnimatedOpacity(
+                  opacity: 1.0,
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeOut,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'Today\'s Usage',
+                          value: '185 gal',
+                          description: '40% of daily avg',
+                          icon: Icons.water,
+                          color: const Color(0xFF00796B),
+                          progress: 0.4,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildStatCard(
+                          title: 'Flow Rate',
+                          value: '20.3 gal/min',
+                          description: 'Water Running',
+                          icon: Icons.speed,
+                          color: const Color(0xFF00838F),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatCard(
-                  title: 'Flow Rate',
-                  value: '20.3 gal/min',
-                  description: 'Water Running',
-                  icon: Icons.speed,
-                  color: const Color(0xFF00838F),
+                const SizedBox(height: 32),
+                AnimatedOpacity(
+                  opacity: 1.0,
+                  duration: const Duration(milliseconds: 500),
+                  curve: Curves.easeOut,
+                  child: _buildWeeklyUsageChart(),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          _buildWeeklyUsageChart(),
-        ],
+                const SizedBox(height: 24),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -365,41 +394,45 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         gradient: LinearGradient(
-          colors: [color.withOpacity(0.12), Colors.white],
+          colors: [color.withOpacity(0.1), Colors.white],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.10),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+            color: color.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
         ],
-        border: Border.all(color: color.withOpacity(0.18), width: 1.2),
+        border: Border.all(color: color.withOpacity(0.15), width: 1),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  title,
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: color.withOpacity(0.95),
+                Flexible(
+                  child: Text(
+                    title,
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: color.withOpacity(0.95),
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Container(
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.13),
-                    borderRadius: BorderRadius.circular(10),
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   padding: const EdgeInsets.all(8),
                   child: Icon(icon, size: 24, color: color.withOpacity(0.85)),
@@ -407,44 +440,43 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
               ],
             ),
             const SizedBox(height: 16),
-            if (progress != null)
-              Center(
-                child: SizedBox(
-                  width: 80,
-                  height: 80,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircularProgressIndicator(
-                        value: progress,
-                        strokeWidth: 8,
-                        backgroundColor: color.withOpacity(0.08),
-                        valueColor: AlwaysStoppedAnimation<Color>(color),
+            Center(
+              child: progress != null
+                  ? SizedBox(
+                      width: 80,
+                      height: 80,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            value: progress,
+                            strokeWidth: 8,
+                            backgroundColor: color.withOpacity(0.08),
+                            valueColor: AlwaysStoppedAnimation<Color>(color),
+                          ),
+                          Text(
+                            value,
+                            style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: color.withOpacity(0.95),
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
                       ),
-                      Text(
-                        value,
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: color.withOpacity(0.95),
-                        ),
+                    )
+                  : Text(
+                      value,
+                      style: GoogleFonts.poppins(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: color.withOpacity(0.95),
                       ),
-                    ],
-                  ),
-                ),
-              )
-            else
-              Center(
-                child: Text(
-                  value,
-                  style: GoogleFonts.poppins(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: color.withOpacity(0.95),
-                  ),
-                ),
-              ),
-            const SizedBox(height: 10),
+                      textAlign: TextAlign.center,
+                    ),
+            ),
+            const SizedBox(height: 12),
             Center(
               child: Text(
                 description,
@@ -453,6 +485,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                   color: color.withOpacity(0.7),
                   fontWeight: FontWeight.w500,
                 ),
+                textAlign: TextAlign.center,
               ),
             ),
           ],
@@ -475,18 +508,18 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4A2C6F).withOpacity(0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
+            color: const Color(0xFF4A2C6F).withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
           ),
         ],
-        border: Border.all(color: const Color(0xFF4A2C6F).withOpacity(0.10), width: 1.2),
+        border: Border.all(color: const Color(0xFF4A2C6F).withOpacity(0.08), width: 1),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -494,7 +527,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
               'Weekly Water Usage',
               style: GoogleFonts.poppins(
                 fontSize: 18,
-                fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.w600,
                 color: const Color(0xFF4A2C6F),
               ),
             ),
