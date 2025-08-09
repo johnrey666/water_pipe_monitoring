@@ -25,7 +25,7 @@ class _MonitorPageState extends State<MonitorPage> {
     try {
       final querySnapshot = await FirebaseFirestore.instance
           .collection('users')
-          .where('role', isEqualTo: 'Plumber') // Match the exact case
+          .where('role', isEqualTo: 'Plumber')
           .get();
       print('Fetched plumbers: ${querySnapshot.docs.length} documents');
       final plumbers = querySnapshot.docs
@@ -46,7 +46,6 @@ class _MonitorPageState extends State<MonitorPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Check authentication and trigger modal if reportId is valid
     if (FirebaseAuth.instance.currentUser == null) {
       Navigator.pushReplacementNamed(context, '/login');
       return;
@@ -525,85 +524,183 @@ class _MonitorPageState extends State<MonitorPage> {
           color: const Color(0xFFF5F5F5),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
-            child: StreamBuilder<QuerySnapshot>(
-              stream:
-                  FirebaseFirestore.instance.collection('reports').snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  print('StreamBuilder error: ${snapshot.error}');
-                  return Center(
-                    child: Text(
-                      'No reports available',
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                      ),
-                    ),
-                  );
-                }
-
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                final markers = snapshot.data!.docs
-                    .map((doc) {
-                      final data = doc.data() as Map<String, dynamic>;
-                      final location = data['location'];
-                      if (location == null || location is! GeoPoint)
-                        return null;
-
-                      return Marker(
-                        point: LatLng(location.latitude, location.longitude),
-                        width: 140,
-                        height: 70,
-                        child: GestureDetector(
-                          onTap: () => _fetchAndShowReportModal(doc.id),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                data['fullName'] ?? 'Unknown',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: const Color(0xFF4A2C6F),
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const Icon(
-                                Icons.location_pin,
-                                color: Color(0xFF4A2C6F),
-                                size: 28,
-                              ),
-                            ],
+            child: Stack(
+              children: [
+                StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('reports')
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      print('StreamBuilder error: ${snapshot.error}');
+                      return Center(
+                        child: Text(
+                          'No reports available',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: Colors.grey[600],
                           ),
                         ),
                       );
-                    })
-                    .whereType<Marker>()
-                    .toList();
+                    }
 
-                return FlutterMap(
-                  options: const MapOptions(
-                    initialCenter: LatLng(13.1486, 123.7156),
-                    initialZoom: 12,
-                    interactionOptions: InteractionOptions(
-                        flags: InteractiveFlag.all &
-                            ~InteractiveFlag.doubleTapZoom),
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate:
-                          'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      subdomains: ['a', 'b', 'c'],
-                      userAgentPackageName: 'com.example.app',
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    final markers = snapshot.data!.docs
+                        .map((doc) {
+                          final data = doc.data() as Map<String, dynamic>;
+                          final location = data['location'];
+                          if (location == null || location is! GeoPoint)
+                            return null;
+
+                          return Marker(
+                            point:
+                                LatLng(location.latitude, location.longitude),
+                            width: 140,
+                            height: 70,
+                            child: GestureDetector(
+                              onTap: () => _fetchAndShowReportModal(doc.id),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    data['fullName'] ?? 'Unknown',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: const Color(0xFF4A2C6F),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const Icon(
+                                    Icons.location_pin,
+                                    color: Color(0xFF4A2C6F),
+                                    size: 28,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        })
+                        .whereType<Marker>()
+                        .toList();
+
+                    // Add San Jose label (no icon)
+                    markers.add(
+                      Marker(
+                        point: const LatLng(
+                            13.3467, 123.7222), // San Jose, Malilipot, Albay
+                        width: 140,
+                        height: 40,
+                        child: Text(
+                          'San Jose',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18, // Enlarged font size
+                            fontWeight: FontWeight.w700,
+                            color: Colors.red[900],
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    );
+
+                    return FlutterMap(
+                      options: MapOptions(
+                        initialCenter: const LatLng(
+                            13.3467, 123.7222), // San Jose, Malilipot, Albay
+                        initialZoom: 16, // Tighter zoom for San Jose focus
+                        minZoom: 15, // Prevent zooming out too far
+                        maxZoom: 17, // Allow slight zoom-in for detail
+                        initialCameraFit: CameraFit.bounds(
+                          bounds: LatLngBounds(
+                            const LatLng(13.3447, 123.7202), // Southwest
+                            const LatLng(13.3487, 123.7242), // Northeast
+                          ),
+                          padding:
+                              const EdgeInsets.all(50), // Margin around bounds
+                        ),
+                        interactionOptions: const InteractionOptions(
+                          flags: InteractiveFlag.all &
+                              ~InteractiveFlag.doubleTapZoom &
+                              ~InteractiveFlag.flingAnimation,
+                        ),
+                      ),
+                      children: [
+                        TileLayer(
+                          urlTemplate:
+                              'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          subdomains: const ['a', 'b', 'c'],
+                          userAgentPackageName: 'com.example.app',
+                          errorTileCallback: (tile, error, stackTrace) {
+                            print('Tile loading error: $error');
+                            _showErrorOverlay(
+                                'Failed to load map tiles. Check your internet connection.');
+                          },
+                        ),
+                        MarkerLayer(markers: markers),
+                      ],
+                    );
+                  },
+                ),
+                // Manual scale indicator
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
                     ),
-                    MarkerLayer(markers: markers),
-                  ],
-                );
-              },
+                    child: Text(
+                      'Approx. 100m', // Adjusted for zoom 16
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                ),
+                // Attribution text
+                Positioned(
+                  bottom: 8,
+                  right: 8,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      '© OpenStreetMap contributors',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
