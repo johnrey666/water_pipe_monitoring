@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
 import 'view_schedule_page.dart';
 import 'view_reports_page.dart';
 import 'geographic_mapping_page.dart';
@@ -24,11 +23,26 @@ class _PlumberHomePageState extends State<PlumberHomePage>
   bool _isDropdownOpen = false;
   final GlobalKey _bellKey = GlobalKey();
   String? _initialReportId;
+  String _plumberName = 'Plumber User';
 
   @override
   void initState() {
     super.initState();
     _fetchNotifications();
+    _fetchPlumberName();
+  }
+
+  Future<void> _fetchPlumberName() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final data = doc.data();
+      if (data != null && data['fullName'] != null) {
+        setState(() {
+          _plumberName = data['fullName'];
+        });
+      }
+    }
   }
 
   Future<void> _fetchNotifications() async {
@@ -133,11 +147,7 @@ class _PlumberHomePageState extends State<PlumberHomePage>
                 padding:
                     const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
                 decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF6E4A9E), Color(0xFF4A2C6F)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: Colors.blue, // Changed background to solid blue
                   borderRadius:
                       BorderRadius.only(bottomRight: Radius.circular(24)),
                 ),
@@ -154,32 +164,31 @@ class _PlumberHomePageState extends State<PlumberHomePage>
                       ),
                     ),
                     const SizedBox(width: 16),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Welcome,',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            'Plumber User',
-                            style: TextStyle(
+                            _plumberName,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                               letterSpacing: 0.3,
                             ),
                           ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Plumber',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    const Icon(Icons.chevron_left, color: Colors.white70),
                   ],
                 ),
               ),
@@ -206,13 +215,18 @@ class _PlumberHomePageState extends State<PlumberHomePage>
                 ),
               ),
               const Divider(),
-              ListTile(
-                leading: const Icon(Icons.logout, color: Colors.redAccent),
-                title: const Text(
-                  'Logout',
-                  style: TextStyle(color: Colors.redAccent),
+              Center(
+                child: ListTile(
+                  leading: const Icon(Icons.logout, color: Colors.redAccent),
+                  title: const Text(
+                    'Logout',
+                    style: TextStyle(
+                      color: Colors.redAccent,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  onTap: _logout,
                 ),
-                onTap: _logout,
               ),
             ],
           ),

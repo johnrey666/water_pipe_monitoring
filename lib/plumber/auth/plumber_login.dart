@@ -1,6 +1,7 @@
+// ignore_for_file: sort_child_properties_last, use_build_context_synchronously
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'plumber_signup.dart';
 import '../plumber_home.dart';
 import '../../landing_page.dart';
 
@@ -16,6 +17,7 @@ class _PlumberLoginPageState extends State<PlumberLoginPage> {
   final TextEditingController passwordController = TextEditingController();
 
   bool isLoading = false;
+  bool _obscurePassword = true;
 
   Future<void> _login() async {
     setState(() => isLoading = true);
@@ -40,6 +42,7 @@ class _PlumberLoginPageState extends State<PlumberLoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    const fieldBorderColor = Color(0xFF87CEEB);
     return Scaffold(
       body: Stack(
         children: [
@@ -54,7 +57,7 @@ class _PlumberLoginPageState extends State<PlumberLoginPage> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.plumbing, size: 80, color: Colors.teal),
+                  const Icon(Icons.plumbing, size: 80, color: Color(0xFF87CEEB)),
                   const SizedBox(height: 8),
                   const Text(
                     'Plumber Login',
@@ -63,10 +66,15 @@ class _PlumberLoginPageState extends State<PlumberLoginPage> {
                   const SizedBox(height: 32),
                   TextField(
                     controller: emailController,
+                    cursorColor: Colors.black,
                     decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.email_outlined),
+                      prefixIcon: Icon(Icons.email_outlined, color: Colors.grey),
                       hintText: 'Email Address',
                       border: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: fieldBorderColor),
                         borderRadius: BorderRadius.all(Radius.circular(12)),
                       ),
                     ),
@@ -74,47 +82,47 @@ class _PlumberLoginPageState extends State<PlumberLoginPage> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.lock_outline),
+                    obscureText: _obscurePassword,
+                    cursorColor: Colors.black,
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey),
                       hintText: 'Password',
-                      border: OutlineInputBorder(
+                      border: const OutlineInputBorder(
                         borderRadius: BorderRadius.all(Radius.circular(12)),
+                      ),
+                      focusedBorder: const OutlineInputBorder(
+                        borderSide: BorderSide(color: fieldBorderColor),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
+                      ),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                          color: Colors.grey,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
                       ),
                     ),
                   ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton.icon(
-                      icon: const Icon(Icons.login, color: Colors.white),
-                      label: isLoading
-                          ? const CircularProgressIndicator(
-                              color: Colors.white,
-                            )
-                          : const Text('Log In',
-                              style: TextStyle(color: Colors.white)),
+                    child: ElevatedButton(
+                      child: isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text('LOG IN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       onPressed: isLoading ? null : _login,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.black,
+                        backgroundColor: const Color(0xFF87CEEB),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (_) => const PlumberSignupPage()),
-                      );
-                    },
-                    child:
-                        const Text('Sign Up', style: TextStyle(fontSize: 16)),
                   ),
                 ],
               ),
@@ -132,12 +140,13 @@ class BackButtonStyled extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-        icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),
-        onPressed: () {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (_) => const LandingPage()),
-          );
-        });
+      icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),
+      onPressed: () {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const LandingPage()),
+        );
+      },
+    );
   }
 }

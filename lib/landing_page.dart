@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_const_constructors
+
 import 'package:flutter/material.dart';
 import 'package:water_pipe_monitoring/resident/auth/resident_login.dart';
 import 'package:water_pipe_monitoring/plumber/auth/plumber_login.dart';
@@ -14,6 +16,15 @@ class LandingPage extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              Text(
+                'Please Select Your Role',
+                style: TextStyle(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 40),
               RoleButton(
                 title: 'PLUMBER',
                 onTap: () {
@@ -29,8 +40,7 @@ class LandingPage extends StatelessWidget {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                        builder: (_) => const ResidentLoginPage()),
+                    MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
                   );
                 },
               ),
@@ -53,12 +63,14 @@ class RoleButton extends StatelessWidget {
     return ElevatedButton(
       onPressed: onTap,
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 4,
+        backgroundColor: Color(0xFF87CEEB),
+        foregroundColor: Color.fromARGB(255, 255, 255, 255),
+        elevation: 2,
+        shadowColor: Colors.grey.withOpacity(0.5),
         padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: Colors.black12),
         ),
       ),
       child: Text(
