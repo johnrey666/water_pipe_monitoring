@@ -9,6 +9,9 @@ import 'dart:io';
 import 'package:latlong2/latlong.dart' as latlong;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:animate_do/animate_do.dart';
+import 'package:intl/intl.dart';
 
 class ReportProblemPage extends StatefulWidget {
   const ReportProblemPage({super.key});
@@ -32,7 +35,6 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
 
   // Pagination for recent reports
   int _recentPage = 0;
-  static const int _reportsPerPage = 3;
 
   Color get accentColor => const Color(0xFF4A2C6F);
 
@@ -74,7 +76,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
             _locationController.text = placeName;
           });
           if (_mapController != null) {
-            _mapController!.move(_selectedLocation!, 14);
+            _mapController!.move(_selectedLocation!, 16);
           }
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -216,6 +218,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         _selectedLocation = null;
         _selectedPlaceName = null;
         _selectedDateTime = null;
+        _recentPage = 0; // Reset to first page to show newest report
       });
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -229,8 +232,8 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   }
 
   void _openMapPicker() {
-    latlong.LatLng initial = _selectedLocation ??
-        const latlong.LatLng(13.1486, 123.7156); // Daraga, Albay
+    latlong.LatLng initial =
+        const latlong.LatLng(13.3467, 123.7222); // San Jose, Malilipot, Albay
     latlong.LatLng? tempLocation = _selectedLocation;
     String? tempPlaceName = _selectedPlaceName;
     MapController tempMapController = MapController();
@@ -245,17 +248,105 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
           clipBehavior: Clip.antiAlias,
           child: StatefulBuilder(
-            builder: (context, modalSetState) => Column(
+            builder: (context, modalSetState) => Stack(
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(10),
+                FlutterMap(
+                  mapController: tempMapController,
+                  options: MapOptions(
+                    initialCenter: tempLocation ?? initial,
+                    initialZoom: 16, // Tighter zoom for San Jose focus
+                    minZoom: 15, // Prevent zooming out too far
+                    maxZoom: 17, // Allow slight zoom-in for detail
+                    initialCameraFit: CameraFit.bounds(
+                      bounds: LatLngBounds(
+                        const latlong.LatLng(13.3447, 123.7202), // Southwest
+                        const latlong.LatLng(13.3487, 123.7242), // Northeast
+                      ),
+                      padding: const EdgeInsets.all(50), // Margin around bounds
+                    ),
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.all &
+                          ~InteractiveFlag.doubleTapZoom &
+                          ~InteractiveFlag.flingAnimation,
+                    ),
+                    onTap: (tapPosition, position) async {
+                      final placeName = await _getPlaceName(position);
+                      modalSetState(() {
+                        tempLocation = position;
+                        tempPlaceName = placeName;
+                      });
+                      tempMapController.move(position, 16);
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      subdomains: const ['a', 'b', 'c'],
+                      userAgentPackageName: 'com.example.water_pipe_monitoring',
+                      errorTileCallback: (tile, error, stackTrace) {
+                        print('Tile loading error: $error');
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                              content: Text(
+                                  'Failed to load map tiles. Check your internet connection.')),
+                        );
+                      },
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        // San Jose label (no icon)
+                        Marker(
+                          point: const latlong.LatLng(
+                              13.3467, 123.7222), // San Jose
+                          width: 140,
+                          height: 40,
+                          child: FadeIn(
+                            duration: const Duration(milliseconds: 300),
+                            child: Text(
+                              'San Jose',
+                              style: GoogleFonts.poppins(
+                                fontSize: 18, // Enlarged font size
+                                fontWeight: FontWeight.w700,
+                                color: Colors.red[900],
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                        // User-selected location marker
+                        if (tempLocation != null)
+                          Marker(
+                            point: tempLocation!,
+                            width: 36,
+                            height: 36,
+                            child: const Icon(
+                              Icons.location_pin,
+                              color: Colors.red,
+                              size: 36,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  right: 10,
                   child: TextField(
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Search Location',
-                      border: OutlineInputBorder(),
-                      hintText: 'e.g., Daraga, Albay',
-                      suffixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      hintText: 'e.g., San Jose, Malilipot, Albay',
+                      suffixIcon:
+                          const Icon(Icons.search, color: Color(0xFF4A2C6F)),
                       isDense: true,
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.95),
                     ),
                     onSubmitted: (value) async {
                       if (value.isNotEmpty) {
@@ -274,55 +365,72 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                               tempLocation = latlong.LatLng(lat, lon);
                               tempPlaceName = placeName;
                             });
-                            tempMapController.move(tempLocation!, 14);
+                            tempMapController.move(tempLocation!, 16);
                           }
                         }
                       }
                     },
                   ),
                 ),
-                Expanded(
-                  child: FlutterMap(
-                    mapController: tempMapController,
-                    options: MapOptions(
-                      initialCenter: tempLocation ?? initial,
-                      initialZoom: 14,
-                      onTap: (tapPosition, position) async {
-                        final placeName = await _getPlaceName(position);
-                        modalSetState(() {
-                          tempLocation = position;
-                          tempPlaceName = placeName;
-                        });
-                        tempMapController.move(position, 14);
-                      },
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        subdomains: ['a', 'b', 'c'],
-                        userAgentPackageName: 'com.example.water_pipe_monitoring',
-                      ),
-                      if (tempLocation != null)
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              point: tempLocation!,
-                              width: 36,
-                              height: 36,
-                              child: const Icon(
-                                Icons.location_pin,
-                                color: Colors.red,
-                                size: 36,
-                              ),
-                            ),
-                          ],
+                // Manual scale indicator
+                Positioned(
+                  top: 60,
+                  left: 10,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
                         ),
-                    ],
+                      ],
+                    ),
+                    child: Text(
+                      'Approx. 100m', // Adjusted for zoom 16
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.black87,
+                      ),
+                    ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.all(10),
+                // Attribution text
+                Positioned(
+                  bottom: 10,
+                  right: 10,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      '© OpenStreetMap contributors',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                ),
+                // Confirm button
+                Positioned(
+                  bottom: 10,
+                  left: 10,
+                  right: 10,
                   child: SizedBox(
                     width: double.infinity,
                     height: 40,
@@ -342,11 +450,14 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
                       ),
-                      child: const Text('Confirm Location',
-                          style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white)),
+                      child: const Text(
+                        'Confirm Location',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -389,10 +500,18 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
             borderRadius: BorderRadius.circular(10),
           ),
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         ),
       ),
     );
+  }
+
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp is Timestamp) {
+      return DateFormat.yMMMMd().add_jm().format(timestamp.toDate());
+    }
+    return 'N/A';
   }
 
   Widget _recentReports() {
@@ -408,17 +527,18 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         if (snapshot.hasError) {
           return const Padding(
             padding: EdgeInsets.all(8.0),
-            child: Text('Error loading recent reports', style: TextStyle(color: Colors.red)),
+            child: Text('Error loading recent reports',
+                style: TextStyle(color: Colors.red)),
           );
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const SizedBox();
         }
         final docs = snapshot.data!.docs;
-        final totalPages = (docs.length / _reportsPerPage).ceil();
-        final start = _recentPage * _reportsPerPage;
-        final end = (start + _reportsPerPage) > docs.length ? docs.length : (start + _reportsPerPage);
-        final pageDocs = docs.sublist(start, end);
+        final totalPages = docs.length; // One report per page
+        final index = _recentPage.clamp(0, docs.length - 1);
+        final doc = docs[index];
+        final data = doc.data() as Map<String, dynamic>;
 
         return Container(
           margin: const EdgeInsets.only(top: 18),
@@ -441,7 +561,9 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                 children: [
                   Icon(Icons.history, color: accentColor, size: 22),
                   const SizedBox(width: 8),
-                  const Text('Recent Reports', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const Text('Recent Report',
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   const Spacer(),
                   if (totalPages > 1)
                     Row(
@@ -452,7 +574,8 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                               ? () => setState(() => _recentPage--)
                               : null,
                         ),
-                        Text('${_recentPage + 1}/$totalPages', style: const TextStyle(fontSize: 13)),
+                        Text('${_recentPage + 1}/$totalPages',
+                            style: const TextStyle(fontSize: 13)),
                         IconButton(
                           icon: const Icon(Icons.chevron_right),
                           onPressed: _recentPage < totalPages - 1
@@ -463,62 +586,73 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                     ),
                 ],
               ),
-              ...pageDocs.map((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                return Container(
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[200]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.report, color: accentColor, size: 22),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.grey[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.report, color: accentColor, size: 22),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data['issueDescription'] ?? '',
+                            style: const TextStyle(
+                                fontSize: 14, fontWeight: FontWeight.w500),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (data['placeName'] != null)
                             Text(
-                              data['issueDescription'] ?? '',
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                              maxLines: 2,
+                              data['placeName'],
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.black54),
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            if (data['placeName'] != null)
-                              Text(
-                                data['placeName'],
-                                style: const TextStyle(fontSize: 12, color: Colors.black54),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Chip(
-                        label: Text(
-                          (data['status'] ?? '').toString().replaceAll('Reports', ''),
-                          style: TextStyle(
-                            color: data['status'] == 'Fixed'
-                                ? Colors.green[700]
-                                : (data['status'] == 'Unfixed Reports'
-                                    ? Colors.red[700]
-                                    : Colors.orange[800]),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
+                          Text(
+                            _formatTimestamp(data['createdAt']),
+                            style: const TextStyle(
+                                fontSize: 12, color: Colors.black54),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        backgroundColor: Colors.grey[100],
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                        ],
                       ),
-                    ],
-                  ),
-                );
-              }).toList(),
+                    ),
+                    const SizedBox(width: 8),
+                    Chip(
+                      label: Text(
+                        (data['status'] ?? '')
+                            .toString()
+                            .replaceAll('Reports', ''),
+                        style: TextStyle(
+                          color: data['status'] == 'Fixed'
+                              ? Colors.green[700]
+                              : (data['status'] == 'Unfixed Reports'
+                                  ? Colors.red[700]
+                                  : Colors.orange[800]),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      backgroundColor: Colors.grey[100],
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 0),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         );
@@ -567,7 +701,8 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                     ),
                   ],
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                 child: Column(
                   children: [
                     _modernField(
@@ -584,7 +719,8 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                       readOnly: true,
                       onTap: _openMapPicker,
                       hint: 'Tap to select or search location',
-                      validator: (v) => _selectedLocation == null ? 'Required' : null,
+                      validator: (v) =>
+                          _selectedLocation == null ? 'Required' : null,
                       suffixIcon: IconButton(
                         icon: Icon(Icons.map, color: accentColor),
                         onPressed: _openMapPicker,
@@ -597,13 +733,15 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                       readOnly: true,
                       onTap: _selectDateTime,
                       hint: 'Tap to select date and time',
-                      validator: (v) => _selectedDateTime == null ? 'Required' : null,
+                      validator: (v) =>
+                          _selectedDateTime == null ? 'Required' : null,
                     ),
                     Row(
                       children: [
                         Expanded(
                           child: _modernField(
-                            controller: TextEditingController(text: _imageFile?.name ?? ''),
+                            controller: TextEditingController(
+                                text: _imageFile?.name ?? ''),
                             label: 'Upload Image',
                             icon: Icons.image_outlined,
                             readOnly: true,
@@ -613,12 +751,15 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                         ElevatedButton.icon(
                           onPressed: _pickImage,
                           icon: const Icon(Icons.upload, size: 18),
-                          label: const Text('Upload', style: TextStyle(fontSize: 13)),
+                          label: const Text('Upload',
+                              style: TextStyle(fontSize: 13)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: accentColor,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
                             minimumSize: const Size(0, 40),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 0),
                           ),
                         ),
                       ],
@@ -647,7 +788,8 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                                     color: Colors.white70,
                                     borderRadius: BorderRadius.circular(20),
                                   ),
-                                  child: const Icon(Icons.close, size: 20, color: Colors.red),
+                                  child: const Icon(Icons.close,
+                                      size: 20, color: Colors.red),
                                 ),
                               ),
                             ),
@@ -662,16 +804,22 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                         onPressed: _isSubmitting ? null : _submitReport,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: accentColor,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
                           padding: EdgeInsets.zero,
                         ),
                         child: _isSubmitting
                             ? const SizedBox(
                                 height: 22,
                                 width: 22,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                    color: Colors.white, strokeWidth: 2),
                               )
-                            : const Text('Submit Report', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                            : const Text('Submit Report',
+                                style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white)),
                       ),
                     ),
                     const SizedBox(height: 8),

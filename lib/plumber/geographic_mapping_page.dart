@@ -318,27 +318,65 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                       .whereType<Marker>()
                       .toList();
 
+                  // Add San Jose label (no icon)
+                  markers.add(
+                    Marker(
+                      point: const LatLng(
+                          13.3467, 123.7222), // San Jose, Malilipot, Albay
+                      width: 140,
+                      height: 40,
+                      child: Text(
+                        'San Jose',
+                        style: GoogleFonts.poppins(
+                          fontSize: 18, // Enlarged font size
+                          fontWeight: FontWeight.w700,
+                          color: Colors.red[900],
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  );
+
                   return FlutterMap(
-                    options: const MapOptions(
-                      initialCenter: LatLng(13.1486, 123.7156),
-                      initialZoom: 12,
-                      interactionOptions: InteractionOptions(
+                    options: MapOptions(
+                      initialCenter:
+                          const LatLng(13.3467, 123.7222), // San Jose
+                      initialZoom: 16, // Tighter zoom for San Jose focus
+                      minZoom: 15, // Prevent zooming out too far
+                      maxZoom: 17, // Allow slight zoom-in for detail
+                      initialCameraFit: CameraFit.bounds(
+                        bounds: LatLngBounds(
+                          const LatLng(13.3447, 123.7202), // Southwest
+                          const LatLng(13.3487, 123.7242), // Northeast
+                        ),
+                        padding:
+                            const EdgeInsets.all(50), // Margin around bounds
+                      ),
+                      interactionOptions: const InteractionOptions(
                         flags: InteractiveFlag.all &
-                            ~InteractiveFlag.doubleTapZoom,
+                            ~InteractiveFlag.doubleTapZoom &
+                            ~InteractiveFlag.flingAnimation,
                       ),
                     ),
                     children: [
                       TileLayer(
                         urlTemplate:
                             'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        subdomains: ['a', 'b', 'c'],
+                        subdomains: const ['a', 'b', 'c'],
                         userAgentPackageName: 'com.example.app',
+                        errorTileCallback: (tile, error, stackTrace) {
+                          print('Tile loading error: $error');
+                          _showErrorOverlay(
+                              'Failed to load map tiles. Check your internet connection.');
+                        },
                       ),
                       MarkerLayer(markers: markers),
                     ],
                   );
                 },
               ),
+              // Title
               Positioned(
                 top: 16,
                 left: 16,
@@ -373,6 +411,60 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                           ),
                         ],
                       ),
+                    ),
+                  ),
+                ),
+              ),
+              // Manual scale indicator
+              Positioned(
+                top: 60,
+                left: 16,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    'Approx. 100m', // Adjusted for zoom 16
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              ),
+              // Attribution text
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(4),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 2,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    '© OpenStreetMap contributors',
+                    style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      color: Colors.black87,
                     ),
                   ),
                 ),
