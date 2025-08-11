@@ -1,4 +1,4 @@
-// ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const, unused_element, use_build_context_synchronously, unnecessary_string_interpolations, unnecessary_to_list_in_spreads
+// ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const, unused_element, use_build_context_synchronously, unnecessary_string_interpolations, unnecessary_to_list_in_spreads, unused_local_variable, unused_import
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -602,7 +602,7 @@ final Color asteriskColor = Colors.red;
                     ),
                 ],
               ),
-              ...pageDocs.map((doc) {
+              ...[doc].map((doc) {
                 final data = doc.data() as Map<String, dynamic>;
                 return Container(
                   margin: const EdgeInsets.symmetric(vertical: 4),
