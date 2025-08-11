@@ -214,7 +214,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: Color.fromARGB(255, 255, 255, 255),
       body: _loading 
         ? _buildLoadingState()
         : _error != null 
@@ -446,16 +446,16 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   child: Icon(
                     Icons.water_drop,
                     size: 32,
-                    color: const Color(0xFF4A2C6F),
+                    color: Color(0xFF87CEEB),
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  "WATER BILLING SYSTEM",
+                  "VIEW BILLING",
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF4A2C6F),
+                    color: Colors.grey[800],
                     letterSpacing: 1.2,
                   ),
                 ),
@@ -544,7 +544,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF4A2C6F),
+                    color: Colors.grey[800],
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -579,7 +579,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF4A2C6F),
+                    color: Colors.grey[800],
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -594,7 +594,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFF4A2C6F),
+                    color: Colors.grey[800],
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -609,7 +609,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     style: GoogleFonts.poppins(
                     fontSize: 14,
                       fontWeight: FontWeight.w600,
-                    color: const Color(0xFF4A2C6F),
+                    color: Colors.grey[800],
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -632,11 +632,11 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        "TOTAL AMOUNT DUE",
+                        "TOTAL AMOUNT DUE:",
                         style: GoogleFonts.poppins(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF4A2C6F),
+                          color: Colors.grey[800],
                         ),
                       ),
                       Text(
@@ -644,7 +644,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                         style: GoogleFonts.poppins(
                           fontSize: 18,
                           fontWeight: FontWeight.w700,
-                          color: const Color(0xFF4A2C6F),
+                          color: Color.fromARGB(255, 223, 77, 77),
                         ),
                       ),
                     ],
@@ -693,7 +693,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                       style: GoogleFonts.poppins(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: const Color(0xFF4A2C6F),
+                        color: Colors.grey[800],
                       ),
                     ),
                   ],

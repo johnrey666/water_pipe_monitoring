@@ -233,6 +233,7 @@ class _PlumberHomePageState extends State<PlumberHomePage>
         ),
       ),
       appBar: AppBar(
+        backgroundColor: Colors.white,
         title: const Text('Plumber Portal'),
         centerTitle: true,
         elevation: 0,

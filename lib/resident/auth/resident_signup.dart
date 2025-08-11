@@ -95,6 +95,7 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
   Widget build(BuildContext context) {
     final height = MediaQuery.of(context).size.height;
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Stack(
           children: [
