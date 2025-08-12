@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const, unused_element, use_build_context_synchronously, unnecessary_string_interpolations, unnecessary_to_list_in_spreads, unused_local_variable, unused_import
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:image_picker/image_picker.dart';
@@ -32,12 +34,17 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   MapController? _mapController;
   DateTime? _selectedDateTime;
   bool _isSubmitting = false;
+  final Color focusBlue = const Color(0xFF87CEEB);
+final Color fieldLabelColor = Colors.grey[800]!;
+final Color iconGrey = Colors.grey[800]!;
+final Color asteriskColor = Colors.red;
 
   // Pagination for recent reports
   int _recentPage = 0;
 
+  // Color scheme updates
   Color get accentColor => const Color(0xFF4A2C6F);
-
+  
   Future<void> _pickImage() async {
     final androidInfo = await DeviceInfoPlugin().androidInfo;
     final sdkInt = androidInfo.version.sdkInt;
@@ -232,8 +239,8 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   }
 
   void _openMapPicker() {
-    latlong.LatLng initial =
-        const latlong.LatLng(13.3467, 123.7222); // San Jose, Malilipot, Albay
+    latlong.LatLng initial = _selectedLocation ??
+        const latlong.LatLng(13.1486, 123.7156);
     latlong.LatLng? tempLocation = _selectedLocation;
     String? tempPlaceName = _selectedPlaceName;
     MapController tempMapController = MapController();
@@ -336,14 +343,16 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                   left: 10,
                   right: 10,
                   child: TextField(
+                    cursorColor: Colors.black,
                     decoration: InputDecoration(
                       labelText: 'Search Location',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
+                      labelStyle: TextStyle(color: Colors.grey[800]),
+                      border: OutlineInputBorder(),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(color: focusBlue, width: 2),
                       ),
-                      hintText: 'e.g., San Jose, Malilipot, Albay',
-                      suffixIcon:
-                          const Icon(Icons.search, color: Color(0xFF4A2C6F)),
+                      hintText: 'e.g., San Jose, Malilipot',
+                      suffixIcon: Icon(Icons.search, color: iconGrey),
                       isDense: true,
                       filled: true,
                       fillColor: Colors.white.withOpacity(0.95),
@@ -446,18 +455,15 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: accentColor,
+                        backgroundColor: focusBlue,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
                       ),
-                      child: const Text(
-                        'Confirm Location',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.white,
-                        ),
-                      ),
+                      child: const Text('CONFIRM LOCATION',
+                          style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.white)),
                     ),
                   ),
                 ),
@@ -470,49 +476,59 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   }
 
   Widget _modernField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    bool readOnly = false,
-    VoidCallback? onTap,
-    String? hint,
-    String? Function(String?)? validator,
-    Widget? suffixIcon,
-    int maxLines = 1,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: TextFormField(
-        controller: controller,
-        readOnly: readOnly,
-        onTap: onTap,
-        maxLines: maxLines,
-        validator: validator,
-        style: const TextStyle(fontSize: 15),
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          prefixIcon: Icon(icon, size: 22, color: accentColor),
-          suffixIcon: suffixIcon,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-          focusedBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: accentColor, width: 2),
-            borderRadius: BorderRadius.circular(10),
+  required TextEditingController controller,
+  required String label,
+  required IconData icon,
+  Color? iconColor, // optional override per-call
+  bool readOnly = false,
+  VoidCallback? onTap,
+  String? hint,
+  String? Function(String?)? validator,
+  Widget? suffixIcon,
+  int maxLines = 1,
+}) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: TextFormField(
+      controller: controller,
+      readOnly: readOnly,
+      onTap: onTap,
+      maxLines: maxLines,
+      validator: validator,
+      cursorColor: Colors.black, // text cursor color
+      style: const TextStyle(fontSize: 15, color: Colors.black),
+      decoration: InputDecoration(
+        // use a Widget label to mix normal text + red asterisk
+        label: RichText(
+          text: TextSpan(
+            text: label.replaceAll('*', '').trim(),
+            style: TextStyle(color: fieldLabelColor, fontSize: 13),
+            children: label.contains('*')
+                ? [
+                    TextSpan(
+                      text: ' *',
+                      style: TextStyle(color: asteriskColor),
+                    )
+                  ]
+                : [],
           ),
-          isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         ),
+        hintText: hint,
+        prefixIcon: Icon(icon, size: 22, color: iconColor ?? iconGrey),
+        suffixIcon: suffixIcon,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: focusBlue, width: 2),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        isDense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  String _formatTimestamp(dynamic timestamp) {
-    if (timestamp is Timestamp) {
-      return DateFormat.yMMMMd().add_jm().format(timestamp.toDate());
-    }
-    return 'N/A';
-  }
 
   Widget _recentReports() {
     final user = FirebaseAuth.instance.currentUser;
@@ -559,7 +575,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
             children: [
               Row(
                 children: [
-                  Icon(Icons.history, color: accentColor, size: 22),
+                  Icon(Icons.history, color: focusBlue, size: 22),
                   const SizedBox(width: 8),
                   const Text('Recent Report',
                       style:
@@ -586,84 +602,73 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                     ),
                 ],
               ),
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey[200]!),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.report, color: accentColor, size: 22),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            data['issueDescription'] ?? '',
-                            style: const TextStyle(
-                                fontSize: 14, fontWeight: FontWeight.w500),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (data['placeName'] != null)
+              ...[doc].map((doc) {
+                final data = doc.data() as Map<String, dynamic>;
+                return Container(
+                  margin: const EdgeInsets.symmetric(vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey[200]!),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.report, color: const Color.fromARGB(255, 209, 70, 60), size: 22),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              data['placeName'],
-                              style: const TextStyle(
-                                  fontSize: 12, color: Colors.black54),
-                              maxLines: 1,
+                              data['issueDescription'] ?? '',
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                              maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
-                          Text(
-                            _formatTimestamp(data['createdAt']),
-                            style: const TextStyle(
-                                fontSize: 12, color: Colors.black54),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Chip(
-                      label: Text(
-                        (data['status'] ?? '')
-                            .toString()
-                            .replaceAll('Reports', ''),
-                        style: TextStyle(
-                          color: data['status'] == 'Fixed'
-                              ? Colors.green[700]
-                              : (data['status'] == 'Unfixed Reports'
-                                  ? Colors.red[700]
-                                  : Colors.orange[800]),
-                          fontWeight: FontWeight.bold,
-                          fontSize: 12,
+                            if (data['placeName'] != null)
+                              Text(
+                                data['placeName'],
+                                style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                          ],
                         ),
                       ),
-                      backgroundColor: Colors.grey[100],
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(6)),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 0),
-                    ),
-                  ],
-                ),
-              ),
+                      const SizedBox(width: 8),
+                      Chip(
+                        label: Text(
+                          (data['status'] ?? '').toString().replaceAll('Reports', ''),
+                          style: TextStyle(
+                            color: data['status'] == 'Fixed'
+                                ? Colors.green[700]
+                                : (data['status'] == 'Unfixed Reports'
+                                    ? Colors.red[700]
+                                    : Colors.orange[800]),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        backgroundColor: Colors.grey[100],
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
             ],
           ),
         );
       },
     );
-  }
+  }  
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.grey[50],
+      color: const Color.fromARGB(255, 255, 255, 255),
       child: SafeArea(
         child: Form(
           key: _formKey,
@@ -674,14 +679,14 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
               Center(
                 child: Column(
                   children: [
-                    Icon(Icons.water_drop, color: Color(0xFF4A2C6F), size: 38),
+                    Icon(Icons.water_drop, color: focusBlue, size: 38),
                     const SizedBox(height: 4),
                     const Text(
                       'Report a Water Issue',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 22,
-                        color: Color(0xFF4A2C6F),
+                        color: Color.fromRGBO(66, 66, 66, 1),
                         letterSpacing: 0.5,
                       ),
                     ),
@@ -722,7 +727,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                       validator: (v) =>
                           _selectedLocation == null ? 'Required' : null,
                       suffixIcon: IconButton(
-                        icon: Icon(Icons.map, color: accentColor),
+                        icon: Icon(Icons.map, color: iconGrey),
                         onPressed: _openMapPicker,
                       ),
                     ),
@@ -750,13 +755,11 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                         const SizedBox(width: 6),
                         ElevatedButton.icon(
                           onPressed: _pickImage,
-                          icon: const Icon(Icons.upload, size: 18),
-                          label: const Text('Upload',
-                              style: TextStyle(fontSize: 13)),
+                          icon: Icon(Icons.upload, size: 18, color: iconGrey),
+                          label: Text('UPLOAD', style: TextStyle(fontSize: 13, color: iconGrey, fontWeight: FontWeight.w900)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: accentColor,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
+                            backgroundColor: focusBlue,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                             minimumSize: const Size(0, 40),
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 0),
@@ -803,9 +806,8 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                       child: ElevatedButton(
                         onPressed: _isSubmitting ? null : _submitReport,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: accentColor,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                          backgroundColor: focusBlue,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           padding: EdgeInsets.zero,
                         ),
                         child: _isSubmitting
@@ -815,11 +817,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                                 child: CircularProgressIndicator(
                                     color: Colors.white, strokeWidth: 2),
                               )
-                            : const Text('Submit Report',
-                                style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white)),
+                            : const Text('SUBMIT REPORT', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white)),
                       ),
                     ),
                     const SizedBox(height: 8),

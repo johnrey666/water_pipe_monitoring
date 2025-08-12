@@ -44,6 +44,7 @@ class _PlumberLoginPageState extends State<PlumberLoginPage> {
   Widget build(BuildContext context) {
     const fieldBorderColor = Color(0xFF87CEEB);
     return Scaffold(
+      backgroundColor:Colors.white, 
       body: Stack(
         children: [
           const Positioned(

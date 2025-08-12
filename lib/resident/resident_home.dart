@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_const_constructors, unnecessary_const
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -120,7 +122,9 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       drawer: Drawer(
+        backgroundColor: Colors.white,
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.horizontal(right: Radius.circular(16)),
         ),
@@ -131,11 +135,15 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
                 decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF4A2C6F), Color(0xFF6B46C1)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                 gradient: LinearGradient(
+  colors: [
+    const Color(0xFF87CEEB),         // Sky Blue
+    Color.fromARGB(255, 127, 190, 226),         // Light Sky Blue
+  ],
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+),
+
                   borderRadius: BorderRadius.only(
                     topRight: Radius.circular(16),
                     bottomRight: Radius.circular(32),
@@ -146,7 +154,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                     const CircleAvatar(
                       radius: 28,
                       backgroundColor: Colors.white,
-                      child: Icon(Icons.person, size: 36, color: Color(0xFF4A2C6F)),
+                      child: Icon(Icons.person, size: 36, color: Color.fromARGB(255, 58, 56, 56)),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -156,7 +164,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                           Text(
                             'Welcome!',
                             style: GoogleFonts.poppins(
-                              color: Colors.white,
+                              color: Colors.grey[800],
                               fontWeight: FontWeight.w500,
                               fontSize: 16,
                             ),
@@ -164,7 +172,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                           Text(
                             'Resident',
                             style: GoogleFonts.poppins(
-                              color: Colors.white,
+                              color: Colors.grey[800],
                               fontWeight: FontWeight.bold,
                               fontSize: 20,
                             ),
@@ -221,21 +229,21 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
       ),
       appBar: AppBar(
         title: Text(
-          'Resident Portal',
+          'Resident',
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.bold,
             fontSize: 22,
-            color: const Color(0xFF4A2C6F),
+            color: Colors.grey[800],
             letterSpacing: 1.2,
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFF87CEEB),
         elevation: 3,
         actions: [
           Stack(
             children: [
               IconButton(
-                icon: const Icon(Icons.notifications_outlined, size: 24, color: Color(0xFF4A2C6F)),
+                icon: Icon(Icons.notifications_outlined, size: 24, color: Colors.grey[800]),
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -272,7 +280,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
             ],
           ),
         ],
-        iconTheme: const IconThemeData(color: Color(0xFF4A2C6F)),
+        iconTheme: IconThemeData(color: Colors.grey[800]),
       ),
       body: SafeArea(
         child: AnimatedSwitcher(
@@ -288,62 +296,60 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
   }
 
   Widget _buildDrawerItem({
-    required IconData icon,
-    required String title,
-    required ResidentPage page,
-  }) {
-    final bool isSelected = _selectedPage == page;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Material(
-        color: isSelected ? const Color(0xFFE0F2F1) : null,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: ListTile(
-          leading: Icon(
-            icon,
-            color: isSelected
-                ? Theme.of(context).colorScheme.primary
-                : Colors.grey.shade700,
-            size: 24,
-          ),
-          title: Text(
-            title,
-            style: GoogleFonts.poppins(
-              fontSize: 16,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-              color: isSelected
-                  ? Theme.of(context).colorScheme.primary
-                  : Colors.black87,
-            ),
-          ),
-          selected: isSelected,
-          onTap: () => _onSelectPage(page),
-        ),
+  required IconData icon,
+  required String title,
+  required ResidentPage page,
+}) {
+  final bool isSelected = _selectedPage == page;
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    child: Material(
+      color: isSelected ? const Color(0xFF87CEEB) : Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
       ),
-    );
-  }
+      child: ListTile(
+        leading: Icon(
+          icon,
+          color: Colors.grey[800],
+          size: 24,
+        ),
+        title: Text(
+          title,
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: Colors.grey[800], 
+          ),
+        ),
+        selected: isSelected,
+        onTap: () => _onSelectPage(page),
+      ),
+    ),
+  );
+}
 
-  Widget _buildDashboard() {
-    return RefreshIndicator(
-      onRefresh: _refreshDashboard,
-      color: const Color(0xFF4A2C6F),
-      backgroundColor: Colors.white,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 24),
-                AnimatedOpacity(
-                  opacity: 1.0,
-                  duration: const Duration(milliseconds: 500),
-                  curve: Curves.easeOut,
+Widget _buildDashboard() {
+  return RefreshIndicator(
+    onRefresh: _refreshDashboard,
+    color: const Color(0xFF4A2C6F),
+    backgroundColor: Colors.white,
+    child: LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 24),
+              AnimatedOpacity(
+                opacity: 1.0,
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeOut,
+                child: IntrinsicHeight(
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(
                         child: _buildStatCard(
@@ -351,298 +357,304 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                           value: '185 gal',
                           description: '40% of daily avg',
                           icon: Icons.water,
-                          color: const Color(0xFF00796B),
+                          color: const Color(0xFF87CEEB),
                           progress: 0.4,
                         ),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
                         child: _buildStatCard(
-                          title: 'Flow Rate',
+                          title: 'Water Status',
                           value: '20.3 gal/min',
                           description: 'Water Running',
                           icon: Icons.speed,
-                          color: const Color(0xFF00838F),
+                          color: const Color(0xFF87CEEB),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 32),
-                AnimatedOpacity(
-                  opacity: 1.0,
-                  duration: const Duration(milliseconds: 500),
-                  curve: Curves.easeOut,
-                  child: _buildWeeklyUsageChart(),
-                ),
-                const SizedBox(height: 24),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildStatCard({
-    required String title,
-    required String value,
-    required String description,
-    required IconData icon,
-    required Color color,
-    double? progress,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        gradient: LinearGradient(
-          colors: [color.withOpacity(0.1), Colors.white],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+              ),
+              const SizedBox(height: 32),
+              AnimatedOpacity(
+                opacity: 1.0,
+                duration: const Duration(milliseconds: 500),
+                curve: Curves.easeOut,
+                child: _buildWeeklyUsageChart(),
+              ),
+              const SizedBox(height: 24),
+            ],
           ),
-        ],
-        border: Border.all(color: color.withOpacity(0.15), width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                  child: Text(
-                    title,
+        );
+      },
+    ),
+  );
+}
+
+Widget _buildStatCard({
+  required String title,
+  required String value,
+  required String description,
+  required IconData icon,
+  required Color color,
+  double? progress,
+}) {
+  return Container(
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(16),
+      color: Colors.white,
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 12,
+          offset: const Offset(0, 6),
+        ),
+      ],
+      border: Border.all(color: color.withOpacity(0.15), width: 1),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[800], // Updated text color
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              Container(
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.all(8),
+                child: Icon(icon, size: 24, color: color.withOpacity(0.85)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: progress != null
+                ? SizedBox(
+                    width: 130, // Bigger circular indicator
+                    height: 150,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        CircularProgressIndicator(
+                          value: progress,
+                          strokeWidth: 100,
+                          backgroundColor: color.withOpacity(0.08),
+                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                        ),
+                        Text(
+                          value,
+                          style: GoogleFonts.poppins(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.grey[800], 
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
+                : Text(
+                    value,
                     style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: color.withOpacity(0.95),
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey[800], 
                     ),
-                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
                   ),
-                ),
-                Container(
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.all(8),
-                  child: Icon(icon, size: 24, color: color.withOpacity(0.85)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Center(
-              child: progress != null
-                  ? SizedBox(
-                      width: 80,
-                      height: 80,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            value: progress,
-                            strokeWidth: 8,
-                            backgroundColor: color.withOpacity(0.08),
-                            valueColor: AlwaysStoppedAnimation<Color>(color),
-                          ),
-                          Text(
-                            value,
-                            style: GoogleFonts.poppins(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: color.withOpacity(0.95),
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    )
-                  : Text(
-                      value,
-                      style: GoogleFonts.poppins(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: color.withOpacity(0.95),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: Text(
-                description,
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  color: color.withOpacity(0.7),
-                  fontWeight: FontWeight.w500,
-                ),
-                textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Center(
+            child: Text(
+              description,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: Colors.grey[800], 
+                fontWeight: FontWeight.w500,
               ),
+              textAlign: TextAlign.center,
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildWeeklyUsageChart() {
-    final List<BarChartGroupData> barGroups = [
-      _buildBarGroup(0, 150, 'Mon', const Color(0xFF4A2C6F)),
-      _buildBarGroup(1, 200, 'Tue', const Color(0xFF6B46C1)),
-      _buildBarGroup(2, 180, 'Wed', const Color(0xFF7C3AED)),
-      _buildBarGroup(3, 220, 'Thu', const Color(0xFF4F46E5)),
-      _buildBarGroup(4, 190, 'Fri', const Color(0xFF6366F1)),
-      _buildBarGroup(5, 160, 'Sat', const Color(0xFF818CF8)),
-      _buildBarGroup(6, 170, 'Sun', const Color(0xFFEEF2FF)),
-    ];
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF4A2C6F).withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
           ),
         ],
-        border: Border.all(color: const Color(0xFF4A2C6F).withOpacity(0.08), width: 1),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Weekly Water Usage',
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: const Color(0xFF4A2C6F),
-              ),
+    ),
+  );
+}
+
+ Widget _buildWeeklyUsageChart() {
+  final List<BarChartGroupData> barGroups = [
+    _buildBarGroup(0, 150, 'Mon'),
+    _buildBarGroup(1, 200, 'Tue'),
+    _buildBarGroup(2, 180, 'Wed'),
+    _buildBarGroup(3, 220, 'Thu'),
+    _buildBarGroup(4, 190, 'Fri'),
+    _buildBarGroup(5, 160, 'Sat'),
+    _buildBarGroup(6, 170, 'Sun'),
+  ];
+
+  return Container(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF4A2C6F).withOpacity(0.06),
+          blurRadius: 12,
+          offset: const Offset(0, 6),
+        ),
+      ],
+      border: Border.all(
+        color: const Color(0xFF4A2C6F).withOpacity(0.08),
+        width: 1,
+      ),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Weekly Water Usage',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[800],
             ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 240,
-              child: BarChart(
-                BarChartData(
-                  alignment: BarChartAlignment.spaceAround,
-                  maxY: 250,
-                  barTouchData: BarTouchData(
-                    enabled: true,
-                    touchTooltipData: BarTouchTooltipData(
-                      tooltipPadding: const EdgeInsets.all(8),
-                      tooltipMargin: 8,
-                      getTooltipColor: (_) => Colors.white,
-                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                        return BarTooltipItem(
-                          '${rod.toY.toStringAsFixed(0)} gal',
-                          GoogleFonts.poppins(
-                            color: const Color(0xFF4A2C6F),
-                            fontWeight: FontWeight.w600,
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 240,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                maxY: 250,
+                barTouchData: BarTouchData(
+                  enabled: true,
+                  touchTooltipData: BarTouchTooltipData(
+                    tooltipPadding: const EdgeInsets.all(8),
+                    tooltipMargin: 8,
+                    getTooltipColor: (_) => Colors.white,
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      return BarTooltipItem(
+                        '${rod.toY.toStringAsFixed(0)} gal',
+                        GoogleFonts.poppins(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  show: true,
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 30,
+                      getTitlesWidget: (value, meta) {
+                        final days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+                        return SideTitleWidget(
+                          axisSide: meta.axisSide,
+                          space: 4,
+                          child: Text(
+                            days[value.toInt()],
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: Colors.grey[800],
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         );
                       },
                     ),
                   ),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 30,
-                        getTitlesWidget: (value, meta) {
-                          final days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-                          return SideTitleWidget(
-                            axisSide: meta.axisSide,
-                            space: 4,
-                            child: Text(
-                              days[value.toInt()],
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                color: const Color(0xFF4A2C6F),
-                                fontWeight: FontWeight.w600,
-                              ),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      interval: 50,
+                      getTitlesWidget: (value, meta) {
+                        return SideTitleWidget(
+                          axisSide: meta.axisSide,
+                          space: 4,
+                          child: Text(
+                            value.toInt().toString(),
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
                             ),
-                          );
-                        },
-                      ),
-                    ),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                        interval: 50,
-                        getTitlesWidget: (value, meta) {
-                          return SideTitleWidget(
-                            axisSide: meta.axisSide,
-                            space: 4,
-                            child: Text(
-                              value.toInt().toString(),
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    topTitles: AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    rightTitles: AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
+                          ),
+                        );
+                      },
                     ),
                   ),
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    getDrawingHorizontalLine: (value) {
-                      return FlLine(
-                        color: Colors.grey.shade200,
-                        strokeWidth: 1,
-                      );
-                    },
+                  topTitles: AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
                   ),
-                  borderData: FlBorderData(
-                    show: false,
+                  rightTitles: AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
                   ),
-                  barGroups: barGroups,
-                  groupsSpace: 8,
                 ),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(
+                      color: Colors.grey.shade200,
+                      strokeWidth: 1,
+                    );
+                  },
+                ),
+                borderData: FlBorderData(show: false),
+                barGroups: barGroups,
+                groupsSpace: 8,
               ),
             ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+BarChartGroupData _buildBarGroup(int x, double y, String day) {
+  return BarChartGroupData(
+    x: x,
+    barRods: [
+      BarChartRodData(
+        toY: y,
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF87CEEB), // Sky Blue (bottom)
+            Color(0xFFE0F7FA), // Light aqua (top)
           ],
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+        ),
+        width: 16,
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(4),
         ),
       ),
-    );
-  }
+    ],
+  );
+}
 
-  BarChartGroupData _buildBarGroup(int x, double y, String day, Color color) {
-    return BarChartGroupData(
-      x: x,
-      barRods: [
-        BarChartRodData(
-          toY: y,
-          color: color,
-          width: 16,
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(4),
-          ),
-        ),
-      ],
-    );
-  }
 }

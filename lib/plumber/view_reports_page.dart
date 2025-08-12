@@ -40,7 +40,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
-          backgroundColor: Colors.white,
+          backgroundColor: Colors.white, // Modal bg white
           child: ReportDetailsModal(report: doc),
         ),
       );
@@ -50,7 +50,17 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: Colors.white, // Page bg white
+      appBar: AppBar(
+        backgroundColor: Colors.white, // AppBar bg white
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        title: const Text(
+          "View Reports",
+          style: TextStyle(color: Colors.black),
+        ),
+        iconTheme: const IconThemeData(color: Colors.black),
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
@@ -109,6 +119,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       elevation: 2,
+                      color: Colors.white, // Card bg white
                       shadowColor: Colors.black12,
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(
@@ -146,7 +157,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                         ),
                         trailing: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF4A2C6F),
+                            backgroundColor: const Color(0xFF87CEEB), // View btn bg
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -262,7 +273,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
         ),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Colors.white, // Modal bg white
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
@@ -285,7 +296,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                       children: [
                         const CircleAvatar(
                           radius: 20,
-                          backgroundColor: Color(0xFF4A2C6F),
+                          backgroundColor: Colors.grey, // Profile icon bg gray
                           child: Icon(
                             Icons.person,
                             color: Colors.white,
@@ -293,34 +304,36 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              fullName,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.black87,
+                        Flexible(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                fullName,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.black87,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              contactNumber,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: Colors.black54,
+                              const SizedBox(height: 4),
+                              Text(
+                                contactNumber,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.black54,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              formattedDate,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: Colors.black54,
+                              const SizedBox(height: 4),
+                              Text(
+                                formattedDate,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.black54,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -363,10 +376,10 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                   _showLocation ? "Hide Location" : "View Location",
                   style: TextStyle(
                     fontSize: 13,
-                    color: const Color(0xFF4A2C6F),
+                    color: Colors.grey[800], // Text color
                     fontWeight: FontWeight.w600,
                     decoration: TextDecoration.underline,
-                    decorationColor: const Color(0xFF4A2C6F).withOpacity(0.3),
+                    decorationColor: Colors.grey[800]?.withOpacity(0.3),
                   ),
                 ),
               ),
@@ -427,95 +440,83 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                   color: Colors.black54,
                 ),
               ),
-              const SizedBox(height: 16),
-              Row(
+            const SizedBox(height: 16),
+Column(
+  children: [
+    SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _isUpdating ? null : () => _updateStatus('Monitored'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF2F8E2F),
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+        child: _isUpdating
+            ? const CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2,
+              )
+            : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  ElevatedButton(
-                    onPressed:
-                        _isUpdating ? null : () => _updateStatus('Monitored'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2F8E2F),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      minimumSize: const Size(120, 40),
+                  if (currentStatus == 'Monitored')
+                    const Icon(Icons.check_circle, size: 18, color: Colors.white),
+                  if (currentStatus == 'Monitored') const SizedBox(width: 6),
+                  const Text(
+                    "Monitoring",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
                     ),
-                    child: _isUpdating
-                        ? const CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          )
-                        : Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (currentStatus == 'Monitored')
-                                const Icon(
-                                  Icons.check_circle,
-                                  size: 18,
-                                  color: Colors.white,
-                                ),
-                              if (currentStatus == 'Monitored')
-                                const SizedBox(width: 6),
-                              const Text(
-                                "Monitoring",
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed:
-                        _isUpdating ? null : () => _updateStatus('Fixed'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF0288D1),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
-                      ),
-                      minimumSize: const Size(120, 40),
-                    ),
-                    child: _isUpdating
-                        ? const CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          )
-                        : Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (currentStatus == 'Fixed')
-                                const Icon(
-                                  Icons.check_circle,
-                                  size: 18,
-                                  color: Colors.white,
-                                ),
-                              if (currentStatus == 'Fixed')
-                                const SizedBox(width: 6),
-                              const Text(
-                                "Fixed",
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
                   ),
                 ],
               ),
+      ),
+    ),
+    const SizedBox(height: 10),
+    SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _isUpdating ? null : () => _updateStatus('Fixed'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF87CEEB), // Updated fixed btn bg
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+        child: _isUpdating
+            ? const CircularProgressIndicator(
+                color: Colors.white,
+                strokeWidth: 2,
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (currentStatus == 'Fixed')
+                    const Icon(Icons.check_circle, size: 18, color: Colors.white),
+                  if (currentStatus == 'Fixed') const SizedBox(width: 6),
+                  const Text(
+                    "Fixed",
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    ),
+  ],
+),
+
             ],
           ),
         ),
