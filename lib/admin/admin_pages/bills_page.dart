@@ -186,8 +186,12 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
       case 'PUROK 4':
       case 'PUROK 5':
         return 30.00; // Residential
+      case 'COMMERCIAL':
+        return 75.00; // Commercial
       case 'NON-RESIDENCE':
         return 100.00; // Non-residence
+      case 'INDUSTRIAL':
+        return 100.00; // Industrial
       default:
         return 0.00;
     }
@@ -201,8 +205,12 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
       case 'PUROK 4':
       case 'PUROK 5':
         return 5.00; // Residential
+      case 'COMMERCIAL':
+        return 10.00; // Commercial
       case 'NON-RESIDENCE':
         return 10.00; // Non-residence
+      case 'INDUSTRIAL':
+        return 15.00; // Industrial
       default:
         return 0.00;
     }
@@ -260,347 +268,410 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 800, maxHeight: 400),
-        margin: const EdgeInsets.symmetric(vertical: 24),
-        padding: const EdgeInsets.all(16),
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 650),
+        margin: const EdgeInsets.symmetric(vertical: 20),
+        padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE0E0E0), width: 1.5),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey[200]!, width: 2),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
+              color: Colors.black12.withOpacity(0.15),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
             ),
           ],
+          gradient: LinearGradient(
+            colors: [Colors.white, Color(0xFFF5F6FA)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
         ),
         child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header with Purok Selection
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Image.asset('images/icon.png',
-                            height: 32), // Replace icon with image
-                        const SizedBox(height: 4),
-                        Text('NOTICE OF BILLING',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              letterSpacing: 1.2,
-                              color: Color(0xFF4A2C6F),
-                            )),
-                        const SizedBox(height: 2),
-                        Text(DateFormat.yMMMd().format(DateTime.now()),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                              fontFamily: 'monospace',
-                            )),
-                      ],
-                    ),
-                  ),
-                  // Purok Selection (Top right, smaller)
-                  Container(
-                    width: 100,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Purok:',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 12)),
-                        CheckboxListTile(
-                          title:
-                              const Text('P1', style: TextStyle(fontSize: 10)),
-                          value: selectedPurok == 'PUROK 1',
-                          onChanged: (bool? value) {
-                            if (value == true) {
-                              setState(() => selectedPurok = 'PUROK 1');
-                            }
-                          },
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                        CheckboxListTile(
-                          title:
-                              const Text('P2', style: TextStyle(fontSize: 10)),
-                          value: selectedPurok == 'PUROK 2',
-                          onChanged: (bool? value) {
-                            if (value == true) {
-                              setState(() => selectedPurok = 'PUROK 2');
-                            }
-                          },
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                        CheckboxListTile(
-                          title:
-                              const Text('P3', style: TextStyle(fontSize: 10)),
-                          value: selectedPurok == 'PUROK 3',
-                          onChanged: (bool? value) {
-                            if (value == true) {
-                              setState(() => selectedPurok = 'PUROK 3');
-                            }
-                          },
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                        CheckboxListTile(
-                          title:
-                              const Text('P4', style: TextStyle(fontSize: 10)),
-                          value: selectedPurok == 'PUROK 4',
-                          onChanged: (bool? value) {
-                            if (value == true) {
-                              setState(() => selectedPurok = 'PUROK 4');
-                            }
-                          },
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                        CheckboxListTile(
-                          title:
-                              const Text('P5', style: TextStyle(fontSize: 10)),
-                          value: selectedPurok == 'PUROK 5',
-                          onChanged: (bool? value) {
-                            if (value == true) {
-                              setState(() => selectedPurok = 'PUROK 5');
-                            }
-                          },
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                        CheckboxListTile(
-                          title:
-                              const Text('NR', style: TextStyle(fontSize: 10)),
-                          value: selectedPurok == 'NON-RESIDENCE',
-                          onChanged: (bool? value) {
-                            if (value == true) {
-                              setState(() => selectedPurok = 'NON-RESIDENCE');
-                            }
-                          },
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              // Dashed divider (tear effect)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: List.generate(
-                    30,
-                    (i) => Expanded(
-                      child: Container(
-                        height: 1,
-                        color: i.isEven ? Colors.grey[300] : Colors.transparent,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              // Resident Info
-              _receiptRow('NAME', widget.fullName),
-              _receiptRow(
-                'METER NUMBER',
-                null,
-                trailing: SizedBox(
-                  width: 80,
-                  child: TextFormField(
-                    style: const TextStyle(fontFamily: 'monospace'),
-                    decoration: const InputDecoration(
-                      hintText: '1234',
-                      isDense: true,
-                      contentPadding:
-                          EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                    ),
-                    keyboardType: TextInputType.number,
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Enter';
-                      return null;
-                    },
-                    onChanged: (v) {
-                      setState(() => meterNumber = v);
-                    },
-                  ),
-                ),
-              ),
-              _receiptRow(
-                'PERIOD',
-                null,
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with Purok Dropdown
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    SizedBox(
-                      width: 80,
-                      child: TextFormField(
-                        style: const TextStyle(fontFamily: 'monospace'),
-                        decoration: InputDecoration(
-                          hintText: startDate == null
-                              ? 'Start Date'
-                              : DateFormat('yyyy-MM-dd').format(startDate!),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                              vertical: 6, horizontal: 8),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Image.asset('assets/images/icon.png', height: 45),
+                            const SizedBox(height: 8),
+                            Text(
+                              'San Jose Water Services Administration\nSajowasa',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
+                                letterSpacing: 1.2,
+                                color: Color(0xFF2C3E50),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              DateFormat.yMMMd().format(DateTime.now()),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[700],
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ],
                         ),
-                        readOnly: true,
-                        onTap: () => _selectDate(context, true),
                       ),
                     ),
-                    const Text(' - '),
-                    SizedBox(
-                      width: 80,
-                      child: TextFormField(
-                        style: const TextStyle(fontFamily: 'monospace'),
-                        decoration: InputDecoration(
-                          hintText: endDate == null
-                              ? 'End Date'
-                              : DateFormat('yyyy-MM-dd').format(endDate!),
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                              vertical: 6, horizontal: 8),
-                        ),
-                        readOnly: true,
-                        onTap: () => _selectDate(context, false),
+                    Container(
+                      width: 90,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[400]!),
+                        borderRadius: BorderRadius.circular(6),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black12.withOpacity(0.1),
+                            blurRadius: 5,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: DropdownButton<String>(
+                        value: selectedPurok,
+                        onChanged: (String? newValue) {
+                          if (newValue != null) {
+                            setState(() {
+                              selectedPurok = newValue;
+                            });
+                          }
+                        },
+                        items: <String>[
+                          'PUROK 1',
+                          'PUROK 2',
+                          'PUROK 3',
+                          'PUROK 4',
+                          'PUROK 5',
+                          'COMMERCIAL',
+                          'NON-RESIDENCE',
+                          'INDUSTRIAL'
+                        ].map<DropdownMenuItem<String>>((String value) {
+                          return DropdownMenuItem<String>(
+                            value: value,
+                            child: Text(value, style: TextStyle(fontSize: 11)),
+                          );
+                        }).toList(),
+                        underline: SizedBox(),
+                        isExpanded: true,
+                        icon: Icon(Icons.arrow_drop_down,
+                            color: Color(0xFF2C3E50), size: 18),
+                        dropdownColor: Colors.white,
                       ),
                     ),
                   ],
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: List.generate(
-                    30,
-                    (i) => Expanded(
-                      child: Container(
-                        height: 1,
-                        color: i.isEven ? Colors.grey[200] : Colors.transparent,
+                // Dashed divider
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    children: List.generate(
+                      30,
+                      (i) => Expanded(
+                        child: Container(
+                          height: 1,
+                          color:
+                              i.isEven ? Colors.grey[300] : Colors.transparent,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-              // Bill values
-              _receiptRow(
-                  'PREVIOUS READING',
-                  _loading
-                      ? 'Loading...'
-                      : '${previous.toStringAsFixed(2)} m³'),
-              _receiptRow(
-                'CURRENT READING',
-                null,
-                trailing: SizedBox(
-                  width: 80,
-                  child: TextFormField(
-                    style: const TextStyle(fontFamily: 'monospace'),
-                    decoration: InputDecoration(
-                      hintText: '0.00',
-                      suffixText: 'm³',
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                          vertical: 6, horizontal: 8),
-                    ),
-                    keyboardType:
-                        TextInputType.numberWithOptions(decimal: true),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Enter';
-                      final d = double.tryParse(v);
-                      if (d == null || d < 0) return 'Invalid';
-                      return null;
-                    },
-                    onChanged: (v) {
-                      setState(() => current = double.tryParse(v) ?? 0.0);
-                    },
-                  ),
-                ),
-              ),
-              _receiptRow(
-                  'TOTAL CUBIC METER USED', '${total.toStringAsFixed(2)} m³'),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: List.generate(
-                    30,
-                    (i) => Expanded(
-                      child: Container(
-                        height: 1,
-                        color: i.isEven ? Colors.grey[300] : Colors.transparent,
+                // Resident Info
+                _receiptRow('NAME', widget.fullName),
+                _receiptRow(
+                  'METER NUMBER',
+                  null,
+                  trailing: SizedBox(
+                    width: 80,
+                    child: TextFormField(
+                      style: const TextStyle(fontFamily: 'monospace'),
+                      decoration: InputDecoration(
+                        hintText: '1234',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey[400]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Color(0xFF2C3E50)),
+                        ),
                       ),
+                      keyboardType: TextInputType.number,
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Enter';
+                        return null;
+                      },
+                      onChanged: (v) {
+                        setState(() => meterNumber = v);
+                      },
                     ),
                   ),
                 ),
-              ),
-              _receiptRow('CURRENT BILL', '₱${currentBill.toStringAsFixed(2)}',
-                  valueColor: Colors.black87),
-              _receiptRow(
-                  'TOTAL BILL AMOUNT', '₱${totalBill.toStringAsFixed(2)}',
-                  valueColor: Color(0xFF4A2C6F)),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    child: const Text('Cancel'),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF4A2C6F),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 10),
-                      textStyle: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    child: const Text('Create Bill'),
-                    onPressed: () async {
-                      if (_formKey.currentState!.validate()) {
-                        final billData = {
-                          'residentId': widget.residentId,
-                          'fullName': widget.fullName,
-                          'address': widget.address,
-                          'contactNumber': widget.contactNumber,
-                          'meterNumber': meterNumber,
-                          'periodStart': startDate,
-                          'periodEnd': endDate,
-                          'currentConsumedWaterMeter': current,
-                          'previousConsumedWaterMeter': previous,
-                          'totalConsumed': total,
-                          'totalBill': totalBill,
-                          'currentMonthBill': currentBill,
-                          'issueDate': FieldValue.serverTimestamp(),
-                        };
-
-                        print('Creating bill with data: $billData');
-
-                        await FirebaseFirestore.instance
-                            .collection('bills')
-                            .add(billData);
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Bill created successfully!'),
-                            backgroundColor: Color(0xFF4A2C6F),
+                _receiptRow(
+                  'PERIOD',
+                  null,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 80,
+                        child: TextFormField(
+                          style: const TextStyle(fontFamily: 'monospace'),
+                          decoration: InputDecoration(
+                            hintText: startDate == null
+                                ? 'Start'
+                                : DateFormat('MM-dd').format(startDate!),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                                vertical: 10, horizontal: 12),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: Colors.grey[400]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: Color(0xFF2C3E50)),
+                            ),
                           ),
-                        );
-                      }
-                    },
+                          readOnly: true,
+                          onTap: () => _selectDate(context, true),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Text('-',
+                          style: TextStyle(
+                              fontSize: 16, color: Color(0xFF2C3E50))),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 80,
+                        child: TextFormField(
+                          style: const TextStyle(fontFamily: 'monospace'),
+                          decoration: InputDecoration(
+                            hintText: endDate == null
+                                ? 'End'
+                                : DateFormat('MM-dd').format(endDate!),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                                vertical: 10, horizontal: 12),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: Colors.grey[400]!),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: Color(0xFF2C3E50)),
+                            ),
+                          ),
+                          readOnly: true,
+                          onTap: () => _selectDate(context, false),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ],
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    children: List.generate(
+                      30,
+                      (i) => Expanded(
+                        child: Container(
+                          height: 1,
+                          color:
+                              i.isEven ? Colors.grey[300] : Colors.transparent,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // Bill values
+                _receiptRow(
+                    'PREVIOUS READING',
+                    _loading
+                        ? 'Loading...'
+                        : '${previous.toStringAsFixed(2)} m³'),
+                _receiptRow(
+                  'CURRENT READING',
+                  null,
+                  trailing: SizedBox(
+                    width: 80,
+                    child: TextFormField(
+                      style: const TextStyle(fontFamily: 'monospace'),
+                      decoration: InputDecoration(
+                        hintText: '0.00',
+                        suffixText: 'm³',
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Colors.grey[400]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(color: Color(0xFF2C3E50)),
+                        ),
+                      ),
+                      keyboardType:
+                          TextInputType.numberWithOptions(decimal: true),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) return 'Enter';
+                        final d = double.tryParse(v);
+                        if (d == null || d < 0) return 'Invalid';
+                        return null;
+                      },
+                      onChanged: (v) {
+                        setState(() => current = double.tryParse(v) ?? 0.0);
+                      },
+                    ),
+                  ),
+                ),
+                _receiptRow(
+                    'TOTAL CUBIC METER USED', '${total.toStringAsFixed(2)} m³'),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    children: List.generate(
+                      30,
+                      (i) => Expanded(
+                        child: Container(
+                          height: 1,
+                          color:
+                              i.isEven ? Colors.grey[300] : Colors.transparent,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                _receiptRow(
+                    'CURRENT BILL', '₱${currentBill.toStringAsFixed(2)}',
+                    valueColor: Colors.black87),
+                _receiptRow(
+                    'TOTAL BILL AMOUNT', '₱${totalBill.toStringAsFixed(2)}',
+                    valueColor: Color(0xFF2C3E50)),
+                const SizedBox(height: 20),
+                // Rates section
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!, width: 1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _rateRow('Residential:',
+                              'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
+                          const SizedBox(width: 10),
+                          _rateRow('Commercial:',
+                              'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          _rateRow('Non Residence:',
+                              'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
+                          const SizedBox(width: 10),
+                          _rateRow('Industrial:',
+                              'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        textStyle: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w500),
+                        foregroundColor: Color(0xFF2C3E50),
+                        side: BorderSide(color: Color(0xFF2C3E50)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('Cancel'),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFF2C3E50),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        textStyle: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                        elevation: 5,
+                      ),
+                      child: const Text('Create Bill'),
+                      onPressed: () async {
+                        if (_formKey.currentState!.validate()) {
+                          final billData = {
+                            'residentId': widget.residentId,
+                            'fullName': widget.fullName,
+                            'address': widget.address,
+                            'contactNumber': widget.contactNumber,
+                            'meterNumber': meterNumber,
+                            'periodStart': startDate,
+                            'periodEnd': endDate,
+                            'currentConsumedWaterMeter': current,
+                            'previousConsumedWaterMeter': previous,
+                            'totalConsumed': total,
+                            'totalBill': totalBill,
+                            'currentMonthBill': currentBill,
+                            'issueDate': FieldValue.serverTimestamp(),
+                          };
+
+                          print('Creating bill with data: $billData');
+
+                          await FirebaseFirestore.instance
+                              .collection('bills')
+                              .add(billData);
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Bill created successfully!'),
+                              backgroundColor: Color(0xFF2C3E50),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -610,7 +681,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
   Widget _receiptRow(String label, String? value,
           {Widget? trailing, Color? valueColor}) =>
       Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
+        padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
           children: [
             Expanded(
@@ -618,9 +689,9 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                 label,
                 style: const TextStyle(
                   fontFamily: 'monospace',
-                  fontWeight: FontWeight.w500,
-                  fontSize: 13,
-                  color: Colors.black87,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                  color: Color(0xFF2C3E50),
                 ),
               ),
             ),
@@ -630,11 +701,37 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                 style: TextStyle(
                   fontFamily: 'monospace',
                   fontWeight: FontWeight.bold,
-                  fontSize: 13,
-                  color: valueColor ?? Colors.black54,
+                  fontSize: 15,
+                  color: valueColor ?? Colors.grey[700],
                 ),
               ),
             if (trailing != null) trailing,
+          ],
+        ),
+      );
+
+  Widget _rateRow(String category, String details) => Expanded(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              category,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: Color(0xFF2C3E50),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: Text(
+                details,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey,
+                ),
+              ),
+            ),
           ],
         ),
       );
