@@ -89,11 +89,13 @@ class BillsPage extends StatelessWidget {
                             horizontal: 12, vertical: 6),
                       ),
                       onPressed: () {
-                        _showBillForm(context, resident.id, fullName, address, contactNumber);
+                        _showBillForm(context, resident.id, fullName, address,
+                            contactNumber);
                       },
                       child: const Text(
                         'Create Bill',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            fontSize: 12, fontWeight: FontWeight.w600),
                       ),
                     ),
                   ),
@@ -143,10 +145,68 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
   double current = 0.0;
   double previous = 0.0;
   bool _loading = true;
-  
+  String meterNumber = '';
+  DateTime? startDate;
+  DateTime? endDate;
+  String selectedPurok = 'PUROK 1';
+
   double get total => previous + current;
-  double get totalBill => (total / 10) * 30.0;
-  double get currentBill => (current / 10) * 30.0;
+  double get totalBill => calculateTotalBill();
+  double get currentBill => (current / 10) * getRatePerCubicMeter();
+
+  Future<void> _selectDate(BuildContext context, bool isStartDate) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate:
+          isStartDate ? startDate ?? DateTime.now() : endDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        if (isStartDate)
+          startDate = picked;
+        else
+          endDate = picked;
+      });
+    }
+  }
+
+  double calculateTotalBill() {
+    double baseRate = getMinimumRate();
+    double excess = current - 10 > 0 ? current - 10 : 0;
+    return baseRate + (excess * getRatePerCubicMeter());
+  }
+
+  double getMinimumRate() {
+    switch (selectedPurok) {
+      case 'PUROK 1':
+      case 'PUROK 2':
+      case 'PUROK 3':
+      case 'PUROK 4':
+      case 'PUROK 5':
+        return 30.00; // Residential
+      case 'NON-RESIDENCE':
+        return 100.00; // Non-residence
+      default:
+        return 0.00;
+    }
+  }
+
+  double getRatePerCubicMeter() {
+    switch (selectedPurok) {
+      case 'PUROK 1':
+      case 'PUROK 2':
+      case 'PUROK 3':
+      case 'PUROK 4':
+      case 'PUROK 5':
+        return 5.00; // Residential
+      case 'NON-RESIDENCE':
+        return 10.00; // Non-residence
+      default:
+        return 0.00;
+    }
+  }
 
   @override
   void initState() {
@@ -161,13 +221,12 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
           .collection('bills')
           .where('residentId', isEqualTo: widget.residentId)
           .get();
-      
+
       print('Found ${snapshot.docs.length} previous bills');
-      
+
       if (mounted) {
         setState(() {
           if (snapshot.docs.isNotEmpty) {
-            // Sort by issueDate in Dart to avoid needing composite index
             final sortedDocs = snapshot.docs.toList()
               ..sort((a, b) {
                 final aDate = a.data()['issueDate'] as Timestamp?;
@@ -177,7 +236,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                 if (bDate == null) return -1;
                 return bDate.compareTo(aDate); // Descending order
               });
-            
+
             final billData = sortedDocs.first.data() as Map<String, dynamic>;
             print('Latest bill data: $billData');
             previous = billData['currentConsumedWaterMeter'] ?? 0.0;
@@ -201,9 +260,9 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 350),
+        constraints: const BoxConstraints(maxWidth: 800, maxHeight: 400),
         margin: const EdgeInsets.symmetric(vertical: 24),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -216,34 +275,125 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
             ),
           ],
         ),
-        child: Form(
-          key: _formKey,
+        child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Column(
-                  children: [
-                    Icon(Icons.receipt_long, color: Color(0xFF4A2C6F), size: 32),
-                    const SizedBox(height: 4),
-                    Text('WATER BILL RECEIPT',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          letterSpacing: 1.2,
-                          color: Color(0xFF4A2C6F),
-                        )),
-                    const SizedBox(height: 2),
-                    Text(DateFormat.yMMMd().format(DateTime.now()),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                          fontFamily: 'monospace',
-                        )),
-                  ],
-                ),
+              // Header with Purok Selection
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Image.asset('images/icon.png',
+                            height: 32), // Replace icon with image
+                        const SizedBox(height: 4),
+                        Text('NOTICE OF BILLING',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              letterSpacing: 1.2,
+                              color: Color(0xFF4A2C6F),
+                            )),
+                        const SizedBox(height: 2),
+                        Text(DateFormat.yMMMd().format(DateTime.now()),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontFamily: 'monospace',
+                            )),
+                      ],
+                    ),
+                  ),
+                  // Purok Selection (Top right, smaller)
+                  Container(
+                    width: 100,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Purok:',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 12)),
+                        CheckboxListTile(
+                          title:
+                              const Text('P1', style: TextStyle(fontSize: 10)),
+                          value: selectedPurok == 'PUROK 1',
+                          onChanged: (bool? value) {
+                            if (value == true) {
+                              setState(() => selectedPurok = 'PUROK 1');
+                            }
+                          },
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                        CheckboxListTile(
+                          title:
+                              const Text('P2', style: TextStyle(fontSize: 10)),
+                          value: selectedPurok == 'PUROK 2',
+                          onChanged: (bool? value) {
+                            if (value == true) {
+                              setState(() => selectedPurok = 'PUROK 2');
+                            }
+                          },
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                        CheckboxListTile(
+                          title:
+                              const Text('P3', style: TextStyle(fontSize: 10)),
+                          value: selectedPurok == 'PUROK 3',
+                          onChanged: (bool? value) {
+                            if (value == true) {
+                              setState(() => selectedPurok = 'PUROK 3');
+                            }
+                          },
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                        CheckboxListTile(
+                          title:
+                              const Text('P4', style: TextStyle(fontSize: 10)),
+                          value: selectedPurok == 'PUROK 4',
+                          onChanged: (bool? value) {
+                            if (value == true) {
+                              setState(() => selectedPurok = 'PUROK 4');
+                            }
+                          },
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                        CheckboxListTile(
+                          title:
+                              const Text('P5', style: TextStyle(fontSize: 10)),
+                          value: selectedPurok == 'PUROK 5',
+                          onChanged: (bool? value) {
+                            if (value == true) {
+                              setState(() => selectedPurok = 'PUROK 5');
+                            }
+                          },
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                        CheckboxListTile(
+                          title:
+                              const Text('NR', style: TextStyle(fontSize: 10)),
+                          value: selectedPurok == 'NON-RESIDENCE',
+                          onChanged: (bool? value) {
+                            if (value == true) {
+                              setState(() => selectedPurok = 'NON-RESIDENCE');
+                            }
+                          },
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               // Dashed divider (tear effect)
               Padding(
@@ -261,9 +411,73 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                 ),
               ),
               // Resident Info
-              _receiptRow('Name', widget.fullName),
-              _receiptRow('Address', widget.address),
-              _receiptRow('Contact', widget.contactNumber),
+              _receiptRow('NAME', widget.fullName),
+              _receiptRow(
+                'METER NUMBER',
+                null,
+                trailing: SizedBox(
+                  width: 80,
+                  child: TextFormField(
+                    style: const TextStyle(fontFamily: 'monospace'),
+                    decoration: const InputDecoration(
+                      hintText: '1234',
+                      isDense: true,
+                      contentPadding:
+                          EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Enter';
+                      return null;
+                    },
+                    onChanged: (v) {
+                      setState(() => meterNumber = v);
+                    },
+                  ),
+                ),
+              ),
+              _receiptRow(
+                'PERIOD',
+                null,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 80,
+                      child: TextFormField(
+                        style: const TextStyle(fontFamily: 'monospace'),
+                        decoration: InputDecoration(
+                          hintText: startDate == null
+                              ? 'Start Date'
+                              : DateFormat('yyyy-MM-dd').format(startDate!),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 6, horizontal: 8),
+                        ),
+                        readOnly: true,
+                        onTap: () => _selectDate(context, true),
+                      ),
+                    ),
+                    const Text(' - '),
+                    SizedBox(
+                      width: 80,
+                      child: TextFormField(
+                        style: const TextStyle(fontFamily: 'monospace'),
+                        decoration: InputDecoration(
+                          hintText: endDate == null
+                              ? 'End Date'
+                              : DateFormat('yyyy-MM-dd').format(endDate!),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 6, horizontal: 8),
+                        ),
+                        readOnly: true,
+                        onTap: () => _selectDate(context, false),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Row(
@@ -279,9 +493,13 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                 ),
               ),
               // Bill values
-              _receiptRow('Previous', _loading ? 'Loading...' : '${previous.toStringAsFixed(2)} m³'),
               _receiptRow(
-                'Current',
+                  'PREVIOUS READING',
+                  _loading
+                      ? 'Loading...'
+                      : '${previous.toStringAsFixed(2)} m³'),
+              _receiptRow(
+                'CURRENT READING',
                 null,
                 trailing: SizedBox(
                   width: 80,
@@ -291,9 +509,11 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                       hintText: '0.00',
                       suffixText: 'm³',
                       isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 6, horizontal: 8),
                     ),
-                    keyboardType: TextInputType.numberWithOptions(decimal: true),
+                    keyboardType:
+                        TextInputType.numberWithOptions(decimal: true),
                     validator: (v) {
                       if (v == null || v.isEmpty) return 'Enter';
                       final d = double.tryParse(v);
@@ -306,7 +526,8 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                   ),
                 ),
               ),
-              _receiptRow('Total', '${total.toStringAsFixed(2)} m³'),
+              _receiptRow(
+                  'TOTAL CUBIC METER USED', '${total.toStringAsFixed(2)} m³'),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Row(
@@ -321,8 +542,11 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                   ),
                 ),
               ),
-              _receiptRow('Current Bill', '₱${currentBill.toStringAsFixed(2)}', valueColor: Colors.black87),
-              _receiptRow('Total Bill', '₱${totalBill.toStringAsFixed(2)}', valueColor: Color(0xFF4A2C6F)),
+              _receiptRow('CURRENT BILL', '₱${currentBill.toStringAsFixed(2)}',
+                  valueColor: Colors.black87),
+              _receiptRow(
+                  'TOTAL BILL AMOUNT', '₱${totalBill.toStringAsFixed(2)}',
+                  valueColor: Color(0xFF4A2C6F)),
               const SizedBox(height: 16),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
@@ -336,7 +560,8 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF4A2C6F),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 10),
                       textStyle: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     child: const Text('Create Bill'),
@@ -347,6 +572,9 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                           'fullName': widget.fullName,
                           'address': widget.address,
                           'contactNumber': widget.contactNumber,
+                          'meterNumber': meterNumber,
+                          'periodStart': startDate,
+                          'periodEnd': endDate,
                           'currentConsumedWaterMeter': current,
                           'previousConsumedWaterMeter': previous,
                           'totalConsumed': total,
@@ -354,10 +582,12 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                           'currentMonthBill': currentBill,
                           'issueDate': FieldValue.serverTimestamp(),
                         };
-                        
+
                         print('Creating bill with data: $billData');
-                        
-                        await FirebaseFirestore.instance.collection('bills').add(billData);
+
+                        await FirebaseFirestore.instance
+                            .collection('bills')
+                            .add(billData);
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -377,7 +607,9 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
     );
   }
 
-  Widget _receiptRow(String label, String? value, {Widget? trailing, Color? valueColor}) => Padding(
+  Widget _receiptRow(String label, String? value,
+          {Widget? trailing, Color? valueColor}) =>
+      Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(
           children: [
