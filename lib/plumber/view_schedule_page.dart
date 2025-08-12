@@ -1,3 +1,5 @@
+// ignore_for_file: prefer_const_constructors, curly_braces_in_flow_control_structures
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
@@ -54,117 +56,117 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
     }
   }
 
-  void _showReportsDialog(
-      BuildContext context, List<Map<String, dynamic>> reports) {
-    showDialog(
-      context: context,
-      builder: (context) => FadeIn(
-        duration: const Duration(milliseconds: 300),
-        child: Center(
+void _showReportsDialog(BuildContext context, List<Map<String, dynamic>> reports) {
+  final mq = MediaQuery.of(context);
+  final maxWidth = mq.size.width * 0.95;
+  final dialogWidth = maxWidth > 550 ? 550.0 : maxWidth;
+  final maxHeight = mq.size.height * 0.8;
+
+  showDialog(
+    context: context,
+    builder: (context) => FadeIn(
+      duration: const Duration(milliseconds: 300),
+      child: Center(
+        child: Dialog(
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 8,
+          backgroundColor: Colors.white, // explicit white background
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxWidth: 550,
-              maxHeight: MediaQuery.of(context).size.height * 0.6,
+              maxWidth: dialogWidth,
+              maxHeight: maxHeight,
             ),
-            child: Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              elevation: 8,
-              backgroundColor: Colors.white.withOpacity(0.95),
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.white,
-                      Colors.grey[50]!,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header row (title + close)
+                  Row(
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Reports for ${DateFormat.yMMMd().format(_selectedDay!)}',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black.withOpacity(0.1),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Container(
-                                width: 100,
-                                height: 2,
-                                decoration: const BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [
-                                      Color(0xFF5E35B1),
-                                      Color(0xFF8E24AA),
-                                    ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Reports for ${DateFormat.yMMMd().format(_selectedDay ?? DateTime.now())}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                                shadows: [
+                                  Shadow(
+                                    color: Colors.black.withOpacity(0.1),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
                                   ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          IconButton(
-                            icon: Container(
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.grey[200],
-                              ),
-                              child: const Icon(
-                                Icons.close,
-                                color: Color(0xFF5E35B1),
-                                size: 20,
+                                ],
                               ),
                             ),
-                            onPressed: () => Navigator.of(context).pop(),
-                          ),
-                        ],
+                            const SizedBox(height: 8),
+                            // underline — changed color to sky blue
+                            Container(
+                              width: 100,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF87CEEB),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: 12),
-                      Flexible(
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: reports.length,
-                          separatorBuilder: (context, index) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (context, index) {
-                            final report = reports[index];
-                            return FadeInUp(
-                              duration:
-                                  Duration(milliseconds: 200 + index * 100),
-                              child: ListTile(
-                                contentPadding:
-                                    const EdgeInsets.symmetric(horizontal: 8),
-                                leading: CircleAvatar(
+                      IconButton(
+                        icon: Container(
+                          padding: const EdgeInsets.all(6),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.grey[200],
+                          ),
+                          child: const Icon(
+                            Icons.close,
+                            color: Color(0xFF87CEEB),
+                            size: 20,
+                          ),
+                        ),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // reports list — flexible so dialog remains responsive & scrollable
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: reports.length,
+                      separatorBuilder: (context, index) =>
+                          const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final report = reports[index];
+                        final status = (report['status'] ?? 'Unknown') as String;
+                        return FadeInUp(
+                          duration: Duration(milliseconds: 200 + index * 100),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
                                   radius: 20,
                                   backgroundColor:
-                                      _getMarkerColor(report['status'])
-                                          .withOpacity(0.2),
+                                      _getMarkerColor(status).withOpacity(0.2),
                                   child: Text(
-                                    (report['fullName'] ?? 'U')[0],
+                                    ((report['fullName'] ?? 'U') as String).isNotEmpty
+                                        ? (report['fullName'] as String)[0]
+                                        : 'U',
                                     style: GoogleFonts.poppins(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -172,47 +174,54 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
                                     ),
                                   ),
                                 ),
-                                title: Text(
-                                  report['fullName'] ?? 'Unknown',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.black87,
+                                const SizedBox(width: 12),
+                                // Expanded text to prevent overflow
+                                Expanded(
+                                  child: Text(
+                                    report['fullName'] ?? 'Unknown',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.black87,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                trailing: Chip(
+                                const SizedBox(width: 8),
+                                // status chip
+                                Chip(
                                   label: Text(
-                                    report['status'] ?? 'Unknown',
+                                    status,
                                     style: GoogleFonts.poppins(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.white,
+                                      color: Colors.black87,
                                     ),
                                   ),
-                                  backgroundColor: _getMarkerColor(
-                                          report['status'] ?? 'Unknown')
-                                      .withOpacity(0.3),
+                                  backgroundColor:
+                                      _getMarkerColor(status).withOpacity(0.25),
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 10),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -358,18 +367,21 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
                               calendarStyle: CalendarStyle(
                                 todayDecoration: BoxDecoration(
                                   color:
-                                      const Color(0xFF5E35B1).withOpacity(0.3),
+                                      const Color(0xFF87CEEB).withOpacity(0.3),
                                   shape: BoxShape.circle,
                                 ),
                                 selectedDecoration: BoxDecoration(
-                                  gradient: const LinearGradient(
-                                    colors: [
-                                      Color(0xFF5E35B1),
-                                      Color(0xFF8E24AA),
-                                    ],
-                                  ),
-                                  shape: BoxShape.circle,
-                                ),
+  gradient: const LinearGradient(
+    colors: [
+      Color(0xFF87CEEB),
+      Color(0xFF87CEEB),
+    ],
+    begin: Alignment.bottomCenter,
+    end: Alignment.topCenter,
+  ),
+  shape: BoxShape.circle,
+),
+
                                 outsideTextStyle: GoogleFonts.poppins(
                                   fontSize: 12,
                                   color: Colors.grey[500],
@@ -402,7 +414,7 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
                                   duration: const Duration(milliseconds: 200),
                                   child: const Icon(
                                     Icons.chevron_left,
-                                    color: Color(0xFF5E35B1),
+                                    color: Color(0xFF87CEEB),
                                     size: 24,
                                   ),
                                 ),
@@ -410,7 +422,7 @@ class _ViewSchedulePageState extends State<ViewSchedulePage> {
                                   duration: const Duration(milliseconds: 200),
                                   child: const Icon(
                                     Icons.chevron_right,
-                                    color: Color(0xFF5E35B1),
+                                    color: Color(0xFF87CEEB),
                                     size: 24,
                                   ),
                                 ),

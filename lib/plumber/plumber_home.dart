@@ -136,106 +136,113 @@ class _PlumberHomePageState extends State<PlumberHomePage>
 
     return Scaffold(
       drawer: Drawer(
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.horizontal(right: Radius.circular(24)),
-        ),
-        child: SafeArea(
-          child: Column(
+  backgroundColor: Colors.white,
+  shape: const RoundedRectangleBorder(
+    borderRadius: BorderRadius.horizontal(right: Radius.circular(16)),
+  ),
+  child: SafeArea(
+    child: Column(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Color(0xFF87CEEB),         // Sky Blue
+                Color.fromARGB(255, 127, 190, 226), // Light Sky Blue
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.only(
+              topRight: Radius.circular(16),
+              bottomRight: Radius.circular(32),
+            ),
+          ),
+          child: Row(
             children: [
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
-                decoration: const BoxDecoration(
-                  color: Colors.blue, // Changed background to solid blue
-                  borderRadius:
-                      BorderRadius.only(bottomRight: Radius.circular(24)),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    CircleAvatar(
-                      radius: 28,
-                      backgroundColor: Colors.white.withOpacity(0.15),
-                      child: const Icon(
-                        Icons.plumbing,
-                        size: 30,
-                        color: Colors.white,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _plumberName,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.3,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          const Text(
-                            'Plumber',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+              const CircleAvatar(
+                radius: 28,
+                backgroundColor: Colors.white,
+                child: Icon(Icons.plumbing, size: 36, color: Color.fromARGB(255, 58, 56, 56)),
               ),
+              const SizedBox(width: 16),
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildDrawerItem(
-                      icon: Icons.schedule,
-                      title: 'View Schedule',
-                      page: PlumberPage.schedule,
+                    Text(
+                      'Welcome!',
+                      style: TextStyle(
+                        color: Colors.grey[800],
+                        fontWeight: FontWeight.w500,
+                        fontSize: 16,
+                      ),
                     ),
-                    _buildDrawerItem(
-                      icon: Icons.report,
-                      title: 'View Reports',
-                      page: PlumberPage.reports,
-                    ),
-                    _buildDrawerItem(
-                      icon: Icons.map_outlined,
-                      title: 'Geographic Mapping',
-                      page: PlumberPage.mapping,
+                    Text(
+                      _plumberName,
+                      style: TextStyle(
+                        color: Colors.grey[800],
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
-                ),
-              ),
-              const Divider(),
-              Center(
-                child: ListTile(
-                  leading: const Icon(Icons.logout, color: Colors.redAccent),
-                  title: const Text(
-                    'Logout',
-                    style: TextStyle(
-                      color: Colors.redAccent,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  onTap: _logout,
                 ),
               ),
             ],
           ),
         ),
-      ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            children: [
+              _buildDrawerItem(
+                icon: Icons.schedule,
+                title: 'View Schedule',
+                page: PlumberPage.schedule,
+              ),
+              _buildDrawerItem(
+                icon: Icons.report,
+                title: 'View Reports',
+                page: PlumberPage.reports,
+              ),
+              _buildDrawerItem(
+                icon: Icons.map_outlined,
+                title: 'Geographic Mapping',
+                page: PlumberPage.mapping,
+              ),
+            ],
+          ),
+        ),
+        const Divider(),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          child: ListTile(
+            leading: const Icon(Icons.logout, color: Colors.red),
+            title: Text(
+              'Logout',
+              style: TextStyle(
+                color: Colors.red,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            onTap: _logout,
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+    ),
+  ),
+),
+
       appBar: AppBar(
         backgroundColor: Colors.white,
-        title: const Text('Plumber Portal'),
-        centerTitle: true,
+        title: const Text('Plumber'),
         elevation: 0,
         leading: Builder(
           builder: (context) => IconButton(
@@ -381,28 +388,36 @@ class _PlumberHomePageState extends State<PlumberHomePage>
   }
 
   Widget _buildDrawerItem({
-    required IconData icon,
-    required String title,
-    required PlumberPage page,
-  }) {
-    final bool isSelected = _selectedPage == page;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+  required IconData icon,
+  required String title,
+  required PlumberPage page,
+}) {
+  final bool isSelected = _selectedPage == page;
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+    child: Material(
+      color: isSelected ? const Color(0xFF87CEEB) : Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: ListTile(
-        tileColor: isSelected ? Colors.blue.withOpacity(0.1) : null,
-        leading:
-            Icon(icon, color: isSelected ? Colors.blue : Colors.grey.shade700),
+        leading: Icon(
+          icon,
+          color: Colors.grey[800],
+          size: 24,
+        ),
         title: Text(
           title,
           style: TextStyle(
+            fontSize: 16,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: isSelected ? Colors.blue : Colors.black87,
+            color: Colors.grey[800],
           ),
         ),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         selected: isSelected,
         onTap: () => _onSelectPage(page),
       ),
-    );
-  }
+    ),
+  );
+}
 }
