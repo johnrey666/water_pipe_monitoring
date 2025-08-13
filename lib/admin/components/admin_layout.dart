@@ -69,13 +69,17 @@ class AdminLayout extends StatelessWidget {
                 ),
                 SizedBox(height: 20),
                 _sidebarItem(
-                    context, 'Dashboard', Icons.dashboard, '/dashboard'),
+                  context,
+                  'Dashboard',
+                  Icons.dashboard,
+                  '/dashboard',
+                ),
                 _sidebarItem(context, 'Monitor', Icons.monitor, '/monitor'),
                 _sidebarItem(context, 'View Reports', Icons.report, '/reports'),
                 _sidebarItem(context, 'Users', Icons.people, '/users'),
                 _sidebarItem(context, 'Bills', Icons.receipt, '/bills'),
                 Spacer(),
-                _sidebarItem(context, 'Log Out', Icons.logout, '/logout',
+                _sidebarItem(context, 'Log Out', Icons.logout, '/login',
                     isLogout: true),
                 SizedBox(height: 20),
               ],
@@ -138,21 +142,31 @@ class AdminLayout extends StatelessWidget {
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           onTap: () {
-            if (isLogout) {
-              Navigator.pushReplacementNamed(context, '/login');
-            } else if (!isSelected) {
-              Navigator.pushReplacementNamed(context, route);
+            if (!isSelected) {
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                route,
+                (Route<dynamic> route) => false,
+              );
             }
           },
           child: AnimatedContainer(
             duration: Duration(milliseconds: 200),
             curve: Curves.easeInOut,
-            padding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            padding: EdgeInsets.symmetric(
+              vertical: isLogout ? 14 : 12,
+              horizontal: isLogout ? 14 : 16,
+            ),
             decoration: BoxDecoration(
               color: isSelected
                   ? Colors.white.withOpacity(0.2)
-                  : Colors.transparent,
+                  : isLogout
+                      ? Colors.redAccent.withOpacity(0.15)
+                      : Colors.transparent,
               borderRadius: BorderRadius.circular(8),
+              border: isLogout
+                  ? Border.all(color: Colors.redAccent, width: 1.5)
+                  : null,
               boxShadow: isSelected
                   ? [
                       BoxShadow(
@@ -172,7 +186,7 @@ class AdminLayout extends StatelessWidget {
                       : isSelected
                           ? Colors.white
                           : Colors.white70,
-                  size: 22,
+                  size: isLogout ? 24 : 22,
                 ),
                 SizedBox(width: 12),
                 Text(
@@ -183,9 +197,12 @@ class AdminLayout extends StatelessWidget {
                         : isSelected
                             ? Colors.white
                             : Colors.white70,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
-                    fontSize: 15,
+                    fontWeight: isLogout
+                        ? FontWeight.w600
+                        : isSelected
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                    fontSize: isLogout ? 16 : 15,
                   ),
                 ),
               ],
