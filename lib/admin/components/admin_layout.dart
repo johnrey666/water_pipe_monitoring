@@ -142,13 +142,11 @@ class AdminLayout extends StatelessWidget {
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           onTap: () {
-            if (!isSelected) {
-              Navigator.pushNamedAndRemoveUntil(
-                context,
-                route,
-                (Route<dynamic> route) => false,
-              );
-            }
+            Navigator.pushNamedAndRemoveUntil(
+              context,
+              route,
+              (Route<dynamic> route) => false,
+            );
           },
           child: AnimatedContainer(
             duration: Duration(milliseconds: 200),
