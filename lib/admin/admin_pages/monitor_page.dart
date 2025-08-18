@@ -3,11 +3,11 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import '../components/admin_layout.dart';
 import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:convert';
 import 'package:animate_do/animate_do.dart';
+import 'package:water_pipe_monitoring/admin/components/admin_layout.dart';
 
 class MonitorPage extends StatefulWidget {
   final String? reportId; // Optional report ID to open modal
@@ -158,7 +158,7 @@ class _MonitorPageState extends State<MonitorPage> {
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) => Center(
+        builder: (context, setDialogState) => Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: 450,
@@ -203,7 +203,7 @@ class _MonitorPageState extends State<MonitorPage> {
                           backgroundColor: const Color(0xFF4A2C6F),
                           backgroundImage: data['avatarUrl'] != null &&
                                   data['avatarUrl'] is String
-                              ? NetworkImage(data['avatarUrl'])
+                              ? NetworkImage(data['avatarUrl'] as String)
                               : null,
                           child: data['avatarUrl'] == null ||
                                   data['avatarUrl'] is! String
@@ -248,11 +248,11 @@ class _MonitorPageState extends State<MonitorPage> {
                     const SizedBox(height: 12),
                     if (data['image'] != null &&
                         data['image'] is String &&
-                        data['image'].isNotEmpty)
+                        (data['image'] as String).isNotEmpty)
                       ClipRRect(
                         borderRadius: BorderRadius.circular(8),
                         child: Image.memory(
-                          base64Decode(data['image']),
+                          base64Decode(data['image'] as String),
                           width: double.infinity,
                           height: 140,
                           fit: BoxFit.cover,
@@ -357,11 +357,11 @@ class _MonitorPageState extends State<MonitorPage> {
                                     );
                                   }).toList()
                                 : [
-                                    const DropdownMenuItem<String>(
+                                    DropdownMenuItem<String>(
                                       value: null,
                                       child: Text(
                                         'No plumbers available',
-                                        style: TextStyle(
+                                        style: GoogleFonts.poppins(
                                           color: Colors.grey,
                                           fontSize: 12,
                                         ),
@@ -370,7 +370,7 @@ class _MonitorPageState extends State<MonitorPage> {
                                   ],
                             onChanged: plumbers.isNotEmpty
                                 ? (value) {
-                                    setState(() {
+                                    setDialogState(() {
                                       selectedPlumberUid = value;
                                       isButtonDisabled = false;
                                     });
@@ -444,7 +444,7 @@ class _MonitorPageState extends State<MonitorPage> {
                                 },
                               );
                               if (pickedDate != null) {
-                                setState(() {
+                                setDialogState(() {
                                   selectedDate = pickedDate;
                                 });
                               }
@@ -500,7 +500,7 @@ class _MonitorPageState extends State<MonitorPage> {
       case 'Unfixed':
         return const Color(0xFFD94B3B);
       case 'Fixed':
-        return const Color(0xC18B00);
+        return const Color(0xFFC18B00);
       default:
         return Colors.grey;
     }
@@ -552,8 +552,9 @@ class _MonitorPageState extends State<MonitorPage> {
                         .map((doc) {
                           final data = doc.data() as Map<String, dynamic>;
                           final location = data['location'];
-                          if (location == null || location is! GeoPoint)
+                          if (location == null || location is! GeoPoint) {
                             return null;
+                          }
 
                           return Marker(
                             point:
@@ -588,17 +589,17 @@ class _MonitorPageState extends State<MonitorPage> {
                         .whereType<Marker>()
                         .toList();
 
-                    // Add San Jose label (no icon)
+                    // Add label at new coordinates
                     markers.add(
                       Marker(
                         point: const LatLng(
-                            13.3467, 123.7222), // San Jose, Malilipot, Albay
+                            13.294678436001885, 123.75569591912894),
                         width: 140,
                         height: 40,
                         child: Text(
                           'San Jose',
                           style: GoogleFonts.poppins(
-                            fontSize: 18, // Enlarged font size
+                            fontSize: 18,
                             fontWeight: FontWeight.w700,
                             color: Colors.red[900],
                           ),
@@ -611,17 +612,18 @@ class _MonitorPageState extends State<MonitorPage> {
                     return FlutterMap(
                       options: MapOptions(
                         initialCenter: const LatLng(
-                            13.3467, 123.7222), // San Jose, Malilipot, Albay
-                        initialZoom: 16, // Tighter zoom for San Jose focus
-                        minZoom: 15, // Prevent zooming out too far
-                        maxZoom: 17, // Allow slight zoom-in for detail
+                            13.294678436001885, 123.75569591912894),
+                        initialZoom: 16,
+                        minZoom: 15,
+                        maxZoom: 17,
                         initialCameraFit: CameraFit.bounds(
                           bounds: LatLngBounds(
-                            const LatLng(13.3447, 123.7202), // Southwest
-                            const LatLng(13.3487, 123.7242), // Northeast
+                            const LatLng(
+                                13.292678436001885, 123.75369591912894),
+                            const LatLng(
+                                13.296678436001885, 123.75769591912894),
                           ),
-                          padding:
-                              const EdgeInsets.all(50), // Margin around bounds
+                          padding: const EdgeInsets.all(50),
                         ),
                         interactionOptions: const InteractionOptions(
                           flags: InteractiveFlag.all &
@@ -646,7 +648,6 @@ class _MonitorPageState extends State<MonitorPage> {
                     );
                   },
                 ),
-                // Manual scale indicator
                 Positioned(
                   top: 8,
                   left: 8,
@@ -665,7 +666,7 @@ class _MonitorPageState extends State<MonitorPage> {
                       ],
                     ),
                     child: Text(
-                      'Approx. 100m', // Adjusted for zoom 16
+                      'Approx. 100m',
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         color: Colors.black87,
@@ -673,7 +674,6 @@ class _MonitorPageState extends State<MonitorPage> {
                     ),
                   ),
                 ),
-                // Attribution text
                 Positioned(
                   bottom: 8,
                   right: 8,

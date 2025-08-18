@@ -318,17 +318,17 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                       .whereType<Marker>()
                       .toList();
 
-                  // Add San Jose label (no icon)
+                  // Add label at new coordinates
                   markers.add(
                     Marker(
-                      point: const LatLng(
-                          13.3467, 123.7222), // San Jose, Malilipot, Albay
+                      point:
+                          const LatLng(13.294678436001885, 123.75569591912894),
                       width: 140,
                       height: 40,
                       child: Text(
                         'San Jose',
                         style: GoogleFonts.poppins(
-                          fontSize: 18, // Enlarged font size
+                          fontSize: 18,
                           fontWeight: FontWeight.w700,
                           color: Colors.red[900],
                         ),
@@ -341,17 +341,16 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                   return FlutterMap(
                     options: MapOptions(
                       initialCenter:
-                          const LatLng(13.3467, 123.7222), // San Jose
-                      initialZoom: 16, // Tighter zoom for San Jose focus
-                      minZoom: 15, // Prevent zooming out too far
-                      maxZoom: 17, // Allow slight zoom-in for detail
+                          const LatLng(13.294678436001885, 123.75569591912894),
+                      initialZoom: 16,
+                      minZoom: 15,
+                      maxZoom: 17,
                       initialCameraFit: CameraFit.bounds(
                         bounds: LatLngBounds(
-                          const LatLng(13.3447, 123.7202), // Southwest
-                          const LatLng(13.3487, 123.7242), // Northeast
+                          const LatLng(13.292678436001885, 123.75369591912894),
+                          const LatLng(13.296678436001885, 123.75769591912894),
                         ),
-                        padding:
-                            const EdgeInsets.all(50), // Margin around bounds
+                        padding: const EdgeInsets.all(50),
                       ),
                       interactionOptions: const InteractionOptions(
                         flags: InteractiveFlag.all &
@@ -434,7 +433,7 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                     ],
                   ),
                   child: Text(
-                    'Approx. 100m', // Adjusted for zoom 16
+                    'Approx. 100m',
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       color: Colors.black87,
