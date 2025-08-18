@@ -2,7 +2,6 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
@@ -18,9 +17,12 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   Map<String, dynamic>? _latestBill;
   bool _loading = true;
   String? _error;
-  String _residentId = 'ZEEuYzKxgqVzjliWPsN6K490O1H3'; // You'll need to get this from auth
+  String _residentId =
+      'ZEEuYzKxgqVzjliWPsN6K490O1H3'; // Replace with auth-based ID
   bool _paymentSubmitted = false;
   String? _paymentStatus;
+  String? selectedPurok;
+  bool _showRates = false;
 
   @override
   void initState() {
@@ -35,16 +37,14 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         _error = null;
       });
 
-      // First, let's try to get all bills for this resident to debug
       final snapshot = await FirebaseFirestore.instance
           .collection('bills')
           .where('residentId', isEqualTo: _residentId)
           .get();
 
       print('Found ${snapshot.docs.length} bills for resident: $_residentId');
-      
+
       if (snapshot.docs.isNotEmpty) {
-        // Sort by issueDate to get the latest
         final sortedDocs = snapshot.docs.toList()
           ..sort((a, b) {
             final aDate = a.data()['issueDate'] as Timestamp?;
@@ -52,27 +52,26 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
             if (aDate == null && bDate == null) return 0;
             if (aDate == null) return 1;
             if (bDate == null) return -1;
-            return bDate.compareTo(aDate); // Descending order
+            return bDate.compareTo(aDate);
           });
 
         final latestBill = sortedDocs.first.data();
-        latestBill['billId'] = sortedDocs.first.id; // Add billId to the data
+        latestBill['billId'] = sortedDocs.first.id;
         print('Latest bill data: $latestBill');
-        
-        // Check if payment has been submitted for this bill
+
         await _checkPaymentStatus(latestBill['billId']);
-        
+
         setState(() {
           _latestBill = latestBill;
+          selectedPurok = latestBill['purok'] ?? 'PUROK 1';
           _loading = false;
         });
       } else {
-        // If no bills found, let's check if the resident exists
         final userSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(_residentId)
             .get();
-            
+
         if (userSnapshot.exists) {
           setState(() {
             _error = 'No bills found for this resident yet.';
@@ -141,26 +140,21 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
     }
 
     try {
-      // Show loading indicator
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => const Center(
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4A2C6F)),
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2C3E50)),
           ),
         ),
       );
 
-      // Convert image to base64
       final bytes = await _receiptImage!.readAsBytes();
       final base64Image = base64Encode(bytes);
-      
-      // Get bill details
       final bill = _latestBill!;
-      final billId = bill['billId'] ?? 'unknown'; // You might need to store billId when creating bills
-      
-      // Create payment record
+      final billId = bill['billId'] ?? 'unknown';
+
       final paymentData = {
         'residentId': _residentId,
         'billId': billId,
@@ -171,37 +165,30 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         'paymentMethod': 'GCash',
         'gcashNumber': '09853886411',
         'submissionDate': FieldValue.serverTimestamp(),
-        'status': 'pending', // pending, approved, rejected
+        'status': 'pending',
         'adminNotes': '',
         'processedBy': '',
         'processedDate': null,
       };
 
-      // Save to Firestore
-      await FirebaseFirestore.instance
-          .collection('payments')
-          .add(paymentData);
-
-      // Close loading dialog
+      await FirebaseFirestore.instance.collection('payments').add(paymentData);
       Navigator.pop(context);
 
-      // Show success message
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Payment submitted successfully! Awaiting admin approval.'),
-          backgroundColor: Colors.green,
+          content:
+              Text('Payment submitted successfully! Awaiting admin approval.'),
+          backgroundColor: Color(0xFF2C3E50),
         ),
       );
 
-      // Clear the image
       setState(() {
         _receiptImage = null;
+        _paymentSubmitted = true;
+        _paymentStatus = 'pending';
       });
-
     } catch (e) {
-      // Close loading dialog
       Navigator.pop(context);
-      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error submitting payment: $e'),
@@ -214,53 +201,28 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Color.fromARGB(255, 255, 255, 255),
-      body: _loading 
-        ? _buildLoadingState()
-        : _error != null 
-          ? _buildErrorState() 
-          : _latestBill == null 
-            ? _buildNoBillsState()
-            : _buildBillingContent(),
+      backgroundColor: const Color(0xFFF5F6FA),
+      body: _loading
+          ? _buildLoadingState()
+          : _error != null
+              ? _buildErrorState()
+              : _latestBill == null
+                  ? _buildNoBillsState()
+                  : RefreshIndicator(
+                      onRefresh: _loadLatestBill,
+                      color: const Color(0xFF2C3E50),
+                      child: SingleChildScrollView(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        child: _buildBillingContent(),
+                      ),
+                    ),
     );
   }
 
   Widget _buildLoadingState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-          padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                const CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4A2C6F)),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Loading your bill...',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.grey[700],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+    return const Center(
+      child: CircularProgressIndicator(
+        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2C3E50)),
       ),
     );
   }
@@ -268,61 +230,56 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   Widget _buildErrorState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: Colors.red[400],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Oops!',
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.red[700],
+        padding: const EdgeInsets.all(12.0),
+        child: Card(
+          elevation: 6,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 40,
+                  color: Colors.red[400],
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                _error!,
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: _loadLatestBill,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Try Again'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4A2C6F),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                const SizedBox(height: 8),
+                const Text(
+                  'Error Loading Bill',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2C3E50),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 6),
+                Text(
+                  _error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: _loadLatestBill,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Retry', style: TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2C3E50),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -332,68 +289,56 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   Widget _buildNoBillsState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(24),
-          child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF4A2C6F).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
+        padding: const EdgeInsets.all(12.0),
+        child: Card(
+          elevation: 6,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
                   Icons.receipt_long,
-                  size: 48,
-                  color: const Color(0xFF4A2C6F),
+                  size: 40,
+                  color: Colors.grey[400],
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No Bills Yet',
-                style: GoogleFonts.poppins(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey[800],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'You don\'t have any bills at the moment.\nCheck back later!',
-                style: GoogleFonts.poppins(
-                  fontSize: 14,
-                  color: Colors.grey[600],
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: _loadLatestBill,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Refresh'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4A2C6F),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                const SizedBox(height: 8),
+                const Text(
+                  'No Bills Found',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF2C3E50),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(height: 6),
+                const Text(
+                  'You don\'t have any bills yet. Check back later.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ElevatedButton.icon(
+                  onPressed: _loadLatestBill,
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: const Text('Refresh', style: TextStyle(fontSize: 12)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2C3E50),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -402,539 +347,525 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
 
   Widget _buildBillingContent() {
     final bill = _latestBill!;
-    final currentConsumed = bill['currentConsumedWaterMeter'] ?? 0.0;
-    final previousConsumed = bill['previousConsumedWaterMeter'] ?? 0.0;
-    final totalConsumed = bill['totalConsumed'] ?? 0.0;
-    final currentBill = bill['currentMonthBill'] ?? 0.0;
-    final totalBill = bill['totalBill'] ?? 0.0;
+    final currentConsumed =
+        bill['currentConsumedWaterMeter']?.toDouble() ?? 0.0;
+    final previousConsumed =
+        bill['previousConsumedWaterMeter']?.toDouble() ?? 0.0;
+    final totalConsumed = bill['totalConsumed']?.toDouble() ?? 0.0;
+    final totalBill = bill['totalBill']?.toDouble() ?? 0.0;
+    final periodStart = bill['periodStart'] as Timestamp?;
+    final periodEnd = bill['periodEnd'] as Timestamp?;
     final issueDate = bill['issueDate'] as Timestamp?;
-    final formattedDate = issueDate != null 
-        ? DateFormat('dd MMM yyyy').format(issueDate.toDate())
+    final formattedPeriod = periodStart != null && periodEnd != null
+        ? '${DateFormat('MM-dd').format(periodStart.toDate())} - ${DateFormat('MM-dd').format(periodEnd.toDate())}'
         : 'N/A';
-    final lastPaymentDate = issueDate != null 
-        ? DateFormat('dd MMM yyyy').format(issueDate.toDate().add(const Duration(days: 6)))
+    final formattedIssueDate = issueDate != null
+        ? DateFormat.yMMMd().format(issueDate.toDate())
         : 'N/A';
+    final dueDate = issueDate != null
+        ? issueDate.toDate().add(const Duration(days: 7))
+        : DateTime.now();
+    final formattedDueDate = DateFormat.yMMMd().format(dueDate);
+    final isOverdue = DateTime.now().isAfter(dueDate);
+    final dueColor = isOverdue ? Colors.red : const Color(0xFF2C3E50);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+    return Padding(
+      padding: const EdgeInsets.all(10.0),
       child: Column(
         children: [
-          // Receipt Header
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
+          Card(
+            elevation: 8,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 500),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFFFFFF), Color(0xFFF8FAFF)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-              ],
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                // Company Logo/Icon
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4A2C6F).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    Icons.water_drop,
-                    size: 32,
-                    color: Color(0xFF87CEEB),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  "VIEW BILLING",
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.grey[800],
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  "Official Receipt",
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                
-                // Receipt Number and Date
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Receipt #",
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        Text(
-                          "WB-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}",
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[800],
-                          ),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          "Date",
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        Text(
-                          formattedDate,
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.grey[800],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          
-          // Customer Information
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "CUSTOMER INFORMATION",
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _buildReceiptRow("Name", bill['fullName'] ?? 'N/A'),
-                _buildReceiptRow("Address", bill['address'] ?? 'N/A'),
-                _buildReceiptRow("Contact", bill['contactNumber'] ?? 'N/A'),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          
-          // Billing Details
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12.withOpacity(0.1),
                     blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  "BILLING DETAILS",
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
+                    offset: const Offset(0, 4),
                   ),
-                ),
-                const SizedBox(height: 12),
-                _buildReceiptRow("Bill Period", "Current Month"),
-                _buildReceiptRow("Issue Date", formattedDate),
-                _buildReceiptRow("Due Date", lastPaymentDate),
-                const Divider(height: 20, thickness: 1, color: Color(0xFFE0E0E0)),
-                
-                // Consumption Details
-                Text(
-                  "CONSUMPTION DETAILS",
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _buildReceiptRow("Previous Reading", "${previousConsumed.toStringAsFixed(1)} m³"),
-                _buildReceiptRow("Current Reading", "${currentConsumed.toStringAsFixed(1)} m³"),
-                _buildReceiptRow("Total Consumption", "${totalConsumed.toStringAsFixed(1)} m³"),
-                const Divider(height: 20, thickness: 1, color: Color(0xFFE0E0E0)),
-                
-                // Rate Information
-                Text(
-                  "RATE INFORMATION",
-                    style: GoogleFonts.poppins(
-                    fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    color: Colors.grey[800],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _buildReceiptRow("Rate per 10m³", "₱30.00"),
-                _buildReceiptRow("Minimum Charge", "₱30.00"),
-                _buildReceiptRow("Current Bill", "₱${currentBill.toStringAsFixed(2)}"),
-                const Divider(height: 20, thickness: 1, color: Color(0xFFE0E0E0)),
-                
-                // Total Amount
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4A2C6F).withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: const Color(0xFF4A2C6F).withOpacity(0.2),
-                    ),
-                  ),
-                  child: Row(
+                ],
+              ),
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        "TOTAL AMOUNT DUE:",
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.grey[800],
-                        ),
-                      ),
-                      Text(
-                        "₱${totalBill.toStringAsFixed(2)}",
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: Color.fromARGB(255, 223, 77, 77),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 16),
-          
-          // Payment Section
-          Container(
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Icon(
-                        Icons.account_balance_wallet_rounded,
-                        color: Colors.green,
-                        size: 20,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      "PAYMENT METHOD",
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[800],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                
-                // Payment Status
-                if (_paymentSubmitted) ...[
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: _getStatusColor(_paymentStatus!).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: _getStatusColor(_paymentStatus!).withOpacity(0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _getStatusIcon(_paymentStatus!),
-                          color: _getStatusColor(_paymentStatus!),
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
+                      Row(
+                        children: [
+                          Image.asset('assets/images/icon.png', height: 36),
+                          const SizedBox(width: 8),
+                          const Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _getStatusText(_paymentStatus!),
-                                style: GoogleFonts.poppins(
+                                'San Jose Water Services',
+                                style: TextStyle(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: _getStatusColor(_paymentStatus!),
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF2C3E50),
                                 ),
                               ),
                               Text(
-                                _getStatusDescription(_paymentStatus!),
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
+                                'Sajowasa',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey,
+                                  fontStyle: FontStyle.italic,
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                
-                // GCash Number
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[300]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Icon(Icons.phone, color: Colors.green, size: 18),
+                        ],
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              "GCash Number",
-                              style: GoogleFonts.poppins(
-                                fontSize: 11,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            Text(
-                              "09853886411",
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.grey[800],
-                              ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF2C3E50),
+                          borderRadius: BorderRadius.circular(6),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black12.withOpacity(0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
                             ),
                           ],
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.copy, size: 18),
-                        onPressed: () {
-                          // TODO: Copy to clipboard
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('GCash number copied to clipboard'),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        },
+                        child: Text(
+                          selectedPurok ?? 'PUROK 1',
+                          style: const TextStyle(
+                            fontSize: 9,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 16),
-                
-                // Upload Receipt (only show if payment not submitted)
-                if (!_paymentSubmitted) ...[
-                ElevatedButton.icon(
-                  onPressed: _pickReceiptImage,
-                    icon: const Icon(Icons.upload_file, size: 18),
-                    label: const Text('Upload Payment Receipt'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.grey[100],
-                      foregroundColor: Colors.grey[800],
-                    elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: BorderSide(color: Colors.grey[300]!),
-                      ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'WATER BILL STATEMENT',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2C3E50),
+                      letterSpacing: 0.5,
                     ),
                   ),
-                  
-                  if (_receiptImage != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.green.withOpacity(0.3)),
-                      ),
-                      child: Column(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(6),
-                      child: Image.file(
-                        _receiptImage!,
-                              height: 120,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextButton.icon(
-                            onPressed: () {
-                              setState(() => _receiptImage = null);
-                            },
-                            icon: const Icon(Icons.delete, color: Colors.red, size: 16),
-                            label: const Text('Remove Receipt', style: TextStyle(color: Colors.red)),
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  
-                  const SizedBox(height: 20),
-                  
-                  // Send Payment Button
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                      onPressed: _receiptImage != null ? _uploadReceipt : null,
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: _receiptImage != null 
-                            ? const Color(0xFF4A2C6F) 
-                            : Colors.grey[300],
-                        foregroundColor: _receiptImage != null 
-                            ? Colors.white 
-                            : Colors.grey[600],
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        elevation: _receiptImage != null ? 2 : 0,
-                      ),
+                  const SizedBox(height: 8),
+                  _dashedDivider(),
+                  _receiptRow('Name', bill['fullName'] ?? 'N/A'),
+                  _receiptRow('Address', bill['address'] ?? 'N/A'),
+                  _receiptRow('Contact', bill['contactNumber'] ?? 'N/A'),
+                  _receiptRow('Meter No.', bill['meterNumber'] ?? 'N/A'),
+                  _receiptRow('Period', formattedPeriod),
+                  _receiptRow('Issue Date', formattedIssueDate),
+                  _dashedDivider(),
+                  _receiptRow('Previous Reading',
+                      '${previousConsumed.toStringAsFixed(2)} m³'),
+                  _receiptRow('Current Reading',
+                      '${currentConsumed.toStringAsFixed(2)} m³'),
+                  _receiptRow('Total Consumed',
+                      '${totalConsumed.toStringAsFixed(2)} m³',
+                      isBold: true),
+                  _dashedDivider(),
+                  _receiptRow(
+                      'Total Amount Due', '₱${totalBill.toStringAsFixed(2)}',
+                      valueColor: const Color(0xFF2C3E50), isBold: true),
+                  _receiptRow('Due Date', formattedDueDate,
+                      valueColor: dueColor),
+                  if (isOverdue)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
-                            _receiptImage != null ? Icons.send : Icons.upload,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            _receiptImage != null ? 'Submit Payment' : 'Upload Receipt First',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
+                          const Icon(Icons.warning_amber,
+                              color: Colors.red, size: 14),
+                          const SizedBox(width: 4),
+                          const Text(
+                            'Overdue: Pay immediately to avoid penalties.',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.red,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                         ],
                       ),
                     ),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: () => setState(() => _showRates = !_showRates),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Rate Information',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF2C3E50),
+                            ),
+                          ),
+                          Icon(
+                            _showRates ? Icons.expand_less : Icons.expand_more,
+                            size: 16,
+                            color: const Color(0xFF2C3E50),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  AnimatedCrossFade(
+                    firstChild: const SizedBox.shrink(),
+                    secondChild: Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[200]!, width: 1),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black12.withOpacity(0.05),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _rateRow('Residential',
+                              'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
+                          const SizedBox(height: 6),
+                          _rateRow('Commercial',
+                              'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
+                          const SizedBox(height: 6),
+                          _rateRow('Non Residence',
+                              'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
+                          const SizedBox(height: 6),
+                          _rateRow('Industrial',
+                              'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
+                        ],
+                      ),
+                    ),
+                    crossFadeState: _showRates
+                        ? CrossFadeState.showSecond
+                        : CrossFadeState.showFirst,
+                    duration: const Duration(milliseconds: 300),
+                    sizeCurve: Curves.easeInOut,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Ensure timely payment to maintain uninterrupted water supply.',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: Colors.grey,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    textAlign: TextAlign.center,
                   ),
                 ],
-              ],
+              ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+          Card(
+            elevation: 8,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12.withOpacity(0.05),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'PAYMENT OPTIONS',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF2C3E50),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_paymentSubmitted) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color:
+                            _getStatusColor(_paymentStatus!).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color:
+                              _getStatusColor(_paymentStatus!).withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            _getStatusIcon(_paymentStatus!),
+                            color: _getStatusColor(_paymentStatus!),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _getStatusText(_paymentStatus!),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: _getStatusColor(_paymentStatus!),
+                                  ),
+                                ),
+                                Text(
+                                  _getStatusDescription(_paymentStatus!),
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (!_paymentSubmitted) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(8),
+                        border:
+                            Border.all(color: Colors.green.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.phone_android,
+                                color: Colors.green, size: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'GCash Payment',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  '09853886411',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF2C3E50),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.content_copy,
+                                color: Color(0xFF2C3E50), size: 16),
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('GCash number copied!'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    AnimatedScale(
+                      scale: _receiptImage == null ? 1.0 : 0.98,
+                      duration: const Duration(milliseconds: 200),
+                      child: ElevatedButton.icon(
+                        onPressed: _pickReceiptImage,
+                        icon: const Icon(Icons.upload_file, size: 16),
+                        label: const Text('Select Receipt',
+                            style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2C3E50),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 16),
+                          elevation: 2,
+                        ),
+                      ),
+                    ),
+                    if (_receiptImage != null) ...[
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          _receiptImage!,
+                          height: 120,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: () => setState(() => _receiptImage = null),
+                        icon: const Icon(Icons.delete,
+                            color: Colors.red, size: 14),
+                        label: const Text(
+                          'Remove',
+                          style: TextStyle(color: Colors.red, fontSize: 10),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      AnimatedScale(
+                        scale: 1.0,
+                        duration: const Duration(milliseconds: 200),
+                        child: ElevatedButton.icon(
+                          onPressed: _uploadReceipt,
+                          icon: const Icon(Icons.send, size: 16),
+                          label: const Text('Submit Payment',
+                              style: TextStyle(fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 12, horizontal: 16),
+                            elevation: 2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildReceiptRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-              label,
-              style: GoogleFonts.poppins(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey[700],
+  Widget _dashedDivider() => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: List.generate(
+            30,
+            (i) => Expanded(
+              child: Container(
+                height: 1,
+                color: i.isEven ? Colors.grey[200] : Colors.transparent,
+              ),
             ),
           ),
-          Text(
+        ),
+      );
+
+  Widget _receiptRow(String label, String value,
+          {Color? valueColor, bool isBold = false}) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                  color: Color(0xFF2C3E50),
+                ),
+              ),
+            ),
+            Text(
               value,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                fontSize: 11,
+                color: valueColor ?? Colors.grey[700],
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _rateRow(String category, String details) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            category,
+            style: const TextStyle(
               fontWeight: FontWeight.w600,
-              color: Colors.grey[800],
+              fontSize: 10,
+              color: Color(0xFF2C3E50),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              details,
+              style: const TextStyle(
+                fontSize: 9,
+                color: Colors.grey,
+              ),
             ),
           ),
         ],
-      ),
-    );
-  }
+      );
 
   Color _getStatusColor(String status) {
     switch (status) {
@@ -950,11 +881,11 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   IconData _getStatusIcon(String status) {
     switch (status) {
       case 'approved':
-        return Icons.check_circle_outline;
+        return Icons.check_circle;
       case 'rejected':
-        return Icons.cancel_outlined;
+        return Icons.cancel;
       default:
-        return Icons.pending_actions_outlined;
+        return Icons.hourglass_full;
     }
   }
 
@@ -972,12 +903,11 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   String _getStatusDescription(String status) {
     switch (status) {
       case 'approved':
-        return 'Your payment has been approved by the administrator.';
+        return 'Your payment has been confirmed.';
       case 'rejected':
-        return 'Your payment has been rejected by the administrator.';
+        return 'Please contact admin for details.';
       default:
-        return 'Your payment is awaiting administrator approval.';
+        return 'Awaiting admin review.';
     }
   }
 }
-
