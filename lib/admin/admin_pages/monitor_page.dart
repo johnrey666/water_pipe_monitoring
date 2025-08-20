@@ -21,6 +21,31 @@ class MonitorPage extends StatefulWidget {
 class _MonitorPageState extends State<MonitorPage> {
   OverlayEntry? _errorOverlay;
 
+  // List of colors for different users
+  final List<Color> _userColors = [
+    Colors.blue,
+    Colors.green,
+    Colors.red,
+    Colors.purple,
+    Colors.orange,
+    Colors.teal,
+    Colors.pink,
+    Colors.amber,
+    Colors.cyan,
+    Colors.indigo,
+  ];
+
+  // Function to generate a consistent color for a user based on their userId
+  Color _getUserColor(String? userId) {
+    if (userId == null || userId.isEmpty) {
+      return Colors.grey; // Fallback color for invalid userId
+    }
+    // Use a simple hash of userId to select a color index
+    int hash = userId.hashCode.abs();
+    int index = hash % _userColors.length;
+    return _userColors[index];
+  }
+
   Future<List<Map<String, dynamic>>> _fetchPlumbers() async {
     try {
       final querySnapshot = await FirebaseFirestore.instance
@@ -200,15 +225,21 @@ class _MonitorPageState extends State<MonitorPage> {
                       children: [
                         CircleAvatar(
                           radius: 24,
-                          backgroundColor: const Color(0xFF4A2C6F),
+                          backgroundColor: _getUserColor(data['userId']),
                           backgroundImage: data['avatarUrl'] != null &&
                                   data['avatarUrl'] is String
                               ? NetworkImage(data['avatarUrl'] as String)
                               : null,
                           child: data['avatarUrl'] == null ||
                                   data['avatarUrl'] is! String
-                              ? const Icon(Icons.person,
-                                  color: Colors.white, size: 24)
+                              ? Text(
+                                  (data['fullName'] ?? 'Unknown')[0],
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                )
                               : null,
                         ),
                         const SizedBox(width: 10),
@@ -559,29 +590,21 @@ class _MonitorPageState extends State<MonitorPage> {
                           return Marker(
                             point:
                                 LatLng(location.latitude, location.longitude),
-                            width: 140,
-                            height: 70,
+                            width: 36,
+                            height: 36,
                             child: GestureDetector(
                               onTap: () => _fetchAndShowReportModal(doc.id),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    data['fullName'] ?? 'Unknown',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: const Color(0xFF4A2C6F),
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
+                              child: CircleAvatar(
+                                radius: 14,
+                                backgroundColor: _getUserColor(data['userId']),
+                                child: Text(
+                                  (data['fullName'] ?? 'Unknown')[0],
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
                                   ),
-                                  const Icon(
-                                    Icons.location_pin,
-                                    color: Color(0xFF4A2C6F),
-                                    size: 28,
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
                           );

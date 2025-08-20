@@ -16,9 +16,7 @@ class ViewReportsPage extends StatefulWidget {
 class _ViewReportsPageState extends State<ViewReportsPage> {
   int _currentPage = 0;
   final int _pageSize = 5;
-  String _selectedStatus = 'All'; // Default to show all reports
-  // ignore: unused_field
-  DocumentSnapshot? _lastDocument;
+  String _selectedStatus = 'All';
 
   Color _getStatusColor(String status) {
     switch (status) {
@@ -27,13 +25,12 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
       case 'Unfixed':
         return const Color(0xFFD94B3B);
       case 'Fixed':
-        return const Color(0xC18B00);
+        return const Color(0xFFC18B00);
       default:
         return Colors.grey;
     }
   }
 
-  // Build Firestore query based on selected status
   Stream<QuerySnapshot> _getReportsStream() {
     Query query = FirebaseFirestore.instance
         .collection('reports')
@@ -44,7 +41,6 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
       query = query.where('status', isEqualTo: _selectedStatus);
     }
 
-    // Debug query
     query.get().then((snapshot) {
       print(
           'Query for status $_selectedStatus returned ${snapshot.docs.length} documents');
@@ -83,12 +79,31 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                   if (snapshot.hasError) {
                     print('StreamBuilder error: ${snapshot.error}');
                     return Center(
-                      child: Text(
-                        'Error loading reports: ${snapshot.error}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          color: Colors.redAccent,
-                        ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'Error loading reports: ${snapshot.error}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              color: Colors.redAccent,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          ElevatedButton(
+                            onPressed: () => setState(() {
+                              _currentPage = 0;
+                            }),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4FC3F7),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: const Text('Retry'),
+                          ),
+                        ],
                       ),
                     );
                   }
@@ -114,7 +129,6 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                     );
                   }
 
-                  // Update _lastDocument for the next page
                   DocumentSnapshot? newLastDocument;
                   if (reports.isNotEmpty) {
                     newLastDocument = reports.last;
@@ -222,7 +236,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                           'View',
                                           style: GoogleFonts.poppins(
                                             fontSize: 12,
-                                            color: const Color(0xFF4A2C6F),
+                                            color: const Color(0xFF4FC3F7),
                                           ),
                                         ),
                                       ),
@@ -242,8 +256,6 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                 ? () {
                                     setState(() {
                                       _currentPage--;
-                                      _lastDocument =
-                                          null; // Reset for previous pages
                                     });
                                   }
                                 : null,
@@ -252,7 +264,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                               style: GoogleFonts.poppins(
                                 fontSize: 12,
                                 color: _currentPage > 0
-                                    ? const Color(0xFF4A2C6F)
+                                    ? const Color(0xFF4FC3F7)
                                     : Colors.grey,
                               ),
                             ),
@@ -270,8 +282,6 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                 ? () {
                                     setState(() {
                                       _currentPage++;
-                                      _lastDocument =
-                                          newLastDocument; // Update for next page
                                     });
                                   }
                                 : null,
@@ -281,7 +291,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                 fontSize: 12,
                                 color: reports.length == _pageSize &&
                                         newLastDocument != null
-                                    ? const Color(0xFF4A2C6F)
+                                    ? const Color(0xFF4FC3F7)
                                     : Colors.grey,
                               ),
                             ),
@@ -305,13 +315,12 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
       onPressed: () {
         setState(() {
           _selectedStatus = status;
-          _currentPage = 0; // Reset page when changing filter
-          _lastDocument = null; // Reset document for new filter
+          _currentPage = 0;
         });
       },
       style: ElevatedButton.styleFrom(
         backgroundColor:
-            isSelected ? const Color(0xFF4A2C6F) : Colors.grey.shade200,
+            isSelected ? const Color(0xFF4FC3F7) : Colors.grey.shade200,
         foregroundColor: isSelected ? Colors.white : Colors.grey.shade800,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),

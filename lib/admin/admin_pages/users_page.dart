@@ -19,6 +19,7 @@ class _UsersPageState extends State<UsersPage> {
   String _selectedRole = 'All';
   DocumentSnapshot? _lastDocument;
   OverlayEntry? _successOverlay;
+  OverlayEntry? _errorOverlay;
 
   Color _getRoleColor(String role) {
     switch (role.toLowerCase()) {
@@ -56,29 +57,24 @@ class _UsersPageState extends State<UsersPage> {
 
   Future<void> _deleteUser(String userId, String email) async {
     try {
-      // Delete from Firestore
       await FirebaseFirestore.instance.collection('users').doc(userId).delete();
-      // Show success overlay immediately after Firestore deletion
-      _showSuccessOverlay('User Successfully deleted!');
+      _showSuccessOverlay('User successfully deleted!');
 
-      // Delete from Firebase Authentication
       User? currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
         List<String> signInMethods =
             await FirebaseAuth.instance.fetchSignInMethodsForEmail(email);
         if (signInMethods.isNotEmpty) {
-          // Attempt to delete the user; requires admin privileges or re-auth
           try {
-            User? userToDelete = await FirebaseAuth.instance.currentUser!.uid ==
-                    userId
-                ? currentUser
-                : null; // Only delete self directly; otherwise, need admin SDK
+            User? userToDelete =
+                await FirebaseAuth.instance.currentUser!.uid == userId
+                    ? currentUser
+                    : null;
             if (userToDelete != null) {
               await userToDelete.delete();
               _successOverlay?.remove();
               _showSuccessOverlay('User deleted successfully!');
             } else {
-              // This is a placeholder; client-side can't delete other users without re-auth or admin SDK
               throw FirebaseAuthException(
                 code: 'permission-denied',
                 message:
@@ -96,9 +92,7 @@ class _UsersPageState extends State<UsersPage> {
       }
     } catch (e) {
       print('Error deleting user: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting user: $e. Check admin setup.')),
-      );
+      _showErrorOverlay('Error deleting user: $e. Check admin setup.');
     }
   }
 
@@ -143,6 +137,530 @@ class _UsersPageState extends State<UsersPage> {
     });
   }
 
+  void _showErrorOverlay(String message) {
+    _errorOverlay?.remove();
+    _errorOverlay = OverlayEntry(
+      builder: (context) => Positioned(
+        right: 16,
+        bottom: 16,
+        child: FadeOut(
+          duration: const Duration(seconds: 5),
+          animate: true,
+          child: Material(
+            color: Colors.red.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    message,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_errorOverlay!);
+    Future.delayed(const Duration(seconds: 3), () {
+      _errorOverlay?.remove();
+      _errorOverlay = null;
+    });
+  }
+
+  void _showAddPlumberModal() {
+    final _formKey = GlobalKey<FormState>();
+    final _firstNameController = TextEditingController();
+    final _lastNameController = TextEditingController();
+    final _emailController = TextEditingController();
+    final _addressController = TextEditingController();
+    final _contactNumberController = TextEditingController();
+    final _passwordController = TextEditingController();
+    final _confirmPasswordController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        elevation: 2,
+        backgroundColor: Colors.white,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 400,
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Form(
+              key: _formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Add Plumber',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close,
+                              color: Colors.grey, size: 18),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _firstNameController,
+                            decoration: InputDecoration(
+                              labelText: 'First Name *',
+                              labelStyle: GoogleFonts.poppins(
+                                fontSize: 11,
+                                color: Colors.grey[700],
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey[50],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[300]!, width: 1),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: const BorderSide(
+                                    color: Color(0xFF4FC3F7), width: 1.5),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[300]!, width: 1),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
+                            ),
+                            style: GoogleFonts.poppins(fontSize: 12),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Required';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _lastNameController,
+                            decoration: InputDecoration(
+                              labelText: 'Last Name *',
+                              labelStyle: GoogleFonts.poppins(
+                                fontSize: 11,
+                                color: Colors.grey[700],
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey[50],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[300]!, width: 1),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: const BorderSide(
+                                    color: Color(0xFF4FC3F7), width: 1.5),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[300]!, width: 1),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
+                            ),
+                            style: GoogleFonts.poppins(fontSize: 12),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Required';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _emailController,
+                      decoration: InputDecoration(
+                        labelText: 'Email *',
+                        labelStyle: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.grey[700],
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF4FC3F7), width: 1.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                      ),
+                      style: GoogleFonts.poppins(fontSize: 12),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                            .hasMatch(value)) {
+                          return 'Invalid email';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _addressController,
+                      decoration: InputDecoration(
+                        labelText: 'Address *',
+                        labelStyle: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.grey[700],
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF4FC3F7), width: 1.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                      ),
+                      style: GoogleFonts.poppins(fontSize: 12),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _contactNumberController,
+                      decoration: InputDecoration(
+                        labelText: 'Contact Number *',
+                        labelStyle: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.grey[700],
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF4FC3F7), width: 1.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                      ),
+                      style: GoogleFonts.poppins(fontSize: 12),
+                      keyboardType: TextInputType.phone,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        if (!RegExp(r'^\+?\d{10,12}$').hasMatch(value)) {
+                          return 'Invalid number';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _passwordController,
+                      decoration: InputDecoration(
+                        labelText: 'Password *',
+                        labelStyle: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.grey[700],
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF4FC3F7), width: 1.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                      ),
+                      style: GoogleFonts.poppins(fontSize: 12),
+                      obscureText: true,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        if (value.length < 6) {
+                          return 'Min 6 chars';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _confirmPasswordController,
+                      decoration: InputDecoration(
+                        labelText: 'Confirm Password *',
+                        labelStyle: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.grey[700],
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF4FC3F7), width: 1.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                      ),
+                      style: GoogleFonts.poppins(fontSize: 12),
+                      obscureText: true,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        if (value != _passwordController.text) {
+                          return 'No match';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          if (_formKey.currentState!.validate()) {
+                            _registerPlumber(
+                              _firstNameController.text.trim(),
+                              _lastNameController.text.trim(),
+                              _emailController.text.trim(),
+                              _addressController.text.trim(),
+                              _contactNumberController.text.trim(),
+                              _passwordController.text.trim(),
+                            );
+                            Navigator.of(context).pop();
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4FC3F7),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          elevation: 2,
+                          shadowColor: Colors.black12,
+                        ),
+                        child: Text(
+                          'Register Plumber',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _registerPlumber(
+    String firstName,
+    String lastName,
+    String email,
+    String address,
+    String contactNumber,
+    String password,
+  ) async {
+    try {
+      UserCredential userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .set({
+        'fullName': '$firstName $lastName',
+        'email': email,
+        'address': address,
+        'contactNumber': contactNumber,
+        'role': 'Plumber',
+        'createdAt': Timestamp.now(),
+      });
+
+      _showSuccessOverlay('Plumber registered successfully!');
+    } catch (e) {
+      String errorMessage;
+      if (e is FirebaseAuthException) {
+        switch (e.code) {
+          case 'email-already-in-use':
+            errorMessage = 'The email address is already in use.';
+            break;
+          case 'invalid-email':
+            errorMessage = 'The email address is invalid.';
+            break;
+          case 'weak-password':
+            errorMessage = 'The password is too weak.';
+            break;
+          default:
+            errorMessage = 'Error registering plumber: $e';
+        }
+      } else {
+        errorMessage = 'Error registering plumber: $e';
+      }
+      _showErrorOverlay(errorMessage);
+    }
+  }
+
+  void _showDeleteConfirmationDialog(String userId, String email) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Confirm Delete',
+            style:
+                GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w500)),
+        content: Text('Are you sure you want to delete $email?',
+            style: GoogleFonts.poppins(fontSize: 14)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text('Cancel',
+                style: GoogleFonts.poppins(color: const Color(0xFF4FC3F7))),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _deleteUser(userId, email);
+            },
+            child:
+                Text('Delete', style: GoogleFonts.poppins(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterButton(String role) {
+    final isSelected = _selectedRole == role;
+    return ElevatedButton(
+      onPressed: () {
+        setState(() {
+          _selectedRole = role;
+          _currentPage = 0;
+          _lastDocument = null;
+        });
+      },
+      style: ElevatedButton.styleFrom(
+        backgroundColor:
+            isSelected ? const Color(0xFF4FC3F7) : Colors.grey.shade200,
+        foregroundColor: isSelected ? Colors.white : Colors.grey.shade800,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        textStyle: GoogleFonts.poppins(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      child: Text(role),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AdminLayout(
@@ -154,12 +672,39 @@ class _UsersPageState extends State<UsersPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                _buildFilterButton('All'),
-                const SizedBox(width: 8),
-                _buildFilterButton('Plumber'),
-                const SizedBox(width: 8),
-                _buildFilterButton('Resident'),
+                Row(
+                  children: [
+                    _buildFilterButton('All'),
+                    const SizedBox(width: 8),
+                    _buildFilterButton('Plumber'),
+                    const SizedBox(width: 8),
+                    _buildFilterButton('Resident'),
+                  ],
+                ),
+                ElevatedButton.icon(
+                  onPressed: _showAddPlumberModal,
+                  icon: const Icon(Icons.add, color: Colors.white, size: 18),
+                  label: Text(
+                    'Add Plumber',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4FC3F7),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    elevation: 2,
+                    shadowColor: Colors.black12,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -188,7 +733,7 @@ class _UsersPageState extends State<UsersPage> {
                               _lastDocument = null;
                             }),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF4A2C6F),
+                              backgroundColor: const Color(0xFF4FC3F7),
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(8),
@@ -363,7 +908,7 @@ class _UsersPageState extends State<UsersPage> {
                               style: GoogleFonts.poppins(
                                 fontSize: 12,
                                 color: _currentPage > 0
-                                    ? const Color(0xFF4A2C6F)
+                                    ? const Color(0xFF4FC3F7)
                                     : Colors.grey,
                               ),
                             ),
@@ -390,7 +935,7 @@ class _UsersPageState extends State<UsersPage> {
                                 fontSize: 12,
                                 color: users.length == _pageSize &&
                                         _lastDocument != null
-                                    ? const Color(0xFF4A2C6F)
+                                    ? const Color(0xFF4FC3F7)
                                     : Colors.grey,
                               ),
                             ),
@@ -405,61 +950,6 @@ class _UsersPageState extends State<UsersPage> {
           ],
         ),
       ),
-    );
-  }
-
-  void _showDeleteConfirmationDialog(String userId, String email) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Confirm Delete',
-            style:
-                GoogleFonts.poppins(fontSize: 18, fontWeight: FontWeight.w500)),
-        content: Text('Are you sure you want to delete $email?',
-            style: GoogleFonts.poppins(fontSize: 14)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text('Cancel',
-                style: GoogleFonts.poppins(color: const Color(0xFF4A2C6F))),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              _deleteUser(userId, email);
-            },
-            child:
-                Text('Delete', style: GoogleFonts.poppins(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFilterButton(String role) {
-    final isSelected = _selectedRole == role;
-    return ElevatedButton(
-      onPressed: () {
-        setState(() {
-          _selectedRole = role;
-          _currentPage = 0;
-          _lastDocument = null;
-        });
-      },
-      style: ElevatedButton.styleFrom(
-        backgroundColor:
-            isSelected ? const Color(0xFF4A2C6F) : Colors.grey.shade200,
-        foregroundColor: isSelected ? Colors.white : Colors.grey.shade800,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        textStyle: GoogleFonts.poppins(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      child: Text(role),
     );
   }
 }

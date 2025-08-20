@@ -31,7 +31,7 @@ class BillsPage extends StatelessWidget {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
                 child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2C3E50)),
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4FC3F7)),
                 ),
               );
             }
@@ -102,7 +102,7 @@ class _ResidentCardState extends State<_ResidentCard> {
               padding: const EdgeInsets.all(6),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF2C3E50).withOpacity(0.9),
+                color: const Color(0xFF4FC3F7).withOpacity(0.9),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.1),
@@ -134,7 +134,7 @@ class _ResidentCardState extends State<_ResidentCard> {
                 IconButton(
                   icon: Icon(
                     _showPayments ? Icons.expand_less : Icons.expand_more,
-                    color: const Color(0xFF2C3E50),
+                    color: const Color(0xFF4FC3F7),
                     size: 22,
                   ),
                   onPressed: () =>
@@ -143,7 +143,7 @@ class _ResidentCardState extends State<_ResidentCard> {
                 const SizedBox(width: 8),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2C3E50),
+                    backgroundColor: const Color(0xFF4FC3F7),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -214,7 +214,7 @@ class _PaymentSection extends StatelessWidget {
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Cancel',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF2C3E50))),
+                  style: TextStyle(fontSize: 12, color: Color(0xFF4FC3F7))),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -240,8 +240,7 @@ class _PaymentSection extends StatelessWidget {
                   SnackBar(
                     content: Text(
                         'Payment ${status == 'approved' ? 'approved' : 'rejected'} successfully!'),
-                    backgroundColor:
-                        status == 'approved' ? Colors.green : Colors.red,
+                    backgroundColor: const Color(0xFF4FC3F7),
                     duration: const Duration(seconds: 2),
                   ),
                 );
@@ -300,7 +299,7 @@ class _PaymentSection extends StatelessWidget {
             return const Padding(
               padding: EdgeInsets.all(6.0),
               child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2C3E50)),
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4FC3F7)),
               ),
             );
           }
@@ -414,7 +413,7 @@ class _PaymentSection extends StatelessWidget {
                                           child: CircularProgressIndicator(
                                             valueColor:
                                                 AlwaysStoppedAnimation<Color>(
-                                                    Color(0xFF2C3E50)),
+                                                    Color(0xFF4FC3F7)),
                                           ),
                                         ),
                                         errorWidget: (context, url, error) =>
@@ -440,6 +439,7 @@ class _PaymentSection extends StatelessWidget {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 6),
                               textStyle: const TextStyle(fontSize: 10),
+                              foregroundColor: const Color(0xFF4FC3F7),
                             ),
                             child: const Text('View Receipt'),
                           ),
@@ -447,7 +447,7 @@ class _PaymentSection extends StatelessWidget {
                           const SizedBox(width: 6),
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.blue[300],
+                              backgroundColor: const Color(0xFF4FC3F7),
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 6),
@@ -766,7 +766,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                         underline: const SizedBox(),
                         isExpanded: true,
                         icon: const Icon(Icons.arrow_drop_down,
-                            color: Color(0xFF2C3E50), size: 14),
+                            color: Color(0xFF4FC3F7), size: 14),
                         dropdownColor: Colors.white,
                       ),
                     ),
@@ -793,7 +793,8 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(6),
-                          borderSide: BorderSide(color: Color(0xFF2C3E50)),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF4FC3F7)),
                         ),
                       ),
                       keyboardType: TextInputType.number,
@@ -831,7 +832,8 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: Color(0xFF2C3E50)),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFF4FC3F7)),
                             ),
                           ),
                           readOnly: true,
@@ -861,7 +863,8 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(6),
-                              borderSide: BorderSide(color: Color(0xFF2C3E50)),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFF4FC3F7)),
                             ),
                           ),
                           readOnly: true,
@@ -896,7 +899,8 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(6),
-                          borderSide: BorderSide(color: Color(0xFF2C3E50)),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF4FC3F7)),
                         ),
                       ),
                       keyboardType:
@@ -967,8 +971,8 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                             horizontal: 14, vertical: 6),
                         textStyle: const TextStyle(
                             fontSize: 11, fontWeight: FontWeight.w500),
-                        foregroundColor: const Color(0xFF2C3E50),
-                        side: const BorderSide(color: Color(0xFF2C3E50)),
+                        foregroundColor: const Color(0xFF4FC3F7),
+                        side: const BorderSide(color: Color(0xFF4FC3F7)),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(6)),
                       ),
@@ -978,7 +982,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                     const SizedBox(width: 8),
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2C3E50),
+                        backgroundColor: const Color(0xFF4FC3F7),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 6),
@@ -1016,7 +1020,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Bill created successfully!'),
-                              backgroundColor: Color(0xFF2C3E50),
+                              backgroundColor: Color(0xFF4FC3F7),
                               duration: Duration(seconds: 2),
                             ),
                           );
