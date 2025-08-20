@@ -1,9 +1,10 @@
-// ignore_for_file: prefer_const_constructors, unnecessary_const
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+// ignore: unused_import
+import 'package:intl/intl.dart';
 import 'auth/resident_login.dart';
 import 'report_problem_page.dart';
 import 'view_billing_page.dart';
@@ -85,6 +86,7 @@ class ResidentHomePage extends StatefulWidget {
 
 class _ResidentHomePageState extends State<ResidentHomePage> {
   ResidentPage _selectedPage = ResidentPage.home;
+  final GlobalKey _notificationButtonKey = GlobalKey();
 
   void _logout(BuildContext context) async {
     await FirebaseAuth.instance.signOut();
@@ -119,6 +121,131 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
     });
   }
 
+  Future<List<Map<String, dynamic>>> _fetchNotifications() async {
+    print('Fetching notifications...');
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      print('No user logged in');
+      return [];
+    }
+    print('Current user UID: ${user.uid}');
+
+    try {
+      final notificationsSnapshot = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('residentId', isEqualTo: user.uid)
+          .where('status', whereIn: ['approved', 'rejected'])
+          .orderBy('processedDate', descending: true)
+          .limit(10)
+          .get();
+
+      print('Found ${notificationsSnapshot.docs.length} notifications');
+
+      final notifications = notificationsSnapshot.docs.map((doc) {
+        final data = doc.data();
+        print('Notification data: $data');
+        return {
+          'status': data['status'],
+          'month': data['month'] ?? 'Unknown',
+          'amount': data['amount']?.toDouble() ?? 0.0,
+          'processedDate': (data['processedDate'] as Timestamp?)?.toDate(),
+        };
+      }).toList();
+
+      print('Processed notifications: ${notifications.length}');
+      return notifications;
+    } catch (e) {
+      print('Error fetching notifications: $e');
+      return [];
+    }
+  }
+
+  void _showNotificationsDropdown(BuildContext context) async {
+    print('Attempting to show notification dropdown');
+    final notifications = await _fetchNotifications();
+    print('Notifications fetched: ${notifications.length}');
+
+    final RenderBox? button =
+        _notificationButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    if (button == null) {
+      print('Notification button RenderBox not found');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Unable to show notifications',
+              style: GoogleFonts.poppins(fontSize: 14)),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    final Offset position = button.localToGlobal(Offset.zero);
+    print('Button position: $position, size: ${button.size}');
+
+    await showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx,
+        position.dy + button.size.height + 8,
+        position.dx + button.size.width,
+        0,
+      ),
+      items: notifications.isEmpty
+          ? [
+              PopupMenuItem(
+                enabled: false,
+                child: Text(
+                  'No notifications',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+            ]
+          : notifications.map((notification) {
+              final status = notification['status'] == 'approved'
+                  ? 'Successful'
+                  : 'Declined';
+              final month = notification['month'];
+              final amount = notification['amount'].toStringAsFixed(2);
+              return PopupMenuItem(
+                enabled: false,
+                child: Row(
+                  children: [
+                    Icon(
+                      notification['status'] == 'approved'
+                          ? Icons.check_circle
+                          : Icons.cancel,
+                      color: notification['status'] == 'approved'
+                          ? Colors.green
+                          : Colors.red,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Payment of ₱$amount for $month is $status',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+      elevation: 8,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      color: Colors.white,
+    );
+    print('Dropdown menu closed');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -138,7 +265,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      const Color(0xFF87CEEB), // Sky Blue
+                      Color(0xFF87CEEB), // Sky Blue
                       Color.fromARGB(255, 127, 190, 226), // Light Sky Blue
                     ],
                     begin: Alignment.topLeft,
@@ -238,48 +365,59 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
             letterSpacing: 1.2,
           ),
         ),
-        backgroundColor: Color.fromARGB(255, 255, 255, 255),
+        backgroundColor: Colors.white,
         elevation: 3,
         actions: [
-          Stack(
-            children: [
-              IconButton(
-                icon: Icon(Icons.notifications_outlined,
-                    size: 24, color: Colors.grey[800]),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text("No new notifications"),
-                      behavior: SnackBarBehavior.floating,
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('notifications')
+                .where('residentId',
+                    isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+                .where('status', whereIn: ['approved', 'rejected']).snapshots(),
+            builder: (context, snapshot) {
+              int notificationCount = 0;
+              if (snapshot.hasData) {
+                notificationCount = snapshot.data!.docs.length;
+                print('StreamBuilder: Found $notificationCount notifications');
+              } else if (snapshot.hasError) {
+                print('StreamBuilder error: ${snapshot.error}');
+              }
+              return Stack(
+                children: [
+                  IconButton(
+                    key: _notificationButtonKey,
+                    icon: Icon(Icons.notifications_outlined,
+                        size: 24, color: Colors.grey[800]),
+                    onPressed: () => _showNotificationsDropdown(context),
+                  ),
+                  if (notificationCount > 0)
+                    Positioned(
+                      right: 10,
+                      top: 10,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          notificationCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     ),
-                  );
-                },
-              ),
-              Positioned(
-                right: 10,
-                top: 10,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: BoxDecoration(
-                    color: Colors.redAccent,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 16,
-                    minHeight: 16,
-                  ),
-                  child: const Text(
-                    '0',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ],
+                ],
+              );
+            },
           ),
         ],
         iconTheme: IconThemeData(color: Colors.grey[800]),
@@ -429,7 +567,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                     style: GoogleFonts.poppins(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey[800], // Updated text color
+                      color: Colors.grey[800],
                     ),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -448,7 +586,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
             Center(
               child: progress != null
                   ? SizedBox(
-                      width: 130, // Bigger circular indicator
+                      width: 130,
                       height: 150,
                       child: Stack(
                         alignment: Alignment.center,

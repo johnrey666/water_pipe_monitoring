@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
-import '../components/admin_layout.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../components/admin_layout.dart';
 
 class BillsPage extends StatelessWidget {
   const BillsPage({super.key});
@@ -10,61 +11,75 @@ class BillsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AdminLayout(
-      title: 'Bills',
+      title: 'Bills Management',
       selectedRoute: '/bills',
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: StreamBuilder<QuerySnapshot>(
-          stream: FirebaseFirestore.instance
-              .collection('users')
-              .where('role', isEqualTo: 'Resident')
-              .snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return Center(
-                child: Text(
-                  'Error loading residents: ${snapshot.error}',
-                  style: const TextStyle(fontSize: 14, color: Colors.redAccent),
-                ),
-              );
-            }
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4A90E2)),
-                ),
-              );
-            }
-            final residents = snapshot.data?.docs ?? [];
-            if (residents.isEmpty) {
-              return const Center(
-                child: Text(
-                  'No residents found.',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              );
-            }
-            return ListView.builder(
-              itemCount: residents.length,
-              itemBuilder: (context, index) {
-                final resident = residents[index];
-                final data = resident.data() as Map<String, dynamic>? ?? {};
-                final fullName = data['fullName'] ?? 'Unknown Resident';
-                final address = data['address'] ?? 'No address';
-                final contactNumber = data['contactNumber'] ?? 'No contact';
-                return _ResidentCard(
-                  residentId: resident.id,
-                  fullName: fullName,
-                  address: address,
-                  contactNumber: contactNumber,
-                );
-              },
-            );
-          },
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .where('role', isEqualTo: 'Resident')
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        'Error loading residents: ${snapshot.error}',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: Colors.redAccent,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    );
+                  }
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(
+                      child: CircularProgressIndicator(
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Color(0xFF1E88E5)),
+                      ),
+                    );
+                  }
+                  final residents = snapshot.data?.docs ?? [];
+                  if (residents.isEmpty) {
+                    return Center(
+                      child: Text(
+                        'No residents found.',
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          color: const Color(0xFF2D3748),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    );
+                  }
+                  return ListView.builder(
+                    itemCount: residents.length,
+                    itemBuilder: (context, index) {
+                      final resident = residents[index];
+                      final data =
+                          resident.data() as Map<String, dynamic>? ?? {};
+                      final fullName = data['fullName'] ?? 'Unknown Resident';
+                      final address = data['address'] ?? 'No address';
+                      final contactNumber =
+                          data['contactNumber'] ?? 'No contact';
+                      return _ResidentCard(
+                        residentId: resident.id,
+                        fullName: fullName,
+                        address: address,
+                        contactNumber: contactNumber,
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -90,19 +105,24 @@ class _ResidentCardState extends State<_ResidentCard> {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 6),
+      margin: const EdgeInsets.symmetric(vertical: 8),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 4,
+      elevation: 6,
       shadowColor: Colors.black.withOpacity(0.1),
+      color: Colors.white,
       child: Column(
         children: [
           ListTile(
-            contentPadding: const EdgeInsets.all(14),
+            contentPadding: const EdgeInsets.all(16),
             leading: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF4A90E2).withOpacity(0.9),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF1E88E5), Color(0xFF64B5F6)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.05),
@@ -111,21 +131,22 @@ class _ResidentCardState extends State<_ResidentCard> {
                   ),
                 ],
               ),
-              child: const Icon(Icons.person, color: Colors.white, size: 22),
+              child: const Icon(Icons.person, color: Colors.white, size: 20),
             ),
             title: Text(
               widget.fullName,
-              style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 15,
-                color: Colors.black,
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+                color: const Color(0xFF2D3748),
               ),
             ),
             subtitle: Text(
               '${widget.address}\n${widget.contactNumber}',
-              style: const TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: const Color(0xFF718096),
+                height: 1.4,
               ),
             ),
             trailing: Row(
@@ -134,43 +155,50 @@ class _ResidentCardState extends State<_ResidentCard> {
                 IconButton(
                   icon: Icon(
                     _showPayments ? Icons.expand_less : Icons.expand_more,
-                    color: const Color(0xFF4A90E2),
-                    size: 24,
+                    color: const Color(0xFF1E88E5),
+                    size: 20,
                   ),
                   onPressed: () =>
                       setState(() => _showPayments = !_showPayments),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4A90E2),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    textStyle: const TextStyle(
-                        fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      barrierColor: Colors.black54,
-                      builder: (context) => Dialog(
-                        backgroundColor: Colors.transparent,
-                        elevation: 0,
-                        insetPadding: const EdgeInsets.all(10),
-                        child: _BillReceiptForm(
-                          residentId: widget.residentId,
-                          fullName: widget.fullName,
-                          address: widget.address,
-                          contactNumber: widget.contactNumber,
-                        ),
+                AnimatedScale(
+                  scale: 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF1E88E5),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    );
-                  },
-                  child: const Text('Create Bill'),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      textStyle: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      elevation: 2,
+                    ),
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        barrierColor: Colors.black54,
+                        builder: (context) => Dialog(
+                          backgroundColor: Colors.transparent,
+                          elevation: 0,
+                          insetPadding: const EdgeInsets.all(10),
+                          child: _BillReceiptForm(
+                            residentId: widget.residentId,
+                            fullName: widget.fullName,
+                            address: widget.address,
+                            contactNumber: widget.contactNumber,
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text('Create Bill'),
+                  ),
                 ),
               ],
             ),
@@ -181,8 +209,8 @@ class _ResidentCardState extends State<_ResidentCard> {
             crossFadeState: _showPayments
                 ? CrossFadeState.showSecond
                 : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 400),
-            sizeCurve: Curves.easeInOut,
+            duration: const Duration(milliseconds: 500),
+            sizeCurve: Curves.easeInOutCubic,
           ),
         ],
       ),
@@ -190,31 +218,53 @@ class _ResidentCardState extends State<_ResidentCard> {
   }
 }
 
-class _PaymentSection extends StatelessWidget {
+class _PaymentSection extends StatefulWidget {
   final String residentId;
   const _PaymentSection({required this.residentId});
 
-  Future<void> _updatePaymentStatus(
-      BuildContext context, String paymentId, String status) async {
+  @override
+  State<_PaymentSection> createState() => _PaymentSectionState();
+}
+
+class _PaymentSectionState extends State<_PaymentSection> {
+  String _selectedMonth = DateFormat('MMM yyyy').format(DateTime.now());
+
+  Future<void> _updatePaymentStatus(BuildContext context, String paymentId,
+      String status, String? billId) async {
+    print(
+        'Updating payment status: paymentId=$paymentId, status=$status, billId=$billId');
     try {
       await showDialog(
         context: context,
         builder: (context) => AlertDialog(
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          backgroundColor: Colors.white,
           title: Text(
             'Confirm ${status == 'approved' ? 'Approval' : 'Rejection'}',
-            style: const TextStyle(fontSize: 15, color: Colors.black),
+            style: GoogleFonts.inter(
+              fontSize: 16,
+              color: const Color(0xFF2D3748),
+              fontWeight: FontWeight.w600,
+            ),
           ),
           content: Text(
             'Are you sure you want to ${status == 'approved' ? 'approve' : 'reject'} this payment?',
-            style: const TextStyle(fontSize: 13, color: Colors.grey),
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: const Color(0xFF718096),
+            ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF4A90E2))),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: const Color(0xFF1E88E5),
+                ),
+              ),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -224,273 +274,572 @@ class _PaymentSection extends StatelessWidget {
                     borderRadius: BorderRadius.circular(8)),
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                textStyle: GoogleFonts.inter(
+                    fontSize: 13, fontWeight: FontWeight.w600),
               ),
               onPressed: () async {
-                await FirebaseFirestore.instance
-                    .collection('payments')
-                    .doc(paymentId)
-                    .update({
-                  'status': status,
-                  'processedDate': FieldValue.serverTimestamp(),
-                  'processedBy':
-                      'Admin', // Replace with actual admin ID if available
-                });
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                        'Payment ${status == 'approved' ? 'approved' : 'rejected'} successfully!'),
-                    backgroundColor:
-                        status == 'approved' ? Colors.green : Colors.red,
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
+                try {
+                  // Fetch payment and bill data for notification
+                  final paymentDoc = await FirebaseFirestore.instance
+                      .collection('payments')
+                      .doc(paymentId)
+                      .get();
+                  if (!paymentDoc.exists) {
+                    print('Payment document not found: $paymentId');
+                    throw Exception('Payment not found');
+                  }
+                  final paymentData = paymentDoc.data()!;
+                  print('Payment data: $paymentData');
+                  String month = _selectedMonth;
+                  if (billId != null) {
+                    final billDoc = await FirebaseFirestore.instance
+                        .collection('bills')
+                        .doc(billId)
+                        .get();
+                    if (billDoc.exists) {
+                      final periodStart =
+                          (billDoc.data()!['periodStart'] as Timestamp?)
+                              ?.toDate();
+                      month = periodStart != null
+                          ? DateFormat('MMM yyyy').format(periodStart)
+                          : 'Unknown';
+                      print('Bill found, month: $month');
+                    } else {
+                      print('Bill not found for billId: $billId');
+                    }
+                  } else {
+                    print('No billId provided, using default month: $month');
+                  }
+
+                  // Save to notifications collection
+                  final notificationData = {
+                    'residentId': widget.residentId,
+                    'billId': billId ?? 'Unknown',
+                    'status': status,
+                    'month': month,
+                    'processedDate': FieldValue.serverTimestamp(),
+                    'processedBy': 'Admin',
+                    'amount': paymentData['billAmount']?.toDouble() ?? 0.0,
+                  };
+                  print('Saving notification: $notificationData');
+                  await FirebaseFirestore.instance
+                      .collection('notifications')
+                      .add(notificationData);
+                  print('Notification saved successfully');
+
+                  if (status == 'approved') {
+                    // Update payment status to approved
+                    await FirebaseFirestore.instance
+                        .collection('payments')
+                        .doc(paymentId)
+                        .update({
+                      'status': 'approved',
+                      'processedDate': FieldValue.serverTimestamp(),
+                      'processedBy': 'Admin',
+                    });
+                    print('Payment updated to approved');
+                    // Delete the corresponding bill
+                    if (billId != null) {
+                      await FirebaseFirestore.instance
+                          .collection('bills')
+                          .doc(billId)
+                          .delete();
+                      print('Bill deleted: $billId');
+                    }
+                    // Trigger rebuild to refresh dropdown
+                    setState(() {
+                      _selectedMonth =
+                          DateFormat('MMM yyyy').format(DateTime.now());
+                    });
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Payment approved and bill deleted successfully!',
+                          style: GoogleFonts.inter(fontSize: 13),
+                        ),
+                        backgroundColor: Colors.green,
+                        duration: const Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                    );
+                  } else if (status == 'rejected') {
+                    // Delete the payment
+                    await FirebaseFirestore.instance
+                        .collection('payments')
+                        .doc(paymentId)
+                        .delete();
+                    print('Payment deleted: $paymentId');
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Payment rejected and removed successfully!',
+                          style: GoogleFonts.inter(fontSize: 13),
+                        ),
+                        backgroundColor: Colors.red,
+                        duration: const Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8)),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  print('Error updating payment status: $e');
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Error ${status == 'approved' ? 'approving payment and deleting bill' : 'rejecting payment'}: $e',
+                        style: GoogleFonts.inter(fontSize: 13),
+                      ),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                  );
+                }
               },
               child: Text(
                 status == 'approved' ? 'Approve' : 'Reject',
-                style: const TextStyle(fontSize: 12, color: Colors.white),
+                style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
               ),
             ),
           ],
         ),
       );
     } catch (e) {
+      print('Error initiating update: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error updating payment: $e'),
+          content: Text('Error initiating update: $e',
+              style: GoogleFonts.inter(fontSize: 13)),
           backgroundColor: Colors.red,
           duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
       );
     }
   }
 
+  Widget _buildMonthFilter() {
+    return FutureBuilder<QuerySnapshot>(
+      future: FirebaseFirestore.instance
+          .collection('bills')
+          .where('residentId', isEqualTo: widget.residentId)
+          .get(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox.shrink();
+        }
+        final bills = snapshot.data?.docs ?? [];
+        final uniqueMonths = bills
+            .map((doc) => DateFormat('MMM yyyy')
+                .format((doc['periodStart'] as Timestamp).toDate()))
+            .toSet()
+            .toList()
+          ..sort((a, b) {
+            final aDate = DateFormat('MMM yyyy').parse(a);
+            final bDate = DateFormat('MMM yyyy').parse(b);
+            return bDate.compareTo(aDate);
+          });
+
+        if (uniqueMonths.isEmpty) {
+          uniqueMonths.add(_selectedMonth);
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Container(
+              width: 120,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: const Color(0xFFEDF2F7)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: DropdownButton<String>(
+                value: _selectedMonth,
+                items: uniqueMonths.map((month) {
+                  return DropdownMenuItem<String>(
+                    value: month,
+                    child: Text(
+                      month,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: const Color(0xFF2D3748),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _selectedMonth = value;
+                    });
+                  }
+                },
+                isExpanded: true,
+                underline: const SizedBox(),
+                icon: const Icon(Icons.arrow_drop_down,
+                    color: Color(0xFF1E88E5), size: 16),
+                dropdownColor: Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                elevation: 4,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFEDF7FF),
+        color: const Color(0xFFF5F7FA),
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-        border: Border.all(color: Colors.grey[200]!, width: 1),
+        border: Border.all(color: const Color(0xFFEDF2F7), width: 1),
         boxShadow: [
           BoxShadow(
-            color: Colors.black12.withOpacity(0.05),
+            color: Colors.black.withOpacity(0.05),
             blurRadius: 8,
-            offset: const Offset(0, 3),
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('payments')
-            .where('residentId', isEqualTo: residentId)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: Text(
-                'Error loading payments.',
-                style: TextStyle(fontSize: 11, color: Colors.redAccent),
-              ),
-            );
-          }
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4A90E2)),
-              ),
-            );
-          }
-          final payments = snapshot.data?.docs ?? [];
-          if (payments.isEmpty) {
-            return const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: Text(
-                'No payments found for this resident.',
-                style: TextStyle(fontSize: 11, color: Colors.grey),
-              ),
-            );
-          }
-          return ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: payments.length,
-            itemBuilder: (context, index) {
-              final paymentDoc = payments[index];
-              final payment = paymentDoc.data() as Map<String, dynamic>;
-              final paymentId = paymentDoc.id;
-              final billId = payment['billId'] ?? 'Unknown';
-              final amount = (payment['billAmount'] as num?)?.toDouble() ?? 0.0;
-              final status = payment['status'] ?? 'pending';
-              final submissionDate =
-                  (payment['submissionDate'] as Timestamp?)?.toDate();
-              final receiptImage = payment['receiptImage'] as String?;
-              return Container(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.grey[200]!, width: 1),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black12.withOpacity(0.05),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(status).withOpacity(0.1),
-                        shape: BoxShape.circle,
+      child: Column(
+        children: [
+          _buildMonthFilter(),
+          const SizedBox(height: 12),
+          StreamBuilder<QuerySnapshot>(
+            stream: FirebaseFirestore.instance
+                .collection('payments')
+                .where('residentId', isEqualTo: widget.residentId)
+                .snapshots(),
+            builder: (context, paymentSnapshot) {
+              if (paymentSnapshot.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    'Error loading payments.',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: Colors.redAccent),
+                  ),
+                );
+              }
+              if (paymentSnapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: CircularProgressIndicator(
+                    valueColor:
+                        AlwaysStoppedAnimation<Color>(Color(0xFF1E88E5)),
+                  ),
+                );
+              }
+              final payments = paymentSnapshot.data?.docs ?? [];
+              if (payments.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Text(
+                    'No payments found for this resident.',
+                    style: GoogleFonts.inter(
+                        fontSize: 13, color: const Color(0xFF718096)),
+                  ),
+                );
+              }
+
+              return FutureBuilder<List<Map<String, dynamic>>>(
+                future: _fetchPaymentsWithBillDates(payments),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: CircularProgressIndicator(
+                        valueColor:
+                            AlwaysStoppedAnimation<Color>(Color(0xFF1E88E5)),
                       ),
-                      child: Icon(
-                        _getStatusIcon(status),
-                        color: _getStatusColor(status),
-                        size: 20,
+                    );
+                  }
+                  final filteredPayments = snapshot.data ?? [];
+                  if (filteredPayments.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Text(
+                        'No payments for $_selectedMonth.',
+                        style: GoogleFonts.inter(
+                            fontSize: 13, color: const Color(0xFF718096)),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Bill ID: $billId',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
+                    );
+                  }
+
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: filteredPayments.length,
+                    itemBuilder: (context, index) {
+                      final payment = filteredPayments[index];
+                      final paymentId = payment['paymentId'];
+                      final billId = payment['billId'] ?? 'Unknown';
+                      final amount =
+                          (payment['billAmount'] as num?)?.toDouble() ?? 0.0;
+                      final status = payment['status'] ?? 'pending';
+                      final billingDate = payment['billingDate'];
+                      final receiptImage = payment['receiptImage'] as String?;
+                      return Container(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                              color: const Color(0xFFEDF2F7), width: 1),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
                             ),
-                          ),
-                          Text(
-                            'Amount: ₱${amount.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                                fontSize: 11, color: Colors.grey),
-                          ),
-                          Text(
-                            'Status: ${_getStatusText(status)}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: _getStatusColor(status),
-                              fontWeight: FontWeight.w600,
+                          ],
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: _getStatusColor(status).withOpacity(0.1),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                _getStatusIcon(status),
+                                color: _getStatusColor(status),
+                                size: 20,
+                              ),
                             ),
-                          ),
-                          if (submissionDate != null)
-                            Text(
-                              'Submitted: ${DateFormat.yMMMd().format(submissionDate)}',
-                              style: const TextStyle(
-                                  fontSize: 11, color: Colors.grey),
-                            ),
-                        ],
-                      ),
-                    ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (receiptImage != null)
-                          TextButton(
-                            onPressed: () {
-                              showDialog(
-                                context: context,
-                                builder: (context) => Dialog(
-                                  backgroundColor: Colors.transparent,
-                                  insetPadding: const EdgeInsets.all(20),
-                                  child: Stack(
-                                    alignment: Alignment.topRight,
-                                    children: [
-                                      CachedNetworkImage(
-                                        imageUrl:
-                                            'data:image/jpeg;base64,$receiptImage',
-                                        placeholder: (context, url) =>
-                                            const Center(
-                                          child: CircularProgressIndicator(
-                                            valueColor:
-                                                AlwaysStoppedAnimation<Color>(
-                                                    Color(0xFF4A90E2)),
-                                          ),
-                                        ),
-                                        errorWidget: (context, url, error) =>
-                                            const Icon(Icons.error,
-                                                color: Colors.red, size: 30),
-                                        width: double.infinity,
-                                        height: 250,
-                                        fit: BoxFit.contain,
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.close,
-                                            color: Colors.white, size: 24),
-                                        onPressed: () => Navigator.pop(context),
-                                        padding: const EdgeInsets.all(8),
-                                        visualDensity: VisualDensity.compact,
-                                      ),
-                                    ],
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Bill ID: $billId',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF2D3748),
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
-                            style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 8),
-                              textStyle: const TextStyle(
-                                  fontSize: 11, color: Color(0xFF4A90E2)),
+                                  Text(
+                                    'Amount: ₱${amount.toStringAsFixed(2)}',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: const Color(0xFF718096),
+                                    ),
+                                  ),
+                                  Text(
+                                    'Status: ${_getStatusText(status)}',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: _getStatusColor(status),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Billing Date: $billingDate',
+                                    style: GoogleFonts.inter(
+                                      fontSize: 12,
+                                      color: const Color(0xFF718096),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            child: const Text('View Receipt'),
-                          ),
-                        if (status == 'pending') ...[
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF90CAF9),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                              minimumSize: const Size(70, 36),
-                              textStyle: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (receiptImage != null)
+                                  AnimatedScale(
+                                    scale: 1.0,
+                                    duration: const Duration(milliseconds: 200),
+                                    child: TextButton(
+                                      onPressed: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (context) => Dialog(
+                                            backgroundColor: Colors.transparent,
+                                            insetPadding:
+                                                const EdgeInsets.all(20),
+                                            child: Stack(
+                                              alignment: Alignment.topRight,
+                                              children: [
+                                                CachedNetworkImage(
+                                                  imageUrl:
+                                                      'data:image/jpeg;base64,$receiptImage',
+                                                  placeholder: (context, url) =>
+                                                      const Center(
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      valueColor:
+                                                          AlwaysStoppedAnimation<
+                                                                  Color>(
+                                                              Color(
+                                                                  0xFF1E88E5)),
+                                                    ),
+                                                  ),
+                                                  errorWidget:
+                                                      (context, url, error) =>
+                                                          const Icon(
+                                                    Icons.error,
+                                                    color: Colors.red,
+                                                    size: 30,
+                                                  ),
+                                                  width: double.infinity,
+                                                  height: 250,
+                                                  fit: BoxFit.contain,
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(Icons.close,
+                                                      color: Colors.white,
+                                                      size: 24),
+                                                  onPressed: () =>
+                                                      Navigator.pop(context),
+                                                  padding:
+                                                      const EdgeInsets.all(8),
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 8),
+                                        textStyle: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            color: const Color(0xFF1E88E5)),
+                                      ),
+                                      child: const Text('View Receipt'),
+                                    ),
+                                  ),
+                                if (status == 'pending') ...[
+                                  const SizedBox(width: 8),
+                                  AnimatedScale(
+                                    scale: 1.0,
+                                    duration: const Duration(milliseconds: 200),
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor:
+                                            const Color(0xFF81D4FA),
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 8),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8)),
+                                        minimumSize: const Size(60, 36),
+                                        textStyle: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                      onPressed: () => _updatePaymentStatus(
+                                          context,
+                                          paymentId,
+                                          'approved',
+                                          billId),
+                                      child: const Text('Accept'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  AnimatedScale(
+                                    scale: 1.0,
+                                    duration: const Duration(milliseconds: 200),
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.red,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 8),
+                                        shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(8)),
+                                        minimumSize: const Size(60, 36),
+                                        textStyle: GoogleFonts.inter(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600),
+                                      ),
+                                      onPressed: () => _updatePaymentStatus(
+                                          context,
+                                          paymentId,
+                                          'rejected',
+                                          billId),
+                                      child: const Text('Reject'),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
-                            onPressed: () => _updatePaymentStatus(
-                                context, paymentId, 'approved'),
-                            child: const Text('Accept'),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.red,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 8),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8)),
-                              minimumSize: const Size(70, 36),
-                              textStyle: const TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold),
-                            ),
-                            onPressed: () => _updatePaymentStatus(
-                                context, paymentId, 'rejected'),
-                            child: const Text('Reject'),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
               );
             },
-          );
-        },
+          ),
+        ],
       ),
     );
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchPaymentsWithBillDates(
+      List<QueryDocumentSnapshot> payments) async {
+    final filteredPayments = <Map<String, dynamic>>[];
+    for (var paymentDoc in payments) {
+      final payment = paymentDoc.data() as Map<String, dynamic>;
+      final billId = payment['billId'] as String?;
+      if (billId != null) {
+        final billSnapshot = await FirebaseFirestore.instance
+            .collection('bills')
+            .doc(billId)
+            .get();
+        if (billSnapshot.exists) {
+          final billData = billSnapshot.data()!;
+          final periodStart = (billData['periodStart'] as Timestamp?)?.toDate();
+          final billingDate = periodStart != null
+              ? DateFormat('MMM yyyy').format(periodStart)
+              : 'N/A';
+          if (billingDate == _selectedMonth) {
+            filteredPayments.add({
+              ...payment,
+              'paymentId': paymentDoc.id,
+              'billingDate': billingDate,
+            });
+          }
+        }
+      }
+    }
+    return filteredPayments;
   }
 
   Color _getStatusColor(String status) {
@@ -564,10 +913,11 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
     );
     if (picked != null && mounted) {
       setState(() {
-        if (isStartDate)
+        if (isStartDate) {
           startDate = picked;
-        else
+        } else {
           endDate = picked;
+        }
       });
     }
   }
@@ -628,6 +978,8 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
       final snapshot = await FirebaseFirestore.instance
           .collection('bills')
           .where('residentId', isEqualTo: widget.residentId)
+          .orderBy('issueDate', descending: true)
+          .limit(1)
           .get();
 
       print('Found ${snapshot.docs.length} previous bills');
@@ -635,17 +987,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
       if (mounted) {
         setState(() {
           if (snapshot.docs.isNotEmpty) {
-            final sortedDocs = snapshot.docs.toList()
-              ..sort((a, b) {
-                final aDate = a.data()['issueDate'] as Timestamp?;
-                final bDate = b.data()['issueDate'] as Timestamp?;
-                if (aDate == null && bDate == null) return 0;
-                if (aDate == null) return 1;
-                if (bDate == null) return -1;
-                return bDate.compareTo(aDate);
-              });
-
-            final billData = sortedDocs.first.data() as Map<String, dynamic>;
+            final billData = snapshot.docs.first.data() as Map<String, dynamic>;
             print('Latest bill data: $billData');
             previous = billData['currentConsumedWaterMeter']?.toDouble() ?? 0.0;
             print('Setting previous to: $previous');
@@ -674,16 +1016,16 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey[200]!, width: 1),
+          border: Border.all(color: const Color(0xFFEDF2F7), width: 1),
           boxShadow: [
             BoxShadow(
-              color: Colors.black12.withOpacity(0.05),
+              color: Colors.black.withOpacity(0.05),
               blurRadius: 8,
               offset: const Offset(0, 3),
             ),
           ],
           gradient: const LinearGradient(
-            colors: [Color(0xFFFFFFFF), Color(0xFFEDF7FF)],
+            colors: [Color(0xFFFFFFFF), Color(0xFFF5F7FA)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -704,37 +1046,36 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                         children: [
                           Image.asset('assets/images/icon.png', height: 36),
                           const SizedBox(height: 4),
-                          const Text(
+                          Text(
                             'San Jose Water Services\nSajowasa',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
+                            style: GoogleFonts.inter(
+                              fontWeight: FontWeight.w700,
                               fontSize: 16,
                               letterSpacing: 0.5,
-                              color: Colors.black,
+                              color: const Color(0xFF2D3748),
                             ),
                           ),
                           const SizedBox(height: 3),
                           Text(
                             DateFormat.yMMMd().format(DateTime.now()),
-                            style: const TextStyle(
+                            style: GoogleFonts.inter(
                               fontSize: 11,
-                              color: Colors.grey,
-                              fontFamily: 'monospace',
+                              color: const Color(0xFF718096),
                             ),
                           ),
                         ],
                       ),
                     ),
                     Container(
-                      width: 90,
+                      width: 100,
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 5, vertical: 2),
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey[300]!),
-                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: const Color(0xFFEDF2F7)),
+                        borderRadius: BorderRadius.circular(8),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black12.withOpacity(0.05),
+                            color: Colors.black.withOpacity(0.05),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -761,16 +1102,20 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                         ].map<DropdownMenuItem<String>>((String value) {
                           return DropdownMenuItem<String>(
                             value: value,
-                            child: Text(value,
-                                style: const TextStyle(
-                                    fontSize: 10, color: Colors.black)),
+                            child: Text(
+                              value,
+                              style: GoogleFonts.inter(
+                                  fontSize: 12, color: const Color(0xFF2D3748)),
+                            ),
                           );
                         }).toList(),
                         underline: const SizedBox(),
                         isExpanded: true,
                         icon: const Icon(Icons.arrow_drop_down,
-                            color: Color(0xFF4A90E2), size: 16),
+                            color: Color(0xFF1E88E5), size: 20),
                         dropdownColor: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        elevation: 6,
                       ),
                     ),
                   ],
@@ -783,22 +1128,23 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                   trailing: SizedBox(
                     width: 80,
                     child: TextFormField(
-                      style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 11,
-                          color: Colors.black),
+                      style: GoogleFonts.inter(
+                        color: const Color(0xFF2D3748),
+                      ),
                       decoration: InputDecoration(
                         hintText: '1234',
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(
-                            vertical: 6, horizontal: 10),
+                            vertical: 8, horizontal: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFEDF2F7)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Color(0xFF4A90E2)),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF1E88E5)),
                         ),
                       ),
                       keyboardType: TextInputType.number,
@@ -821,24 +1167,26 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                       SizedBox(
                         width: 80,
                         child: TextFormField(
-                          style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 11,
-                              color: Colors.black),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: const Color(0xFF2D3748),
+                          ),
                           decoration: InputDecoration(
                             hintText: startDate == null
                                 ? 'Start'
                                 : DateFormat('MM-dd').format(startDate!),
                             isDense: true,
                             contentPadding: const EdgeInsets.symmetric(
-                                vertical: 6, horizontal: 10),
+                                vertical: 8, horizontal: 12),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey[300]!),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFFEDF2F7)),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Color(0xFF4A90E2)),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFF1E88E5)),
                             ),
                           ),
                           readOnly: true,
@@ -846,31 +1194,35 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                         ),
                       ),
                       const SizedBox(width: 6),
-                      const Text('-',
-                          style: TextStyle(
-                              fontSize: 13, color: Color(0xFF4A90E2))),
+                      Text(
+                        '-',
+                        style: GoogleFonts.inter(
+                            fontSize: 13, color: const Color(0xFF1E88E5)),
+                      ),
                       const SizedBox(width: 6),
                       SizedBox(
                         width: 80,
                         child: TextFormField(
-                          style: const TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 11,
-                              color: Colors.black),
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: const Color(0xFF2D3748),
+                          ),
                           decoration: InputDecoration(
                             hintText: endDate == null
                                 ? 'End'
                                 : DateFormat('MM-dd').format(endDate!),
                             isDense: true,
                             contentPadding: const EdgeInsets.symmetric(
-                                vertical: 6, horizontal: 10),
+                                vertical: 8, horizontal: 12),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey[300]!),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFFEDF2F7)),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Color(0xFF4A90E2)),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFF1E88E5)),
                             ),
                           ),
                           readOnly: true,
@@ -891,23 +1243,25 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                   trailing: SizedBox(
                     width: 80,
                     child: TextFormField(
-                      style: const TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 11,
-                          color: Colors.black),
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: const Color(0xFF2D3748),
+                      ),
                       decoration: InputDecoration(
                         hintText: '0.00',
                         suffixText: 'm³',
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(
-                            vertical: 6, horizontal: 10),
+                            vertical: 8, horizontal: 12),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Colors.grey[300]!),
+                          borderSide:
+                              const BorderSide(color: Color(0xFFEDF2F7)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Color(0xFF4A90E2)),
+                          borderSide:
+                              const BorderSide(color: Color(0xFF1E88E5)),
                         ),
                       ),
                       keyboardType:
@@ -925,21 +1279,29 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                   ),
                 ),
                 _receiptRow(
-                    'TOTAL CUBIC METER USED', '${total.toStringAsFixed(2)} m³',
-                    isBold: true),
+                  'TOTAL CUBIC METER USED',
+                  '${total.toStringAsFixed(2)} m³',
+                  isBold: true,
+                ),
                 _dashedDivider(),
                 _receiptRow(
-                    'CURRENT BILL', '₱${currentBill.toStringAsFixed(2)}',
-                    valueColor: Colors.grey),
+                  'CURRENT BILL',
+                  '₱${currentBill.toStringAsFixed(2)}',
+                  valueColor: const Color(0xFF718096),
+                ),
                 _receiptRow(
-                    'TOTAL BILL AMOUNT', '₱${totalBill.toStringAsFixed(2)}',
-                    valueColor: Colors.black, isBold: true),
+                  'TOTAL BILL AMOUNT',
+                  '₱${totalBill.toStringAsFixed(2)}',
+                  valueColor: const Color(0xFF2D3748),
+                  isBold: true,
+                ),
                 const SizedBox(height: 12),
                 Container(
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[200]!, width: 1),
+                    border:
+                        Border.all(color: const Color(0xFFEDF2F7), width: 1),
                     borderRadius: BorderRadius.circular(8),
-                    color: Colors.grey[50],
+                    color: Colors.white,
                   ),
                   padding: const EdgeInsets.all(10),
                   child: Column(
@@ -974,15 +1336,15 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                   children: [
                     AnimatedScale(
                       scale: 1.0,
-                      duration: const Duration(milliseconds: 250),
+                      duration: const Duration(milliseconds: 200),
                       child: TextButton(
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          textStyle: const TextStyle(
-                              fontSize: 12, fontWeight: FontWeight.w500),
-                          foregroundColor: const Color(0xFF4A90E2),
-                          side: const BorderSide(color: Color(0xFF4A90E2)),
+                              horizontal: 16, vertical: 10),
+                          textStyle: GoogleFonts.inter(
+                              fontSize: 13, fontWeight: FontWeight.w600),
+                          foregroundColor: const Color(0xFF1E88E5),
+                          side: const BorderSide(color: Color(0xFF1E88E5)),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8)),
                         ),
@@ -993,15 +1355,15 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                     const SizedBox(width: 8),
                     AnimatedScale(
                       scale: 1.0,
-                      duration: const Duration(milliseconds: 250),
+                      duration: const Duration(milliseconds: 200),
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4A90E2),
+                          backgroundColor: const Color(0xFF1E88E5),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 8),
-                          textStyle: const TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 12),
+                              horizontal: 16, vertical: 10),
+                          textStyle: GoogleFonts.inter(
+                              fontWeight: FontWeight.w600, fontSize: 13),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8)),
                           elevation: 2,
@@ -1032,10 +1394,14 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                 .add(billData);
                             Navigator.pop(context);
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Bill created successfully!'),
-                                backgroundColor: Color(0xFF4A90E2),
-                                duration: Duration(seconds: 2),
+                              SnackBar(
+                                content: Text('Bill created successfully!',
+                                    style: GoogleFonts.inter(fontSize: 13)),
+                                backgroundColor: const Color(0xFF1E88E5),
+                                duration: const Duration(seconds: 2),
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8)),
                               ),
                             );
                           }
@@ -1061,7 +1427,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
             (i) => Expanded(
               child: Container(
                 height: 1,
-                color: i.isEven ? Colors.grey[200] : Colors.transparent,
+                color: i.isEven ? const Color(0xFFEDF2F7) : Colors.transparent,
               ),
             ),
           ),
@@ -1077,22 +1443,20 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
             Expanded(
               child: Text(
                 label,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
+                style: GoogleFonts.inter(
                   fontWeight: FontWeight.w600,
                   fontSize: 12,
-                  color: Colors.black,
+                  color: const Color(0xFF2D3748),
                 ),
               ),
             ),
             if (value != null)
               Text(
                 value,
-                style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                style: GoogleFonts.inter(
+                  fontWeight: isBold ? FontWeight.w700 : FontWeight.w600,
                   fontSize: 12,
-                  color: valueColor ?? Colors.grey[700],
+                  color: valueColor ?? const Color(0xFF718096),
                 ),
               ),
             if (trailing != null) trailing,
@@ -1106,19 +1470,19 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
           children: [
             Text(
               category,
-              style: const TextStyle(
+              style: GoogleFonts.inter(
                 fontWeight: FontWeight.w600,
                 fontSize: 11,
-                color: Colors.black,
+                color: const Color(0xFF2D3748),
               ),
             ),
             const SizedBox(width: 4),
             Expanded(
               child: Text(
                 details,
-                style: const TextStyle(
+                style: GoogleFonts.inter(
                   fontSize: 10,
-                  color: Colors.grey,
+                  color: const Color(0xFF718096),
                 ),
               ),
             ),
