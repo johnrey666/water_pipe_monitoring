@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 class ViewBillingPage extends StatefulWidget {
@@ -18,7 +19,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   bool _loading = true;
   String? _error;
   String _residentId =
-      'ZEEuYzKxgqVzjliWPsN6K490O1H3'; // Replace with auth-based ID
+      FirebaseAuth.instance.currentUser!.uid; // Use authenticated user ID
   bool _paymentSubmitted = false;
   String? _paymentStatus;
   String? selectedPurok;
@@ -145,7 +146,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         barrierDismissible: false,
         builder: (context) => const Center(
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2C3E50)),
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4A90E2)),
           ),
         ),
       );
@@ -178,7 +179,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         const SnackBar(
           content:
               Text('Payment submitted successfully! Awaiting admin approval.'),
-          backgroundColor: Color(0xFF2C3E50),
+          backgroundColor: Color(0xFF4A90E2),
         ),
       );
 
@@ -201,7 +202,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: const Color(0xFFEDF7FF),
       body: _loading
           ? _buildLoadingState()
           : _error != null
@@ -210,7 +211,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   ? _buildNoBillsState()
                   : RefreshIndicator(
                       onRefresh: _loadLatestBill,
-                      color: const Color(0xFF2C3E50),
+                      color: const Color(0xFF4A90E2),
                       child: SingleChildScrollView(
                         physics: const AlwaysScrollableScrollPhysics(),
                         child: _buildBillingContent(),
@@ -222,7 +223,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   Widget _buildLoadingState() {
     return const Center(
       child: CircularProgressIndicator(
-        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2C3E50)),
+        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4A90E2)),
       ),
     );
   }
@@ -234,7 +235,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         child: Card(
           elevation: 6,
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -251,7 +252,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF2C3E50),
+                    color: Color(0xFF4A90E2),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -269,7 +270,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   icon: const Icon(Icons.refresh, size: 16),
                   label: const Text('Retry', style: TextStyle(fontSize: 12)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2C3E50),
+                    backgroundColor: const Color(0xFF4A90E2),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -293,7 +294,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         child: Card(
           elevation: 6,
           shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -310,7 +311,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF2C3E50),
+                    color: Color(0xFF4A90E2),
                   ),
                 ),
                 const SizedBox(height: 6),
@@ -328,7 +329,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   icon: const Icon(Icons.refresh, size: 16),
                   label: const Text('Refresh', style: TextStyle(fontSize: 12)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF2C3E50),
+                    backgroundColor: const Color(0xFF4A90E2),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -367,14 +368,14 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         : DateTime.now();
     final formattedDueDate = DateFormat.yMMMd().format(dueDate);
     final isOverdue = DateTime.now().isAfter(dueDate);
-    final dueColor = isOverdue ? Colors.red : const Color(0xFF2C3E50);
+    final dueColor = isOverdue ? Colors.red : Colors.black;
 
     return Padding(
       padding: const EdgeInsets.all(10.0),
       child: Column(
         children: [
           Card(
-            elevation: 8,
+            elevation: 6,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Container(
@@ -382,15 +383,15 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
                 gradient: const LinearGradient(
-                  colors: [Color(0xFFFFFFFF), Color(0xFFF8FAFF)],
+                  colors: [Color(0xFFFFFFFF), Color(0xFFEDF7FF)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black12.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    color: Colors.black12.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
                   ),
                 ],
               ),
@@ -413,7 +414,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF2C3E50),
+                                  color: Color(0xFF4A90E2),
                                 ),
                               ),
                               Text(
@@ -432,11 +433,11 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2C3E50),
+                          color: const Color(0xFF4A90E2),
                           borderRadius: BorderRadius.circular(6),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black12.withOpacity(0.1),
+                              color: Colors.black12.withOpacity(0.05),
                               blurRadius: 4,
                               offset: const Offset(0, 2),
                             ),
@@ -459,7 +460,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF2C3E50),
+                      color: Color(0xFF4A90E2),
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -482,7 +483,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   _dashedDivider(),
                   _receiptRow(
                       'Total Amount Due', '₱${totalBill.toStringAsFixed(2)}',
-                      valueColor: const Color(0xFF2C3E50), isBold: true),
+                      valueColor: const Color(0xFF4A90E2), isBold: true),
                   _receiptRow('Due Date', formattedDueDate,
                       valueColor: dueColor),
                   if (isOverdue)
@@ -522,13 +523,13 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF2C3E50),
+                              color: Color(0xFF4A90E2),
                             ),
                           ),
                           Icon(
                             _showRates ? Icons.expand_less : Icons.expand_more,
                             size: 16,
-                            color: const Color(0xFF2C3E50),
+                            color: const Color(0xFF4A90E2),
                           ),
                         ],
                       ),
@@ -571,7 +572,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     crossFadeState: _showRates
                         ? CrossFadeState.showSecond
                         : CrossFadeState.showFirst,
-                    duration: const Duration(milliseconds: 300),
+                    duration: const Duration(milliseconds: 400),
                     sizeCurve: Curves.easeInOut,
                   ),
                   const SizedBox(height: 12),
@@ -590,7 +591,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
           ),
           const SizedBox(height: 12),
           Card(
-            elevation: 8,
+            elevation: 6,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Container(
@@ -614,7 +615,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF2C3E50),
+                      color: Color(0xFF4A90E2),
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -627,9 +628,8 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                             _getStatusColor(_paymentStatus!).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color:
-                              _getStatusColor(_paymentStatus!).withOpacity(0.3),
-                        ),
+                            color: _getStatusColor(_paymentStatus!)
+                                .withOpacity(0.3)),
                       ),
                       child: Row(
                         children: [
@@ -703,7 +703,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF2C3E50),
+                                    color: Colors.black,
                                   ),
                                 ),
                               ],
@@ -711,7 +711,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                           ),
                           IconButton(
                             icon: const Icon(Icons.content_copy,
-                                color: Color(0xFF2C3E50), size: 16),
+                                color: Color(0xFF4A90E2), size: 16),
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -727,14 +727,14 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     const SizedBox(height: 12),
                     AnimatedScale(
                       scale: _receiptImage == null ? 1.0 : 0.98,
-                      duration: const Duration(milliseconds: 200),
+                      duration: const Duration(milliseconds: 250),
                       child: ElevatedButton.icon(
                         onPressed: _pickReceiptImage,
                         icon: const Icon(Icons.upload_file, size: 16),
                         label: const Text('Select Receipt',
                             style: TextStyle(fontSize: 12)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF2C3E50),
+                          backgroundColor: const Color(0xFF4A90E2),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -769,7 +769,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                       const SizedBox(height: 12),
                       AnimatedScale(
                         scale: 1.0,
-                        duration: const Duration(milliseconds: 200),
+                        duration: const Duration(milliseconds: 250),
                         child: ElevatedButton.icon(
                           onPressed: _uploadReceipt,
                           icon: const Icon(Icons.send, size: 16),
@@ -826,7 +826,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   fontFamily: 'monospace',
                   fontWeight: FontWeight.w600,
                   fontSize: 11,
-                  color: Color(0xFF2C3E50),
+                  color: Colors.black,
                 ),
               ),
             ),
@@ -851,7 +851,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
             style: const TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 10,
-              color: Color(0xFF2C3E50),
+              color: Colors.black,
             ),
           ),
           const SizedBox(width: 4),

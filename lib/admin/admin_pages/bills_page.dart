@@ -13,7 +13,7 @@ class BillsPage extends StatelessWidget {
       title: 'Bills',
       selectedRoute: '/bills',
       child: Padding(
-        padding: const EdgeInsets.all(10.0),
+        padding: const EdgeInsets.all(12.0),
         child: StreamBuilder<QuerySnapshot>(
           stream: FirebaseFirestore.instance
               .collection('users')
@@ -24,14 +24,14 @@ class BillsPage extends StatelessWidget {
               return Center(
                 child: Text(
                   'Error loading residents: ${snapshot.error}',
-                  style: const TextStyle(fontSize: 13, color: Colors.redAccent),
+                  style: const TextStyle(fontSize: 14, color: Colors.redAccent),
                 ),
               );
             }
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
                 child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4FC3F7)),
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4A90E2)),
                 ),
               );
             }
@@ -41,7 +41,7 @@ class BillsPage extends StatelessWidget {
                 child: Text(
                   'No residents found.',
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 16,
                     color: Colors.grey,
                     fontWeight: FontWeight.w500,
                   ),
@@ -90,41 +90,41 @@ class _ResidentCardState extends State<_ResidentCard> {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      elevation: 3,
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 4,
       shadowColor: Colors.black.withOpacity(0.1),
       child: Column(
         children: [
           ListTile(
-            contentPadding: const EdgeInsets.all(12),
+            contentPadding: const EdgeInsets.all(14),
             leading: Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF4FC3F7).withOpacity(0.9),
+                color: const Color(0xFF4A90E2).withOpacity(0.9),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 4,
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
                 ],
               ),
-              child: const Icon(Icons.person, color: Colors.white, size: 20),
+              child: const Icon(Icons.person, color: Colors.white, size: 22),
             ),
             title: Text(
               widget.fullName,
               style: const TextStyle(
                 fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: Color(0xFF2C3E50),
+                fontSize: 15,
+                color: Colors.black,
               ),
             ),
             subtitle: Text(
               '${widget.address}\n${widget.contactNumber}',
               style: const TextStyle(
-                fontSize: 11,
+                fontSize: 12,
                 color: Colors.grey,
               ),
             ),
@@ -134,8 +134,8 @@ class _ResidentCardState extends State<_ResidentCard> {
                 IconButton(
                   icon: Icon(
                     _showPayments ? Icons.expand_less : Icons.expand_more,
-                    color: const Color(0xFF4FC3F7),
-                    size: 22,
+                    color: const Color(0xFF4A90E2),
+                    size: 24,
                   ),
                   onPressed: () =>
                       setState(() => _showPayments = !_showPayments),
@@ -143,13 +143,13 @@ class _ResidentCardState extends State<_ResidentCard> {
                 const SizedBox(width: 8),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4FC3F7),
+                    backgroundColor: const Color(0xFF4A90E2),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                     textStyle: const TextStyle(
                         fontSize: 13, fontWeight: FontWeight.w600),
                   ),
@@ -181,7 +181,7 @@ class _ResidentCardState extends State<_ResidentCard> {
             crossFadeState: _showPayments
                 ? CrossFadeState.showSecond
                 : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 400),
             sizeCurve: Curves.easeInOut,
           ),
         ],
@@ -204,7 +204,7 @@ class _PaymentSection extends StatelessWidget {
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           title: Text(
             'Confirm ${status == 'approved' ? 'Approval' : 'Rejection'}',
-            style: const TextStyle(fontSize: 15, color: Color(0xFF2C3E50)),
+            style: const TextStyle(fontSize: 15, color: Colors.black),
           ),
           content: Text(
             'Are you sure you want to ${status == 'approved' ? 'approve' : 'reject'} this payment?',
@@ -214,7 +214,7 @@ class _PaymentSection extends StatelessWidget {
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Cancel',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF4FC3F7))),
+                  style: TextStyle(fontSize: 12, color: Color(0xFF4A90E2))),
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -240,7 +240,8 @@ class _PaymentSection extends StatelessWidget {
                   SnackBar(
                     content: Text(
                         'Payment ${status == 'approved' ? 'approved' : 'rejected'} successfully!'),
-                    backgroundColor: const Color(0xFF4FC3F7),
+                    backgroundColor:
+                        status == 'approved' ? Colors.green : Colors.red,
                     duration: const Duration(seconds: 2),
                   ),
                 );
@@ -267,16 +268,16 @@ class _PaymentSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(12)),
+        color: const Color(0xFFEDF7FF),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
         border: Border.all(color: Colors.grey[200]!, width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black12.withOpacity(0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -288,28 +289,28 @@ class _PaymentSection extends StatelessWidget {
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return const Padding(
-              padding: EdgeInsets.all(6.0),
+              padding: EdgeInsets.all(8.0),
               child: Text(
                 'Error loading payments.',
-                style: TextStyle(fontSize: 10, color: Colors.redAccent),
+                style: TextStyle(fontSize: 11, color: Colors.redAccent),
               ),
             );
           }
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Padding(
-              padding: EdgeInsets.all(6.0),
+              padding: EdgeInsets.all(8.0),
               child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4FC3F7)),
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4A90E2)),
               ),
             );
           }
           final payments = snapshot.data?.docs ?? [];
           if (payments.isEmpty) {
             return const Padding(
-              padding: EdgeInsets.all(6.0),
+              padding: EdgeInsets.all(8.0),
               child: Text(
                 'No payments found for this resident.',
-                style: TextStyle(fontSize: 10, color: Colors.grey),
+                style: TextStyle(fontSize: 11, color: Colors.grey),
               ),
             );
           }
@@ -328,16 +329,16 @@ class _PaymentSection extends StatelessWidget {
                   (payment['submissionDate'] as Timestamp?)?.toDate();
               final receiptImage = payment['receiptImage'] as String?;
               return Container(
-                margin: const EdgeInsets.symmetric(vertical: 3),
-                padding: const EdgeInsets.all(8),
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                   border: Border.all(color: Colors.grey[200]!, width: 1),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black12.withOpacity(0.05),
-                      blurRadius: 4,
+                      blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
                   ],
@@ -346,7 +347,7 @@ class _PaymentSection extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(4),
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: _getStatusColor(status).withOpacity(0.1),
                         shape: BoxShape.circle,
@@ -354,10 +355,10 @@ class _PaymentSection extends StatelessWidget {
                       child: Icon(
                         _getStatusIcon(status),
                         color: _getStatusColor(status),
-                        size: 18,
+                        size: 20,
                       ),
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,20 +366,20 @@ class _PaymentSection extends StatelessWidget {
                           Text(
                             'Bill ID: $billId',
                             style: const TextStyle(
-                              fontSize: 11,
+                              fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF2C3E50),
+                              color: Colors.black,
                             ),
                           ),
                           Text(
                             'Amount: ₱${amount.toStringAsFixed(2)}',
                             style: const TextStyle(
-                                fontSize: 10, color: Colors.grey),
+                                fontSize: 11, color: Colors.grey),
                           ),
                           Text(
                             'Status: ${_getStatusText(status)}',
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 11,
                               color: _getStatusColor(status),
                               fontWeight: FontWeight.w600,
                             ),
@@ -387,12 +388,13 @@ class _PaymentSection extends StatelessWidget {
                             Text(
                               'Submitted: ${DateFormat.yMMMd().format(submissionDate)}',
                               style: const TextStyle(
-                                  fontSize: 10, color: Colors.grey),
+                                  fontSize: 11, color: Colors.grey),
                             ),
                         ],
                       ),
                     ),
                     Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         if (receiptImage != null)
                           TextButton(
@@ -413,7 +415,7 @@ class _PaymentSection extends StatelessWidget {
                                           child: CircularProgressIndicator(
                                             valueColor:
                                                 AlwaysStoppedAnimation<Color>(
-                                                    Color(0xFF4FC3F7)),
+                                                    Color(0xFF4A90E2)),
                                           ),
                                         ),
                                         errorWidget: (context, url, error) =>
@@ -437,42 +439,42 @@ class _PaymentSection extends StatelessWidget {
                             },
                             style: TextButton.styleFrom(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              textStyle: const TextStyle(fontSize: 10),
-                              foregroundColor: const Color(0xFF4FC3F7),
+                                  horizontal: 14, vertical: 8),
+                              textStyle: const TextStyle(
+                                  fontSize: 11, color: Color(0xFF4A90E2)),
                             ),
                             child: const Text('View Receipt'),
                           ),
                         if (status == 'pending') ...[
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF4FC3F7),
+                              backgroundColor: const Color(0xFF90CAF9),
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
+                                  horizontal: 14, vertical: 8),
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6)),
-                              minimumSize: const Size(60, 30),
+                                  borderRadius: BorderRadius.circular(8)),
+                              minimumSize: const Size(70, 36),
                               textStyle: const TextStyle(
-                                  fontSize: 10, fontWeight: FontWeight.bold),
+                                  fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                             onPressed: () => _updatePaymentStatus(
                                 context, paymentId, 'approved'),
                             child: const Text('Accept'),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           ElevatedButton(
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.red,
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
+                                  horizontal: 14, vertical: 8),
                               shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(6)),
-                              minimumSize: const Size(60, 30),
+                                  borderRadius: BorderRadius.circular(8)),
+                              minimumSize: const Size(70, 36),
                               textStyle: const TextStyle(
-                                  fontSize: 10, fontWeight: FontWeight.bold),
+                                  fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                             onPressed: () => _updatePaymentStatus(
                                 context, paymentId, 'rejected'),
@@ -671,7 +673,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.grey[200]!, width: 1),
           boxShadow: [
             BoxShadow(
@@ -681,7 +683,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
             ),
           ],
           gradient: const LinearGradient(
-            colors: [Colors.white, Color(0xFFF8FAFF)],
+            colors: [Color(0xFFFFFFFF), Color(0xFFEDF7FF)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -708,7 +710,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
                               letterSpacing: 0.5,
-                              color: Color(0xFF2C3E50),
+                              color: Colors.black,
                             ),
                           ),
                           const SizedBox(height: 3),
@@ -729,12 +731,12 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                           horizontal: 5, vertical: 2),
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.grey[300]!),
-                        borderRadius: BorderRadius.circular(5),
+                        borderRadius: BorderRadius.circular(6),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black12.withOpacity(0.05),
-                            blurRadius: 3,
-                            offset: const Offset(0, 1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
                           ),
                         ],
                       ),
@@ -760,13 +762,14 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                           return DropdownMenuItem<String>(
                             value: value,
                             child: Text(value,
-                                style: const TextStyle(fontSize: 9)),
+                                style: const TextStyle(
+                                    fontSize: 10, color: Colors.black)),
                           );
                         }).toList(),
                         underline: const SizedBox(),
                         isExpanded: true,
                         icon: const Icon(Icons.arrow_drop_down,
-                            color: Color(0xFF4FC3F7), size: 14),
+                            color: Color(0xFF4A90E2), size: 16),
                         dropdownColor: Colors.white,
                       ),
                     ),
@@ -781,20 +784,21 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                     width: 80,
                     child: TextFormField(
                       style: const TextStyle(
-                          fontFamily: 'monospace', fontSize: 11),
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          color: Colors.black),
                       decoration: InputDecoration(
                         hintText: '1234',
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(
                             vertical: 6, horizontal: 10),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(8),
                           borderSide: BorderSide(color: Colors.grey[300]!),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide:
-                              const BorderSide(color: Color(0xFF4FC3F7)),
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Color(0xFF4A90E2)),
                         ),
                       ),
                       keyboardType: TextInputType.number,
@@ -818,7 +822,9 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                         width: 80,
                         child: TextFormField(
                           style: const TextStyle(
-                              fontFamily: 'monospace', fontSize: 11),
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                              color: Colors.black),
                           decoration: InputDecoration(
                             hintText: startDate == null
                                 ? 'Start'
@@ -827,13 +833,12 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                             contentPadding: const EdgeInsets.symmetric(
                                 vertical: 6, horizontal: 10),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(color: Colors.grey[300]!),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              borderSide:
-                                  const BorderSide(color: Color(0xFF4FC3F7)),
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Color(0xFF4A90E2)),
                             ),
                           ),
                           readOnly: true,
@@ -843,13 +848,15 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                       const SizedBox(width: 6),
                       const Text('-',
                           style: TextStyle(
-                              fontSize: 13, color: Color(0xFF2C3E50))),
+                              fontSize: 13, color: Color(0xFF4A90E2))),
                       const SizedBox(width: 6),
                       SizedBox(
                         width: 80,
                         child: TextFormField(
                           style: const TextStyle(
-                              fontFamily: 'monospace', fontSize: 11),
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                              color: Colors.black),
                           decoration: InputDecoration(
                             hintText: endDate == null
                                 ? 'End'
@@ -858,13 +865,12 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                             contentPadding: const EdgeInsets.symmetric(
                                 vertical: 6, horizontal: 10),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(8),
                               borderSide: BorderSide(color: Colors.grey[300]!),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              borderSide:
-                                  const BorderSide(color: Color(0xFF4FC3F7)),
+                              borderRadius: BorderRadius.circular(8),
+                              borderSide: BorderSide(color: Color(0xFF4A90E2)),
                             ),
                           ),
                           readOnly: true,
@@ -886,7 +892,9 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                     width: 80,
                     child: TextFormField(
                       style: const TextStyle(
-                          fontFamily: 'monospace', fontSize: 11),
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                          color: Colors.black),
                       decoration: InputDecoration(
                         hintText: '0.00',
                         suffixText: 'm³',
@@ -894,13 +902,12 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                         contentPadding: const EdgeInsets.symmetric(
                             vertical: 6, horizontal: 10),
                         border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(8),
                           borderSide: BorderSide(color: Colors.grey[300]!),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide:
-                              const BorderSide(color: Color(0xFF4FC3F7)),
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Color(0xFF4A90E2)),
                         ),
                       ),
                       keyboardType:
@@ -926,15 +933,15 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                     valueColor: Colors.grey),
                 _receiptRow(
                     'TOTAL BILL AMOUNT', '₱${totalBill.toStringAsFixed(2)}',
-                    valueColor: const Color(0xFF2C3E50), isBold: true),
+                    valueColor: Colors.black, isBold: true),
                 const SizedBox(height: 12),
                 Container(
                   decoration: BoxDecoration(
                     border: Border.all(color: Colors.grey[200]!, width: 1),
-                    borderRadius: BorderRadius.circular(6),
+                    borderRadius: BorderRadius.circular(8),
                     color: Colors.grey[50],
                   ),
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(10),
                   child: Column(
                     children: [
                       Row(
@@ -942,18 +949,18 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                         children: [
                           _rateRow('Residential:',
                               'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           _rateRow('Commercial:',
                               'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
                         ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           _rateRow('Non Residence:',
                               'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 8),
                           _rateRow('Industrial:',
                               'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
                         ],
@@ -965,68 +972,76 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 6),
-                        textStyle: const TextStyle(
-                            fontSize: 11, fontWeight: FontWeight.w500),
-                        foregroundColor: const Color(0xFF4FC3F7),
-                        side: const BorderSide(color: Color(0xFF4FC3F7)),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6)),
+                    AnimatedScale(
+                      scale: 1.0,
+                      duration: const Duration(milliseconds: 250),
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          textStyle: const TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w500),
+                          foregroundColor: const Color(0xFF4A90E2),
+                          side: const BorderSide(color: Color(0xFF4A90E2)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
                       ),
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
                     ),
                     const SizedBox(width: 8),
-                    ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4FC3F7),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 6),
-                        textStyle: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 11),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6)),
-                        elevation: 2,
+                    AnimatedScale(
+                      scale: 1.0,
+                      duration: const Duration(milliseconds: 250),
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4A90E2),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          textStyle: const TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 12),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                          elevation: 2,
+                        ),
+                        onPressed: () async {
+                          if (_formKey.currentState!.validate()) {
+                            final billData = {
+                              'residentId': widget.residentId,
+                              'fullName': widget.fullName,
+                              'address': widget.address,
+                              'contactNumber': widget.contactNumber,
+                              'meterNumber': meterNumber,
+                              'periodStart': startDate,
+                              'periodEnd': endDate,
+                              'currentConsumedWaterMeter': current,
+                              'previousConsumedWaterMeter': previous,
+                              'totalConsumed': total,
+                              'totalBill': totalBill,
+                              'currentMonthBill': currentBill,
+                              'issueDate': FieldValue.serverTimestamp(),
+                              'purok': selectedPurok,
+                            };
+
+                            print('Creating bill with data: $billData');
+
+                            await FirebaseFirestore.instance
+                                .collection('bills')
+                                .add(billData);
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Bill created successfully!'),
+                                backgroundColor: Color(0xFF4A90E2),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text('Create Bill'),
                       ),
-                      onPressed: () async {
-                        if (_formKey.currentState!.validate()) {
-                          final billData = {
-                            'residentId': widget.residentId,
-                            'fullName': widget.fullName,
-                            'address': widget.address,
-                            'contactNumber': widget.contactNumber,
-                            'meterNumber': meterNumber,
-                            'periodStart': startDate,
-                            'periodEnd': endDate,
-                            'currentConsumedWaterMeter': current,
-                            'previousConsumedWaterMeter': previous,
-                            'totalConsumed': total,
-                            'totalBill': totalBill,
-                            'currentMonthBill': currentBill,
-                            'issueDate': FieldValue.serverTimestamp(),
-                            'purok': selectedPurok,
-                          };
-
-                          print('Creating bill with data: $billData');
-
-                          await FirebaseFirestore.instance
-                              .collection('bills')
-                              .add(billData);
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Bill created successfully!'),
-                              backgroundColor: Color(0xFF4FC3F7),
-                              duration: Duration(seconds: 2),
-                            ),
-                          );
-                        }
-                      },
-                      child: const Text('Create Bill'),
                     ),
                   ],
                 ),
@@ -1039,7 +1054,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
   }
 
   Widget _dashedDivider() => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         child: Row(
           children: List.generate(
             30,
@@ -1056,7 +1071,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
   Widget _receiptRow(String label, String? value,
           {Widget? trailing, Color? valueColor, bool isBold = false}) =>
       Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
+        padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
           children: [
             Expanded(
@@ -1065,8 +1080,8 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                 style: const TextStyle(
                   fontFamily: 'monospace',
                   fontWeight: FontWeight.w600,
-                  fontSize: 11,
-                  color: Color(0xFF2C3E50),
+                  fontSize: 12,
+                  color: Colors.black,
                 ),
               ),
             ),
@@ -1076,7 +1091,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                 style: TextStyle(
                   fontFamily: 'monospace',
                   fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-                  fontSize: 11,
+                  fontSize: 12,
                   color: valueColor ?? Colors.grey[700],
                 ),
               ),
@@ -1093,16 +1108,16 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
               category,
               style: const TextStyle(
                 fontWeight: FontWeight.w600,
-                fontSize: 10,
-                color: Color(0xFF2C3E50),
+                fontSize: 11,
+                color: Colors.black,
               ),
             ),
-            const SizedBox(width: 3),
+            const SizedBox(width: 4),
             Expanded(
               child: Text(
                 details,
                 style: const TextStyle(
-                  fontSize: 9,
+                  fontSize: 10,
                   color: Colors.grey,
                 ),
               ),
