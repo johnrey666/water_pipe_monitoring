@@ -35,16 +35,16 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   DateTime? _selectedDateTime;
   bool _isSubmitting = false;
   final Color focusBlue = const Color(0xFF87CEEB);
-final Color fieldLabelColor = Colors.grey[800]!;
-final Color iconGrey = Colors.grey[800]!;
-final Color asteriskColor = Colors.red;
+  final Color fieldLabelColor = Colors.grey[800]!;
+  final Color iconGrey = Colors.grey[800]!;
+  final Color asteriskColor = Colors.red;
 
   // Pagination for recent reports
   int _recentPage = 0;
 
   // Color scheme updates
   Color get accentColor => const Color(0xFF4A2C6F);
-  
+
   Future<void> _pickImage() async {
     final androidInfo = await DeviceInfoPlugin().androidInfo;
     final sdkInt = androidInfo.version.sdkInt;
@@ -240,7 +240,7 @@ final Color asteriskColor = Colors.red;
 
   void _openMapPicker() {
     latlong.LatLng initial = _selectedLocation ??
-        const latlong.LatLng(13.1486, 123.7156);
+        const latlong.LatLng(13.294678436001885, 123.75569591912894);
     latlong.LatLng? tempLocation = _selectedLocation;
     String? tempPlaceName = _selectedPlaceName;
     MapController tempMapController = MapController();
@@ -261,15 +261,17 @@ final Color asteriskColor = Colors.red;
                   mapController: tempMapController,
                   options: MapOptions(
                     initialCenter: tempLocation ?? initial,
-                    initialZoom: 16, // Tighter zoom for San Jose focus
-                    minZoom: 15, // Prevent zooming out too far
-                    maxZoom: 17, // Allow slight zoom-in for detail
+                    initialZoom: 16,
+                    minZoom: 15,
+                    maxZoom: 17,
                     initialCameraFit: CameraFit.bounds(
                       bounds: LatLngBounds(
-                        const latlong.LatLng(13.3447, 123.7202), // Southwest
-                        const latlong.LatLng(13.3487, 123.7242), // Northeast
+                        const latlong.LatLng(
+                            13.292678436001885, 123.75369591912894),
+                        const latlong.LatLng(
+                            13.296678436001885, 123.75769591912894),
                       ),
-                      padding: const EdgeInsets.all(50), // Margin around bounds
+                      padding: const EdgeInsets.all(50),
                     ),
                     interactionOptions: const InteractionOptions(
                       flags: InteractiveFlag.all &
@@ -305,7 +307,7 @@ final Color asteriskColor = Colors.red;
                         // San Jose label (no icon)
                         Marker(
                           point: const latlong.LatLng(
-                              13.3467, 123.7222), // San Jose
+                              13.294678436001885, 123.75569591912894),
                           width: 140,
                           height: 40,
                           child: FadeIn(
@@ -313,7 +315,7 @@ final Color asteriskColor = Colors.red;
                             child: Text(
                               'San Jose',
                               style: GoogleFonts.poppins(
-                                fontSize: 18, // Enlarged font size
+                                fontSize: 18,
                                 fontWeight: FontWeight.w700,
                                 color: Colors.red[900],
                               ),
@@ -400,7 +402,7 @@ final Color asteriskColor = Colors.red;
                       ],
                     ),
                     child: Text(
-                      'Approx. 100m', // Adjusted for zoom 16
+                      'Approx. 100m',
                       style: GoogleFonts.poppins(
                         fontSize: 12,
                         color: Colors.black87,
@@ -476,59 +478,57 @@ final Color asteriskColor = Colors.red;
   }
 
   Widget _modernField({
-  required TextEditingController controller,
-  required String label,
-  required IconData icon,
-  Color? iconColor, // optional override per-call
-  bool readOnly = false,
-  VoidCallback? onTap,
-  String? hint,
-  String? Function(String?)? validator,
-  Widget? suffixIcon,
-  int maxLines = 1,
-}) {
-  return Padding(
-    padding: const EdgeInsets.symmetric(vertical: 8),
-    child: TextFormField(
-      controller: controller,
-      readOnly: readOnly,
-      onTap: onTap,
-      maxLines: maxLines,
-      validator: validator,
-      cursorColor: Colors.black, // text cursor color
-      style: const TextStyle(fontSize: 15, color: Colors.black),
-      decoration: InputDecoration(
-        // use a Widget label to mix normal text + red asterisk
-        label: RichText(
-          text: TextSpan(
-            text: label.replaceAll('*', '').trim(),
-            style: TextStyle(color: fieldLabelColor, fontSize: 13),
-            children: label.contains('*')
-                ? [
-                    TextSpan(
-                      text: ' *',
-                      style: TextStyle(color: asteriskColor),
-                    )
-                  ]
-                : [],
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    Color? iconColor,
+    bool readOnly = false,
+    VoidCallback? onTap,
+    String? hint,
+    String? Function(String?)? validator,
+    Widget? suffixIcon,
+    int maxLines = 1,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: TextFormField(
+        controller: controller,
+        readOnly: readOnly,
+        onTap: onTap,
+        maxLines: maxLines,
+        validator: validator,
+        cursorColor: Colors.black,
+        style: const TextStyle(fontSize: 15, color: Colors.black),
+        decoration: InputDecoration(
+          label: RichText(
+            text: TextSpan(
+              text: label.replaceAll('*', '').trim(),
+              style: TextStyle(color: fieldLabelColor, fontSize: 13),
+              children: label.contains('*')
+                  ? [
+                      TextSpan(
+                        text: ' *',
+                        style: TextStyle(color: asteriskColor),
+                      )
+                    ]
+                  : [],
+            ),
           ),
+          hintText: hint,
+          prefixIcon: Icon(icon, size: 22, color: iconColor ?? iconGrey),
+          suffixIcon: suffixIcon,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(color: focusBlue, width: 2),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          isDense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         ),
-        hintText: hint,
-        prefixIcon: Icon(icon, size: 22, color: iconColor ?? iconGrey),
-        suffixIcon: suffixIcon,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        focusedBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: focusBlue, width: 2),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        isDense: true,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       ),
-    ),
-  );
-}
-
+    );
+  }
 
   Widget _recentReports() {
     final user = FirebaseAuth.instance.currentUser;
@@ -551,7 +551,7 @@ final Color asteriskColor = Colors.red;
           return const SizedBox();
         }
         final docs = snapshot.data!.docs;
-        final totalPages = docs.length; // One report per page
+        final totalPages = docs.length;
         final index = _recentPage.clamp(0, docs.length - 1);
         final doc = docs[index];
         final data = doc.data() as Map<String, dynamic>;
@@ -606,7 +606,8 @@ final Color asteriskColor = Colors.red;
                 final data = doc.data() as Map<String, dynamic>;
                 return Container(
                   margin: const EdgeInsets.symmetric(vertical: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     color: Colors.grey[50],
                     borderRadius: BorderRadius.circular(8),
@@ -614,7 +615,9 @@ final Color asteriskColor = Colors.red;
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.report, color: const Color.fromARGB(255, 209, 70, 60), size: 22),
+                      Icon(Icons.report,
+                          color: const Color.fromARGB(255, 209, 70, 60),
+                          size: 22),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Column(
@@ -622,14 +625,16 @@ final Color asteriskColor = Colors.red;
                           children: [
                             Text(
                               data['issueDescription'] ?? '',
-                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                              style: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w500),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                             if (data['placeName'] != null)
                               Text(
                                 data['placeName'],
-                                style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                style: const TextStyle(
+                                    fontSize: 12, color: Colors.black54),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -639,7 +644,9 @@ final Color asteriskColor = Colors.red;
                       const SizedBox(width: 8),
                       Chip(
                         label: Text(
-                          (data['status'] ?? '').toString().replaceAll('Reports', ''),
+                          (data['status'] ?? '')
+                              .toString()
+                              .replaceAll('Reports', ''),
                           style: TextStyle(
                             color: data['status'] == 'Fixed'
                                 ? Colors.green[700]
@@ -651,8 +658,10 @@ final Color asteriskColor = Colors.red;
                           ),
                         ),
                         backgroundColor: Colors.grey[100],
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 0),
                       ),
                     ],
                   ),
@@ -663,7 +672,7 @@ final Color asteriskColor = Colors.red;
         );
       },
     );
-  }  
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -756,10 +765,15 @@ final Color asteriskColor = Colors.red;
                         ElevatedButton.icon(
                           onPressed: _pickImage,
                           icon: Icon(Icons.upload, size: 18, color: iconGrey),
-                          label: Text('UPLOAD', style: TextStyle(fontSize: 13, color: iconGrey, fontWeight: FontWeight.w900)),
+                          label: Text('UPLOAD',
+                              style: TextStyle(
+                                  fontSize: 13,
+                                  color: iconGrey,
+                                  fontWeight: FontWeight.w900)),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: focusBlue,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8)),
                             minimumSize: const Size(0, 40),
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 10, vertical: 0),
@@ -807,7 +821,8 @@ final Color asteriskColor = Colors.red;
                         onPressed: _isSubmitting ? null : _submitReport,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: focusBlue,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
                           padding: EdgeInsets.zero,
                         ),
                         child: _isSubmitting
@@ -817,7 +832,11 @@ final Color asteriskColor = Colors.red;
                                 child: CircularProgressIndicator(
                                     color: Colors.white, strokeWidth: 2),
                               )
-                            : const Text('SUBMIT REPORT', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white)),
+                            : const Text('SUBMIT REPORT',
+                                style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white)),
                       ),
                     ),
                     const SizedBox(height: 8),
