@@ -361,6 +361,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         bill['previousConsumedWaterMeter']?.toDouble() ?? 0.0;
     final totalConsumed = bill['totalConsumed']?.toDouble() ?? 0.0;
     final totalBill = bill['totalBill']?.toDouble() ?? 0.0;
+    final currentMonthBill = bill['currentMonthBill']?.toDouble() ?? 0.0;
     final periodStart = bill['periodStart'] as Timestamp?;
     final periodEnd = bill['periodEnd'] as Timestamp?;
     final issueDate = bill['issueDate'] as Timestamp?;
@@ -536,6 +537,9 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                       '${totalConsumed.toStringAsFixed(2)} m³',
                       isBold: true),
                   _dashedDivider(),
+                  _receiptRow(
+                      'Current Bill', '₱${currentMonthBill.toStringAsFixed(2)}',
+                      valueColor: Colors.red, isBold: true, fontSize: 13),
                   _receiptRow(
                       'Total Amount Due', '₱${totalBill.toStringAsFixed(2)}',
                       valueColor: const Color(0xFF4A90E2), isBold: true),
@@ -964,7 +968,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
       );
 
   Widget _receiptRow(String label, String value,
-          {Color? valueColor, bool isBold = false}) =>
+          {Color? valueColor, bool isBold = false, double fontSize = 11}) =>
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(
@@ -985,7 +989,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
               style: TextStyle(
                 fontFamily: 'monospace',
                 fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-                fontSize: 11,
+                fontSize: fontSize,
                 color: valueColor ?? Colors.grey[700],
               ),
             ),
