@@ -125,7 +125,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
     }
   }
 
-  Future<void> _uploadReceipt({bool isTotalPayment = false}) async {
+  Future<void> _uploadReceipt() async {
     if (_receiptImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -136,7 +136,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
       return;
     }
 
-    if (!isTotalPayment && _selectedBillId == null) {
+    if (_selectedBillId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select a bill to pay'),
@@ -160,61 +160,23 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
       final bytes = await _receiptImage!.readAsBytes();
       final base64Image = base64Encode(bytes);
 
-      if (isTotalPayment) {
-        final paidBillIds = (await FirebaseFirestore.instance
-                .collection('payments')
-                .where('residentId', isEqualTo: _residentId)
-                .where('status', isEqualTo: 'approved')
-                .get())
-            .docs
-            .map((doc) => doc['billId'] as String)
-            .toSet();
-
-        final unpaidBills = _bills
-            .where((bill) => !paidBillIds.contains(bill['billId']))
-            .toList();
-
-        for (final bill in unpaidBills) {
-          final paymentData = {
-            'residentId': _residentId,
-            'billId': bill['billId'],
-            'residentName': bill['fullName'],
-            'residentAddress': bill['address'],
-            'billAmount': bill['currentMonthBill']?.toDouble() ?? 0.0,
-            'receiptImage': base64Image,
-            'paymentMethod': 'GCash',
-            'gcashNumber': '09853886411',
-            'submissionDate': FieldValue.serverTimestamp(),
-            'status': 'pending',
-            'adminNotes': '',
-            'processedBy': '',
-            'processedDate': null,
-          };
-          await FirebaseFirestore.instance
-              .collection('payments')
-              .add(paymentData);
-        }
-      } else {
-        final bill = _bills.firstWhere((b) => b['billId'] == _selectedBillId);
-        final paymentData = {
-          'residentId': _residentId,
-          'billId': _selectedBillId,
-          'residentName': bill['fullName'],
-          'residentAddress': bill['address'],
-          'billAmount': bill['currentMonthBill']?.toDouble() ?? 0.0,
-          'receiptImage': base64Image,
-          'paymentMethod': 'GCash',
-          'gcashNumber': '09853886411',
-          'submissionDate': FieldValue.serverTimestamp(),
-          'status': 'pending',
-          'adminNotes': '',
-          'processedBy': '',
-          'processedDate': null,
-        };
-        await FirebaseFirestore.instance
-            .collection('payments')
-            .add(paymentData);
-      }
+      final bill = _bills.firstWhere((b) => b['billId'] == _selectedBillId);
+      final paymentData = {
+        'residentId': _residentId,
+        'billId': _selectedBillId,
+        'residentName': bill['fullName'],
+        'residentAddress': bill['address'],
+        'billAmount': bill['currentMonthBill']?.toDouble() ?? 0.0,
+        'receiptImage': base64Image,
+        'paymentMethod': 'GCash',
+        'gcashNumber': '09853886411',
+        'submissionDate': FieldValue.serverTimestamp(),
+        'status': 'pending',
+        'adminNotes': '',
+        'processedBy': '',
+        'processedDate': null,
+      };
+      await FirebaseFirestore.instance.collection('payments').add(paymentData);
 
       Navigator.pop(context);
 
@@ -232,11 +194,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         _paymentStatus = 'pending';
       });
 
-      if (!isTotalPayment) {
-        await _checkPaymentStatus(_selectedBillId!);
-      } else {
-        await _loadBills();
-      }
+      await _checkPaymentStatus(_selectedBillId!);
     } catch (e) {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
@@ -791,64 +749,32 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                               0;
                         });
 
-                      final totalAmountDue = _bills
-                          .where(
-                              (bill) => !paidBillIds.contains(bill['billId']))
-                          .fold<double>(
-                              0.0,
-                              (sum, bill) =>
-                                  sum +
-                                  (bill['currentMonthBill']?.toDouble() ??
-                                      0.0));
-
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (unpaidBills.isNotEmpty)
                             DropdownButton<String>(
                               value: _selectedBillId,
-                              items: [
-                                ...unpaidBills.map((bill) {
-                                  return DropdownMenuItem<String>(
-                                    value: bill['billId'],
-                                    child: Text(
-                                      bill['period'],
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.black,
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                                if (unpaidBills.length > 1)
-                                  DropdownMenuItem<String>(
-                                    value: 'total',
-                                    child: Text(
-                                      'Pay Total Amount (₱${totalAmountDue.toStringAsFixed(2)})',
-                                      style: const TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.black,
-                                      ),
+                              items: unpaidBills.map((bill) {
+                                return DropdownMenuItem<String>(
+                                  value: bill['billId'],
+                                  child: Text(
+                                    bill['period'],
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.black,
                                     ),
                                   ),
-                              ],
+                                );
+                              }).toList(),
                               onChanged: (value) async {
                                 if (value != null) {
                                   setState(() {
                                     _selectedBillId = value;
-                                    if (value != 'total') {
-                                      _currentBillIndex = _bills.indexWhere(
-                                          (b) => b['billId'] == value);
-                                    }
+                                    _currentBillIndex = _bills.indexWhere(
+                                        (b) => b['billId'] == value);
                                   });
-                                  if (value != 'total') {
-                                    await _checkPaymentStatus(value);
-                                  } else {
-                                    setState(() {
-                                      _paymentSubmitted = false;
-                                      _paymentStatus = null;
-                                    });
-                                  }
+                                  await _checkPaymentStatus(value);
                                 }
                               },
                               isExpanded: true,
@@ -866,8 +792,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                               ),
                             ),
                           const SizedBox(height: 12),
-                          if (_paymentSubmitted &&
-                              _selectedBillId != 'total') ...[
+                          if (_paymentSubmitted) ...[
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
@@ -1025,9 +950,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                                 scale: 1.0,
                                 duration: const Duration(milliseconds: 250),
                                 child: ElevatedButton.icon(
-                                  onPressed: () => _uploadReceipt(
-                                      isTotalPayment:
-                                          _selectedBillId == 'total'),
+                                  onPressed: _uploadReceipt,
                                   icon: const Icon(Icons.send, size: 16),
                                   label: const Text('Submit Payment',
                                       style: TextStyle(fontSize: 12)),
