@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-// ignore: unused_import
-import 'package:intl/intl.dart';
 import 'auth/resident_login.dart';
 import 'report_problem_page.dart';
 import 'view_billing_page.dart';
@@ -131,11 +129,12 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
     print('Current user UID: ${user.uid}');
 
     try {
+      // Fetch both payment and report_status notifications
       final notificationsSnapshot = await FirebaseFirestore.instance
           .collection('notifications')
           .where('residentId', isEqualTo: user.uid)
-          .where('status', whereIn: ['approved', 'rejected'])
-          .orderBy('processedDate', descending: true)
+          .where('read', isEqualTo: false) // Only fetch unread notifications
+          .orderBy('createdAt', descending: true)
           .limit(10)
           .get();
 
@@ -145,10 +144,14 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
         final data = doc.data();
         print('Notification data: $data');
         return {
+          'id': doc.id, // Store doc ID for marking as read
+          'type': data['type'] ?? 'unknown',
           'status': data['status'],
-          'month': data['month'] ?? 'Unknown',
-          'amount': data['amount']?.toDouble() ?? 0.0,
+          'month': data['month'],
+          'amount': data['amount']?.toDouble(),
+          'message': data['message'],
           'processedDate': (data['processedDate'] as Timestamp?)?.toDate(),
+          'createdAt': (data['createdAt'] as Timestamp?)?.toDate(),
         };
       }).toList();
 
@@ -157,6 +160,19 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
     } catch (e) {
       print('Error fetching notifications: $e');
       return [];
+    }
+  }
+
+  Future<void> _markNotificationAsRead(String notificationId) async {
+    try {
+      print('Marking notification $notificationId as read');
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(notificationId)
+          .update({'read': true});
+      print('Notification $notificationId marked as read');
+    } catch (e) {
+      print('Error marking notification as read: $e');
     }
   }
 
@@ -183,6 +199,13 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
     final Offset position = button.localToGlobal(Offset.zero);
     print('Button position: $position, size: ${button.size}');
 
+    // Mark all displayed notifications as read
+    for (var notification in notifications) {
+      if (notification['id'] != null) {
+        await _markNotificationAsRead(notification['id']);
+      }
+    }
+
     await showMenu(
       context: context,
       position: RelativeRect.fromLTRB(
@@ -196,7 +219,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
               PopupMenuItem(
                 enabled: false,
                 child: Text(
-                  'No notifications',
+                  'No new notifications',
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     color: Colors.grey[600],
@@ -205,37 +228,65 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
               ),
             ]
           : notifications.map((notification) {
-              final status = notification['status'] == 'approved'
-                  ? 'Successful'
-                  : 'Declined';
-              final month = notification['month'];
-              final amount = notification['amount'].toStringAsFixed(2);
-              return PopupMenuItem(
-                enabled: false,
-                child: Row(
-                  children: [
-                    Icon(
-                      notification['status'] == 'approved'
-                          ? Icons.check_circle
-                          : Icons.cancel,
-                      color: notification['status'] == 'approved'
-                          ? Colors.green
-                          : Colors.red,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Payment of ₱$amount for $month is $status',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          color: Colors.black87,
+              if (notification['type'] == 'report_status') {
+                // Report status notification
+                return PopupMenuItem(
+                  enabled: false,
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.check_circle,
+                        color: Colors.green,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          notification['message'] ?? 'Issue fixed',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: Colors.black87,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              );
+                    ],
+                  ),
+                );
+              } else {
+                // Payment notification
+                final status = notification['status'] == 'approved'
+                    ? 'Successful'
+                    : 'Declined';
+                final month = notification['month'] ?? 'Unknown';
+                final amount =
+                    notification['amount']?.toStringAsFixed(2) ?? '0.00';
+                return PopupMenuItem(
+                  enabled: false,
+                  child: Row(
+                    children: [
+                      Icon(
+                        notification['status'] == 'approved'
+                            ? Icons.check_circle
+                            : Icons.cancel,
+                        color: notification['status'] == 'approved'
+                            ? Colors.green
+                            : Colors.red,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Payment of ₱$amount for $month is $status',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: Colors.black87,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }
             }).toList(),
       elevation: 8,
       shape: RoundedRectangleBorder(
@@ -244,6 +295,8 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
       color: Colors.white,
     );
     print('Dropdown menu closed');
+    // Refresh UI to update notification count
+    setState(() {});
   }
 
   @override
@@ -373,12 +426,15 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                 .collection('notifications')
                 .where('residentId',
                     isEqualTo: FirebaseAuth.instance.currentUser?.uid)
-                .where('status', whereIn: ['approved', 'rejected']).snapshots(),
+                .where('read',
+                    isEqualTo: false) // Show only unread notifications
+                .snapshots(),
             builder: (context, snapshot) {
               int notificationCount = 0;
               if (snapshot.hasData) {
                 notificationCount = snapshot.data!.docs.length;
-                print('StreamBuilder: Found $notificationCount notifications');
+                print(
+                    'StreamBuilder: Found $notificationCount unread notifications');
               } else if (snapshot.hasError) {
                 print('StreamBuilder error: ${snapshot.error}');
               }

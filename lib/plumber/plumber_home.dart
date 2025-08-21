@@ -35,7 +35,10 @@ class _PlumberHomePageState extends State<PlumberHomePage>
   Future<void> _fetchPlumberName() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
       final data = doc.data();
       if (data != null && data['fullName'] != null) {
         setState(() {
@@ -136,110 +139,111 @@ class _PlumberHomePageState extends State<PlumberHomePage>
 
     return Scaffold(
       drawer: Drawer(
-  backgroundColor: Colors.white,
-  shape: const RoundedRectangleBorder(
-    borderRadius: BorderRadius.horizontal(right: Radius.circular(16)),
-  ),
-  child: SafeArea(
-    child: Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color(0xFF87CEEB),         // Sky Blue
-                Color.fromARGB(255, 127, 190, 226), // Light Sky Blue
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.only(
-              topRight: Radius.circular(16),
-              bottomRight: Radius.circular(32),
-            ),
-          ),
-          child: Row(
+        backgroundColor: Colors.white,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.horizontal(right: Radius.circular(16)),
+        ),
+        child: SafeArea(
+          child: Column(
             children: [
-              const CircleAvatar(
-                radius: 28,
-                backgroundColor: Colors.white,
-                child: Icon(Icons.plumbing, size: 36, color: Color.fromARGB(255, 58, 56, 56)),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+              Container(
+                width: double.infinity,
+                padding:
+                    const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Color(0xFF87CEEB), // Sky Blue
+                      Color.fromARGB(255, 127, 190, 226), // Light Sky Blue
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.only(
+                    topRight: Radius.circular(16),
+                    bottomRight: Radius.circular(32),
+                  ),
+                ),
+                child: Row(
                   children: [
-                    Text(
-                      'Welcome!',
-                      style: TextStyle(
-                        color: Colors.grey[800],
-                        fontWeight: FontWeight.w500,
-                        fontSize: 16,
-                      ),
+                    const CircleAvatar(
+                      radius: 28,
+                      backgroundColor: Colors.white,
+                      child: Icon(Icons.plumbing,
+                          size: 36, color: Color.fromARGB(255, 58, 56, 56)),
                     ),
-                    Text(
-                      _plumberName,
-                      style: TextStyle(
-                        color: Colors.grey[800],
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Welcome!',
+                            style: TextStyle(
+                              color: Colors.grey[800],
+                              fontWeight: FontWeight.w500,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            _plumberName,
+                            style: TextStyle(
+                              color: Colors.grey[800],
+                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  children: [
+                    _buildDrawerItem(
+                      icon: Icons.schedule,
+                      title: 'View Schedule',
+                      page: PlumberPage.schedule,
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.report,
+                      title: 'View Reports',
+                      page: PlumberPage.reports,
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.map_outlined,
+                      title: 'Geographic Mapping',
+                      page: PlumberPage.mapping,
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                child: ListTile(
+                  leading: const Icon(Icons.logout, color: Colors.red),
+                  title: Text(
+                    'Logout',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  onTap: _logout,
+                ),
+              ),
+              const SizedBox(height: 8),
             ],
           ),
         ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            children: [
-              _buildDrawerItem(
-                icon: Icons.schedule,
-                title: 'View Schedule',
-                page: PlumberPage.schedule,
-              ),
-              _buildDrawerItem(
-                icon: Icons.report,
-                title: 'View Reports',
-                page: PlumberPage.reports,
-              ),
-              _buildDrawerItem(
-                icon: Icons.map_outlined,
-                title: 'Geographic Mapping',
-                page: PlumberPage.mapping,
-              ),
-            ],
-          ),
-        ),
-        const Divider(),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
-          child: ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
-            title: Text(
-              'Logout',
-              style: TextStyle(
-                color: Colors.red,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            onTap: _logout,
-          ),
-        ),
-        const SizedBox(height: 8),
-      ],
-    ),
-  ),
-),
-
+      ),
       appBar: AppBar(
         backgroundColor: Colors.white,
         title: const Text('Plumber'),
@@ -253,11 +257,6 @@ class _PlumberHomePageState extends State<PlumberHomePage>
         actions: [
           Stack(
             children: [
-              IconButton(
-                key: _bellKey,
-                icon: const Icon(Icons.notifications_none),
-                onPressed: _toggleDropdown,
-              ),
               if (unreadCount > 0)
                 Positioned(
                   right: 8,
@@ -388,36 +387,36 @@ class _PlumberHomePageState extends State<PlumberHomePage>
   }
 
   Widget _buildDrawerItem({
-  required IconData icon,
-  required String title,
-  required PlumberPage page,
-}) {
-  final bool isSelected = _selectedPage == page;
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-    child: Material(
-      color: isSelected ? const Color(0xFF87CEEB) : Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ListTile(
-        leading: Icon(
-          icon,
-          color: Colors.grey[800],
-          size: 24,
+    required IconData icon,
+    required String title,
+    required PlumberPage page,
+  }) {
+    final bool isSelected = _selectedPage == page;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Material(
+        color: isSelected ? const Color(0xFF87CEEB) : Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
         ),
-        title: Text(
-          title,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+        child: ListTile(
+          leading: Icon(
+            icon,
             color: Colors.grey[800],
+            size: 24,
           ),
+          title: Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              color: Colors.grey[800],
+            ),
+          ),
+          selected: isSelected,
+          onTap: () => _onSelectPage(page),
         ),
-        selected: isSelected,
-        onTap: () => _onSelectPage(page),
       ),
-    ),
-  );
-}
+    );
+  }
 }

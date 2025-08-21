@@ -5,8 +5,158 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../components/admin_layout.dart';
 
-class BillsPage extends StatelessWidget {
+class BillsPage extends StatefulWidget {
   const BillsPage({super.key});
+
+  @override
+  State<BillsPage> createState() => _BillsPageState();
+}
+
+class _BillsPageState extends State<BillsPage> {
+  int _currentPage = 0;
+  final int _pageSize = 4;
+  List<DocumentSnapshot?> _lastDocuments = [null];
+  int _totalPages = 1;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  Future<void> _fetchTotalPages() async {
+    Query query = FirebaseFirestore.instance
+        .collection('users')
+        .where('role', isEqualTo: 'Resident');
+    if (_searchQuery.isNotEmpty) {
+      query = query
+          .where('fullName', isGreaterThanOrEqualTo: _searchQuery)
+          .where('fullName', isLessThanOrEqualTo: '$_searchQuery\uf8ff');
+    }
+    final snapshot = await query.get();
+    final totalDocs = snapshot.docs.length;
+    setState(() {
+      _totalPages = (totalDocs / _pageSize).ceil();
+      while (_lastDocuments.length < _totalPages) {
+        _lastDocuments.add(null);
+      }
+    });
+  }
+
+  Stream<QuerySnapshot> _getResidentsStream() {
+    Query query = FirebaseFirestore.instance
+        .collection('users')
+        .where('role', isEqualTo: 'Resident')
+        .orderBy('fullName')
+        .limit(_pageSize);
+
+    if (_searchQuery.isNotEmpty) {
+      query = query
+          .where('fullName', isGreaterThanOrEqualTo: _searchQuery)
+          .where('fullName', isLessThanOrEqualTo: '$_searchQuery\uf8ff');
+    }
+
+    if (_currentPage > 0 && _lastDocuments[_currentPage - 1] != null) {
+      query = query.startAfterDocument(_lastDocuments[_currentPage - 1]!);
+    }
+
+    return query.snapshots();
+  }
+
+  Widget _buildPaginationButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        TextButton(
+          onPressed: _currentPage > 0
+              ? () {
+                  setState(() {
+                    _currentPage--;
+                  });
+                }
+              : null,
+          child: Text(
+            'Previous',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: _currentPage > 0 ? const Color(0xFF1E88E5) : Colors.grey,
+            ),
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(_totalPages, (i) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: TextButton(
+                onPressed: () {
+                  setState(() {
+                    _currentPage = i;
+                  });
+                },
+                style: TextButton.styleFrom(
+                  backgroundColor: _currentPage == i
+                      ? const Color(0xFF1E88E5)
+                      : Colors.grey.shade200,
+                  foregroundColor:
+                      _currentPage == i ? Colors.white : Colors.grey.shade800,
+                  minimumSize: const Size(32, 32),
+                  padding: const EdgeInsets.all(0),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                child: Text(
+                  '${i + 1}',
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+        TextButton(
+          onPressed: _currentPage < _totalPages - 1
+              ? () {
+                  setState(() {
+                    _currentPage++;
+                    if (_currentPage >= _lastDocuments.length) {
+                      _lastDocuments.add(null);
+                    }
+                  });
+                }
+              : null,
+          child: Text(
+            'Next',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: _currentPage < _totalPages - 1
+                  ? const Color(0xFF1E88E5)
+                  : Colors.grey,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTotalPages();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.trim();
+        _currentPage = 0;
+        _lastDocuments = [null];
+        _fetchTotalPages();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,12 +168,45 @@ class BillsPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Search residents by name...',
+                  prefixIcon:
+                      const Icon(Icons.search, color: Color(0xFF718096)),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide:
+                        const BorderSide(color: Color(0xFFEDF2F7), width: 1),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide:
+                        const BorderSide(color: Color(0xFF1E88E5), width: 1.5),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide:
+                        const BorderSide(color: Color(0xFFEDF2F7), width: 1),
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  hintStyle: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: const Color(0xFF718096),
+                  ),
+                ),
+                style: GoogleFonts.inter(fontSize: 14),
+                onChanged: (value) {},
+              ),
+            ),
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('users')
-                    .where('role', isEqualTo: 'Resident')
-                    .snapshots(),
+                stream: _getResidentsStream(),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
                     return Center(
@@ -49,7 +232,9 @@ class BillsPage extends StatelessWidget {
                   if (residents.isEmpty) {
                     return Center(
                       child: Text(
-                        'No residents found.',
+                        _searchQuery.isEmpty
+                            ? 'No residents found.'
+                            : 'No residents found for "$_searchQuery".',
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           color: const Color(0xFF2D3748),
@@ -58,23 +243,41 @@ class BillsPage extends StatelessWidget {
                       ),
                     );
                   }
-                  return ListView.builder(
-                    itemCount: residents.length,
-                    itemBuilder: (context, index) {
-                      final resident = residents[index];
-                      final data =
-                          resident.data() as Map<String, dynamic>? ?? {};
-                      final fullName = data['fullName'] ?? 'Unknown Resident';
-                      final address = data['address'] ?? 'No address';
-                      final contactNumber =
-                          data['contactNumber'] ?? 'No contact';
-                      return _ResidentCard(
-                        residentId: resident.id,
-                        fullName: fullName,
-                        address: address,
-                        contactNumber: contactNumber,
-                      );
-                    },
+
+                  if (residents.isNotEmpty) {
+                    if (_currentPage >= _lastDocuments.length) {
+                      _lastDocuments.add(residents.last);
+                    } else {
+                      _lastDocuments[_currentPage] = residents.last;
+                    }
+                  }
+
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: ListView.builder(
+                          itemCount: residents.length,
+                          itemBuilder: (context, index) {
+                            final resident = residents[index];
+                            final data =
+                                resident.data() as Map<String, dynamic>? ?? {};
+                            final fullName =
+                                data['fullName'] ?? 'Unknown Resident';
+                            final address = data['address'] ?? 'No address';
+                            final contactNumber =
+                                data['contactNumber'] ?? 'No contact';
+                            return _ResidentCard(
+                              residentId: resident.id,
+                              fullName: fullName,
+                              address: address,
+                              contactNumber: contactNumber,
+                              onBillCreated: _fetchTotalPages,
+                            );
+                          },
+                        ),
+                      ),
+                      _buildPaginationButtons(),
+                    ],
                   );
                 },
               ),
@@ -88,11 +291,14 @@ class BillsPage extends StatelessWidget {
 
 class _ResidentCard extends StatefulWidget {
   final String residentId, fullName, address, contactNumber;
+  final VoidCallback onBillCreated;
+
   const _ResidentCard({
     required this.residentId,
     required this.fullName,
     required this.address,
     required this.contactNumber,
+    required this.onBillCreated,
   });
 
   @override
@@ -195,7 +401,9 @@ class _ResidentCardState extends State<_ResidentCard> {
                             contactNumber: widget.contactNumber,
                           ),
                         ),
-                      );
+                      ).then((value) {
+                        widget.onBillCreated();
+                      });
                     },
                     child: const Text('Create Bill'),
                   ),
@@ -279,7 +487,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
               ),
               onPressed: () async {
                 try {
-                  // Fetch payment and bill data for notification
                   final paymentDoc = await FirebaseFirestore.instance
                       .collection('payments')
                       .doc(paymentId)
@@ -311,7 +518,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                     print('No billId provided, using default month: $month');
                   }
 
-                  // Save to notifications collection
                   final notificationData = {
                     'residentId': widget.residentId,
                     'billId': billId ?? 'Unknown',
@@ -328,7 +534,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                   print('Notification saved successfully');
 
                   if (status == 'approved') {
-                    // Update payment status to approved
                     await FirebaseFirestore.instance
                         .collection('payments')
                         .doc(paymentId)
@@ -338,7 +543,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                       'processedBy': 'Admin',
                     });
                     print('Payment updated to approved');
-                    // Delete the corresponding bill
                     if (billId != null) {
                       await FirebaseFirestore.instance
                           .collection('bills')
@@ -346,7 +550,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                           .delete();
                       print('Bill deleted: $billId');
                     }
-                    // Trigger rebuild to refresh dropdown
                     setState(() {
                       _selectedMonth =
                           DateFormat('MMM yyyy').format(DateTime.now());
@@ -366,7 +569,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                       ),
                     );
                   } else if (status == 'rejected') {
-                    // Delete the payment
                     await FirebaseFirestore.instance
                         .collection('payments')
                         .doc(paymentId)
@@ -905,7 +1107,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
     }
 
     if (_selectedMonth == 'Total Bill') {
-      // Aggregate total bill payments
       final totalBillPayment = await _fetchTotalBillPayment(unpaidBillIds);
       if (totalBillPayment != null) {
         filteredPayments.add(totalBillPayment);
@@ -1052,13 +1253,13 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
       case 'PUROK 3':
       case 'PUROK 4':
       case 'PUROK 5':
-        return 30.00; // Residential
+        return 30.00;
       case 'COMMERCIAL':
-        return 75.00; // Commercial
+        return 75.00;
       case 'NON-RESIDENCE':
-        return 100.00; // Non-residence
+        return 100.00;
       case 'INDUSTRIAL':
-        return 100.00; // Industrial
+        return 100.00;
       default:
         return 0.00;
     }
@@ -1071,13 +1272,13 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
       case 'PUROK 3':
       case 'PUROK 4':
       case 'PUROK 5':
-        return 5.00; // Residential
+        return 5.00;
       case 'COMMERCIAL':
-        return 10.00; // Commercial
+        return 10.00;
       case 'NON-RESIDENCE':
-        return 10.00; // Non-residence
+        return 10.00;
       case 'INDUSTRIAL':
-        return 15.00; // Industrial
+        return 15.00;
       default:
         return 0.00;
     }

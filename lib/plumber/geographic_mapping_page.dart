@@ -6,6 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class GeographicMappingPage extends StatefulWidget {
   const GeographicMappingPage({super.key});
@@ -24,7 +25,7 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
         right: 16,
         bottom: 16,
         child: FadeOut(
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 5),
           animate: true,
           child: Material(
             color: Colors.red.withOpacity(0.9),
@@ -52,7 +53,7 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
       ),
     );
     Overlay.of(context).insert(_errorOverlay!);
-    Future.delayed(const Duration(seconds: 3), () {
+    Future.delayed(const Duration(seconds: 5), () {
       _errorOverlay?.remove();
       _errorOverlay = null;
     });
@@ -204,7 +205,7 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
     switch (status) {
       case 'Monitoring':
         return const Color(0xFF2F8E2F);
-      case 'Unfixed':
+      case 'Unfixed Reports':
         return const Color(0xFFD94B3B);
       case 'Fixed':
         return const Color(0xFFC18B00);
@@ -306,7 +307,7 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                                   Icon(
                                     Icons.location_pin,
                                     color: _getStatusColor(
-                                        data['status'] ?? 'Unknown'),
+                                        data['status'] ?? 'Unfixed Reports'),
                                     size: 28,
                                   ),
                                 ],
@@ -344,7 +345,7 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                           const LatLng(13.294678436001885, 123.75569591912894),
                       initialZoom: 16,
                       minZoom: 15,
-                      maxZoom: 17,
+                      maxZoom: 16,
                       initialCameraFit: CameraFit.bounds(
                         bounds: LatLngBounds(
                           const LatLng(13.292678436001885, 123.75369591912894),
@@ -363,11 +364,18 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                         urlTemplate:
                             'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                         subdomains: const ['a', 'b', 'c'],
-                        userAgentPackageName: 'com.example.app',
+                        userAgentPackageName:
+                            'WaterPipeMonitoring/1.0 (contact@yourdomain.com)',
+                        tileProvider: CachedTileProvider(),
                         errorTileCallback: (tile, error, stackTrace) {
                           print('Tile loading error: $error');
-                          _showErrorOverlay(
-                              'Failed to load map tiles. Check your internet connection.');
+                          if (error.toString().contains('403')) {
+                            _showErrorOverlay(
+                                'Access blocked by OpenStreetMap. Please contact support or check your internet.');
+                          } else {
+                            _showErrorOverlay(
+                                'Failed to load map tiles. Check your internet connection.');
+                          }
                         },
                       ),
                       MarkerLayer(markers: markers),
@@ -449,7 +457,7 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.8),
+                    color: Colors.white.withOpacity(0.9),
                     borderRadius: BorderRadius.circular(4),
                     boxShadow: [
                       BoxShadow(
@@ -462,8 +470,9 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                   child: Text(
                     '© OpenStreetMap contributors',
                     style: GoogleFonts.poppins(
-                      fontSize: 10,
+                      fontSize: 12,
                       color: Colors.black87,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ),
@@ -472,6 +481,17 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
           ),
         ),
       ),
+    );
+  }
+}
+
+// Custom TileProvider for caching
+class CachedTileProvider extends TileProvider {
+  @override
+  ImageProvider getImage(TileCoordinates coordinates, TileLayer options) {
+    return CachedNetworkImageProvider(
+      getTileUrl(coordinates, options),
+      cacheKey: '${coordinates.x}_${coordinates.y}_${coordinates.z}',
     );
   }
 }

@@ -15,11 +15,14 @@ class UsersPage extends StatefulWidget {
 
 class _UsersPageState extends State<UsersPage> {
   int _currentPage = 0;
-  final int _pageSize = 5;
+  final int _pageSize = 4; // Set to 4 items per page
   String _selectedRole = 'All';
-  DocumentSnapshot? _lastDocument;
+  List<DocumentSnapshot?> _lastDocuments = [
+    null
+  ]; // Store last document for each page
   OverlayEntry? _successOverlay;
   OverlayEntry? _errorOverlay;
+  int _totalPages = 1; // Default to 1 page
 
   Color _getRoleColor(String role) {
     switch (role.toLowerCase()) {
@@ -37,6 +40,25 @@ class _UsersPageState extends State<UsersPage> {
     return input[0].toUpperCase() + input.substring(1).toLowerCase();
   }
 
+  // Fetch total document count to calculate total pages
+  Future<void> _fetchTotalPages() async {
+    Query query = FirebaseFirestore.instance.collection('users');
+    if (_selectedRole == 'All') {
+      query = query.where('role', whereIn: ['Plumber', 'Resident']);
+    } else {
+      query = query.where('role', isEqualTo: _selectedRole);
+    }
+    final snapshot = await query.get();
+    final totalDocs = snapshot.docs.length;
+    setState(() {
+      _totalPages = (totalDocs / _pageSize).ceil();
+      // Ensure _lastDocuments has enough slots
+      while (_lastDocuments.length < _totalPages) {
+        _lastDocuments.add(null);
+      }
+    });
+  }
+
   Stream<QuerySnapshot> _getUsersStream() {
     Query query = FirebaseFirestore.instance.collection('users');
 
@@ -48,8 +70,8 @@ class _UsersPageState extends State<UsersPage> {
 
     query = query.orderBy('createdAt', descending: true).limit(_pageSize);
 
-    if (_lastDocument != null && _currentPage > 0) {
-      query = query.startAfterDocument(_lastDocument!);
+    if (_currentPage > 0 && _lastDocuments[_currentPage - 1] != null) {
+      query = query.startAfterDocument(_lastDocuments[_currentPage - 1]!);
     }
 
     return query.snapshots();
@@ -90,6 +112,8 @@ class _UsersPageState extends State<UsersPage> {
           }
         }
       }
+      // Refresh total pages after deletion
+      await _fetchTotalPages();
     } catch (e) {
       print('Error deleting user: $e');
       _showErrorOverlay('Error deleting user: $e. Check admin setup.');
@@ -516,9 +540,9 @@ class _UsersPageState extends State<UsersPage> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () {
+                        onPressed: () async {
                           if (_formKey.currentState!.validate()) {
-                            _registerPlumber(
+                            await _registerPlumber(
                               _firstNameController.text.trim(),
                               _lastNameController.text.trim(),
                               _emailController.text.trim(),
@@ -583,6 +607,8 @@ class _UsersPageState extends State<UsersPage> {
       });
 
       _showSuccessOverlay('Plumber registered successfully!');
+      // Refresh total pages after adding a new user
+      await _fetchTotalPages();
     } catch (e) {
       String errorMessage;
       if (e is FirebaseAuthException) {
@@ -641,7 +667,9 @@ class _UsersPageState extends State<UsersPage> {
         setState(() {
           _selectedRole = role;
           _currentPage = 0;
-          _lastDocument = null;
+          _lastDocuments = [null]; // Reset pagination on filter change
+          _totalPages = 1; // Reset total pages
+          _fetchTotalPages(); // Fetch new total pages
         });
       },
       style: ElevatedButton.styleFrom(
@@ -659,6 +687,92 @@ class _UsersPageState extends State<UsersPage> {
       ),
       child: Text(role),
     );
+  }
+
+  // Build pagination buttons with Previous and Next at corners, numbers in center
+  Widget _buildPaginationButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        TextButton(
+          onPressed: _currentPage > 0
+              ? () {
+                  setState(() {
+                    _currentPage--;
+                  });
+                }
+              : null,
+          child: Text(
+            'Previous',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: _currentPage > 0 ? const Color(0xFF4FC3F7) : Colors.grey,
+            ),
+          ),
+        ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(_totalPages, (i) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: TextButton(
+                onPressed: () {
+                  setState(() {
+                    _currentPage = i;
+                  });
+                },
+                style: TextButton.styleFrom(
+                  backgroundColor: _currentPage == i
+                      ? const Color(0xFF4FC3F7)
+                      : Colors.grey.shade200,
+                  foregroundColor:
+                      _currentPage == i ? Colors.white : Colors.grey.shade800,
+                  minimumSize: const Size(32, 32),
+                  padding: const EdgeInsets.all(0),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                child: Text(
+                  '${i + 1}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            );
+          }),
+        ),
+        TextButton(
+          onPressed: _currentPage < _totalPages - 1
+              ? () {
+                  setState(() {
+                    _currentPage++;
+                    if (_currentPage >= _lastDocuments.length) {
+                      _lastDocuments.add(null);
+                    }
+                  });
+                }
+              : null,
+          child: Text(
+            'Next',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: _currentPage < _totalPages - 1
+                  ? const Color(0xFF4FC3F7)
+                  : Colors.grey,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTotalPages(); // Initialize total pages
   }
 
   @override
@@ -730,7 +844,8 @@ class _UsersPageState extends State<UsersPage> {
                           ElevatedButton(
                             onPressed: () => setState(() {
                               _currentPage = 0;
-                              _lastDocument = null;
+                              _lastDocuments = [null];
+                              _fetchTotalPages();
                             }),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF4FC3F7),
@@ -769,7 +884,14 @@ class _UsersPageState extends State<UsersPage> {
                     );
                   }
 
-                  _lastDocument = users.isNotEmpty ? users.last : null;
+                  // Update lastDocuments list
+                  if (users.isNotEmpty) {
+                    if (_currentPage >= _lastDocuments.length) {
+                      _lastDocuments.add(users.last);
+                    } else {
+                      _lastDocuments[_currentPage] = users.last;
+                    }
+                  }
 
                   return Column(
                     children: [
@@ -781,9 +903,8 @@ class _UsersPageState extends State<UsersPage> {
                             final userId = user.id;
                             final fullName = user['fullName'] ?? 'Unknown';
                             final email = user['email'] ?? 'No email';
-                            final contact = user['contactNumber'] ??
-                                user['contactNumber'] ??
-                                'No contact';
+                            final contact =
+                                user['contactNumber'] ?? 'No contact';
                             final address = user['address'] ?? 'No address';
                             final role = (user['role'] ?? 'Unknown').toString();
                             final createdAtRaw = user['createdAt'];
@@ -891,57 +1012,7 @@ class _UsersPageState extends State<UsersPage> {
                           },
                         ),
                       ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          TextButton(
-                            onPressed: _currentPage > 0
-                                ? () {
-                                    setState(() {
-                                      _currentPage--;
-                                      _lastDocument = null;
-                                    });
-                                  }
-                                : null,
-                            child: Text(
-                              'Previous',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: _currentPage > 0
-                                    ? const Color(0xFF4FC3F7)
-                                    : Colors.grey,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            'Page ${_currentPage + 1}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: Colors.grey.shade800,
-                            ),
-                          ),
-                          TextButton(
-                            onPressed: users.length == _pageSize &&
-                                    _lastDocument != null
-                                ? () {
-                                    setState(() {
-                                      _currentPage++;
-                                    });
-                                  }
-                                : null,
-                            child: Text(
-                              'Next',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: users.length == _pageSize &&
-                                        _lastDocument != null
-                                    ? const Color(0xFF4FC3F7)
-                                    : Colors.grey,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      _buildPaginationButtons(),
                     ],
                   );
                 },
