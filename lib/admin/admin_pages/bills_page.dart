@@ -526,6 +526,9 @@ class _PaymentSectionState extends State<_PaymentSection> {
                     'processedDate': FieldValue.serverTimestamp(),
                     'processedBy': 'Admin',
                     'amount': paymentData['billAmount']?.toDouble() ?? 0.0,
+                    'read': false, // Added read field
+                    'createdAt': FieldValue
+                        .serverTimestamp(), // Added createdAt for consistency
                   };
                   print('Saving notification: $notificationData');
                   await FirebaseFirestore.instance

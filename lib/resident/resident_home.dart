@@ -119,32 +119,42 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
     });
   }
 
-  Future<List<Map<String, dynamic>>> _fetchNotifications() async {
+  Future<Map<String, List<Map<String, dynamic>>>> _fetchNotifications() async {
     print('Fetching notifications...');
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       print('No user logged in');
-      return [];
+      return {'unread': [], 'read': []};
     }
     print('Current user UID: ${user.uid}');
 
     try {
-      // Fetch both payment and report_status notifications
-      final notificationsSnapshot = await FirebaseFirestore.instance
+      // Fetch unread notifications
+      final unreadSnapshot = await FirebaseFirestore.instance
           .collection('notifications')
           .where('residentId', isEqualTo: user.uid)
-          .where('read', isEqualTo: false) // Only fetch unread notifications
+          .where('read', isEqualTo: false)
           .orderBy('createdAt', descending: true)
           .limit(10)
           .get();
 
-      print('Found ${notificationsSnapshot.docs.length} notifications');
+      // Fetch read notifications
+      final readSnapshot = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('residentId', isEqualTo: user.uid)
+          .where('read', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .limit(10)
+          .get();
 
-      final notifications = notificationsSnapshot.docs.map((doc) {
+      print('Found ${unreadSnapshot.docs.length} unread notifications');
+      print('Found ${readSnapshot.docs.length} read notifications');
+
+      final unreadNotifications = unreadSnapshot.docs.map((doc) {
         final data = doc.data();
-        print('Notification data: $data');
+        print('Unread notification data: $data');
         return {
-          'id': doc.id, // Store doc ID for marking as read
+          'id': doc.id,
           'type': data['type'] ?? 'unknown',
           'status': data['status'],
           'month': data['month'],
@@ -155,11 +165,27 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
         };
       }).toList();
 
-      print('Processed notifications: ${notifications.length}');
-      return notifications;
+      final readNotifications = readSnapshot.docs.map((doc) {
+        final data = doc.data();
+        print('Read notification data: $data');
+        return {
+          'id': doc.id,
+          'type': data['type'] ?? 'unknown',
+          'status': data['status'],
+          'month': data['month'],
+          'amount': data['amount']?.toDouble(),
+          'message': data['message'],
+          'processedDate': (data['processedDate'] as Timestamp?)?.toDate(),
+          'createdAt': (data['createdAt'] as Timestamp?)?.toDate(),
+        };
+      }).toList();
+
+      print(
+          'Processed ${unreadNotifications.length} unread and ${readNotifications.length} read notifications');
+      return {'unread': unreadNotifications, 'read': readNotifications};
     } catch (e) {
       print('Error fetching notifications: $e');
-      return [];
+      return {'unread': [], 'read': []};
     }
   }
 
@@ -179,7 +205,10 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
   void _showNotificationsDropdown(BuildContext context) async {
     print('Attempting to show notification dropdown');
     final notifications = await _fetchNotifications();
-    print('Notifications fetched: ${notifications.length}');
+    final unreadNotifications = notifications['unread']!;
+    final readNotifications = notifications['read']!;
+    print(
+        'Notifications fetched: ${unreadNotifications.length} unread, ${readNotifications.length} read');
 
     final RenderBox? button =
         _notificationButtonKey.currentContext?.findRenderObject() as RenderBox?;
@@ -199,12 +228,176 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
     final Offset position = button.localToGlobal(Offset.zero);
     print('Button position: $position, size: ${button.size}');
 
-    // Mark all displayed notifications as read
-    for (var notification in notifications) {
+    // Mark all unread notifications as read
+    for (var notification in unreadNotifications) {
       if (notification['id'] != null) {
         await _markNotificationAsRead(notification['id']);
       }
     }
+
+    // Explicitly type the items list
+    final List<PopupMenuEntry<dynamic>> menuItems = [
+      // Unread Notifications Section
+      PopupMenuItem<dynamic>(
+        enabled: false,
+        child: Text(
+          'Unread Notifications',
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+      ),
+      if (unreadNotifications.isEmpty)
+        PopupMenuItem<dynamic>(
+          enabled: false,
+          child: Text(
+            'No unread notifications',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+          ),
+        ),
+      ...unreadNotifications.map((notification) {
+        if (notification['type'] == 'report_status') {
+          return PopupMenuItem<dynamic>(
+            enabled: false,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  color: Colors.green,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    notification['message'] ?? 'Issue fixed',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        } else {
+          final status =
+              notification['status'] == 'approved' ? 'Successful' : 'Declined';
+          final month = notification['month'] ?? 'Unknown';
+          final amount = notification['amount']?.toStringAsFixed(2) ?? '0.00';
+          return PopupMenuItem<dynamic>(
+            enabled: false,
+            child: Row(
+              children: [
+                Icon(
+                  notification['status'] == 'approved'
+                      ? Icons.check_circle
+                      : Icons.cancel,
+                  color: notification['status'] == 'approved'
+                      ? Colors.green
+                      : Colors.red,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Payment of ₱$amount for $month is $status',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      }).toList(),
+      // Divider between sections
+      const PopupMenuDivider(),
+      // Read Notifications Section
+      PopupMenuItem<dynamic>(
+        enabled: false,
+        child: Text(
+          'Read Notifications',
+          style: GoogleFonts.poppins(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+      ),
+      if (readNotifications.isEmpty)
+        PopupMenuItem<dynamic>(
+          enabled: false,
+          child: Text(
+            'No read notifications',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+          ),
+        ),
+      ...readNotifications.map((notification) {
+        if (notification['type'] == 'report_status') {
+          return PopupMenuItem<dynamic>(
+            enabled: false,
+            child: Row(
+              children: [
+                Icon(
+                  Icons.check_circle,
+                  color: Colors.grey[400],
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    notification['message'] ?? 'Issue fixed',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        } else {
+          final status =
+              notification['status'] == 'approved' ? 'Successful' : 'Declined';
+          final month = notification['month'] ?? 'Unknown';
+          final amount = notification['amount']?.toStringAsFixed(2) ?? '0.00';
+          return PopupMenuItem<dynamic>(
+            enabled: false,
+            child: Row(
+              children: [
+                Icon(
+                  notification['status'] == 'approved'
+                      ? Icons.check_circle
+                      : Icons.cancel,
+                  color: Colors.grey[400],
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Payment of ₱$amount for $month is $status',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      }).toList(),
+    ];
 
     await showMenu(
       context: context,
@@ -214,80 +407,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
         position.dx + button.size.width,
         0,
       ),
-      items: notifications.isEmpty
-          ? [
-              PopupMenuItem(
-                enabled: false,
-                child: Text(
-                  'No new notifications',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              ),
-            ]
-          : notifications.map((notification) {
-              if (notification['type'] == 'report_status') {
-                // Report status notification
-                return PopupMenuItem(
-                  enabled: false,
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.check_circle,
-                        color: Colors.green,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          notification['message'] ?? 'Issue fixed',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              } else {
-                // Payment notification
-                final status = notification['status'] == 'approved'
-                    ? 'Successful'
-                    : 'Declined';
-                final month = notification['month'] ?? 'Unknown';
-                final amount =
-                    notification['amount']?.toStringAsFixed(2) ?? '0.00';
-                return PopupMenuItem(
-                  enabled: false,
-                  child: Row(
-                    children: [
-                      Icon(
-                        notification['status'] == 'approved'
-                            ? Icons.check_circle
-                            : Icons.cancel,
-                        color: notification['status'] == 'approved'
-                            ? Colors.green
-                            : Colors.red,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Payment of ₱$amount for $month is $status',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: Colors.black87,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }
-            }).toList(),
+      items: menuItems,
       elevation: 8,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -426,8 +546,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                 .collection('notifications')
                 .where('residentId',
                     isEqualTo: FirebaseAuth.instance.currentUser?.uid)
-                .where('read',
-                    isEqualTo: false) // Show only unread notifications
+                .where('read', isEqualTo: false)
                 .snapshots(),
             builder: (context, snapshot) {
               int notificationCount = 0;

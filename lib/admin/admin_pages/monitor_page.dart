@@ -10,7 +10,7 @@ import 'package:animate_do/animate_do.dart';
 import 'package:water_pipe_monitoring/admin/components/admin_layout.dart';
 
 class MonitorPage extends StatefulWidget {
-  final String? reportId; // Optional report ID to open modal
+  final String? reportId;
 
   const MonitorPage({super.key, this.reportId});
 
@@ -20,32 +20,35 @@ class MonitorPage extends StatefulWidget {
 
 class _MonitorPageState extends State<MonitorPage> {
   OverlayEntry? _errorOverlay;
+  final MapController _mapController = MapController();
 
-  // List of colors for different users
-  final List<Color> _userColors = [
-    Colors.blue,
-    Colors.green,
-    Colors.red,
-    Colors.purple,
-    Colors.orange,
-    Colors.teal,
-    Colors.pink,
-    Colors.amber,
-    Colors.cyan,
-    Colors.indigo,
-  ];
+  // Light blue color palette
+  static const Color primaryBlue = Color(0xFF90CAF9);
+  static const Color lightBlue = Color(0xFFE3F2FD);
+  // ignore: unused_field
+  static const Color accentBlue = Color(0xFFBBDEFB);
 
-  // Function to generate a consistent color for a user based on their userId
-  Color _getUserColor(String? userId) {
-    if (userId == null || userId.isEmpty) {
-      return Colors.grey; // Fallback color for invalid userId
+  // Status-based marker colors
+  Color _getStatusColor(String status) {
+    switch (status) {
+      case 'Monitoring':
+        return primaryBlue;
+      case 'Unfixed':
+        return Colors.redAccent;
+      default:
+        return Colors.grey;
     }
-    // Use a simple hash of userId to select a color index
-    int hash = userId.hashCode.abs();
-    int index = hash % _userColors.length;
-    return _userColors[index];
   }
 
+  // Format timestamp for display
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp is Timestamp) {
+      return DateFormat.yMMMMd().add_jm().format(timestamp.toDate());
+    }
+    return 'N/A';
+  }
+
+  // Fetch plumbers for assignment
   Future<List<Map<String, dynamic>>> _fetchPlumbers() async {
     try {
       final querySnapshot = await FirebaseFirestore.instance
@@ -68,36 +71,7 @@ class _MonitorPageState extends State<MonitorPage> {
     }
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (FirebaseAuth.instance.currentUser == null) {
-      Navigator.pushReplacementNamed(context, '/login');
-      return;
-    }
-    if (widget.reportId != null && widget.reportId!.isNotEmpty) {
-      _fetchAndShowReportModal(widget.reportId!);
-    }
-  }
-
-  Future<void> _fetchAndShowReportModal(String reportId) async {
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('reports')
-          .doc(reportId)
-          .get();
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        _showReportModal(context, data, reportId);
-      } else {
-        _showErrorOverlay('Report not found. Please try again.');
-      }
-    } catch (e) {
-      print('Error fetching report: $e');
-      _showErrorOverlay('Error loading report: $e');
-    }
-  }
-
+  // Show error overlay with modern design
   void _showErrorOverlay(String message) {
     _errorOverlay?.remove();
     _errorOverlay = OverlayEntry(
@@ -108,8 +82,9 @@ class _MonitorPageState extends State<MonitorPage> {
           duration: const Duration(seconds: 3),
           animate: true,
           child: Material(
-            color: Colors.red.withOpacity(0.9),
-            borderRadius: BorderRadius.circular(8),
+            color: Colors.redAccent.withOpacity(0.95),
+            borderRadius: BorderRadius.circular(12),
+            elevation: 4,
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(
@@ -139,6 +114,26 @@ class _MonitorPageState extends State<MonitorPage> {
     });
   }
 
+  // Fetch and show report modal
+  Future<void> _fetchAndShowReportModal(String reportId) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('reports')
+          .doc(reportId)
+          .get();
+      if (doc.exists) {
+        final data = doc.data() as Map<String, dynamic>;
+        _showReportModal(context, data, reportId);
+      } else {
+        _showErrorOverlay('Report not found. Please try again.');
+      }
+    } catch (e) {
+      print('Error fetching report: $e');
+      _showErrorOverlay('Error loading report: $e');
+    }
+  }
+
+  // Show report modal with modern design
   void _showReportModal(
       BuildContext context, Map<String, dynamic> data, String reportId) async {
     String? selectedPlumberUid = data['assignedPlumber'] as String?;
@@ -150,7 +145,7 @@ class _MonitorPageState extends State<MonitorPage> {
 
     void _assignPlumber() async {
       if (selectedPlumberUid == null) {
-        _showErrorOverlay('Please select a plumber first.');
+        _showErrorOverlay('Please select a plumber.');
         return;
       }
       if (selectedDate == null) {
@@ -183,338 +178,346 @@ class _MonitorPageState extends State<MonitorPage> {
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: 450,
-              maxHeight: MediaQuery.of(context).size.height * 0.90,
-            ),
-            child: Dialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+        builder: (context, setDialogState) => FadeInUp(
+          duration: const Duration(milliseconds: 300),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: 500,
+                maxHeight: MediaQuery.of(context).size.height * 0.85,
               ),
-              elevation: 4,
-              backgroundColor: Colors.white,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Report Details',
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close,
-                              color: Colors.grey, size: 20),
-                          onPressed: () => Navigator.of(context).pop(),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
+              child: Dialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                elevation: 6,
+                backgroundColor: Colors.white,
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        CircleAvatar(
-                          radius: 24,
-                          backgroundColor: _getUserColor(data['userId']),
-                          backgroundImage: data['avatarUrl'] != null &&
-                                  data['avatarUrl'] is String
-                              ? NetworkImage(data['avatarUrl'] as String)
-                              : null,
-                          child: data['avatarUrl'] == null ||
-                                  data['avatarUrl'] is! String
-                              ? Text(
-                                  (data['fullName'] ?? 'Unknown')[0],
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Report Details',
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close,
+                                  color: Colors.grey, size: 24),
+                              onPressed: () => Navigator.of(context).pop(),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CircleAvatar(
+                              radius: 28,
+                              backgroundColor: primaryBlue,
+                              backgroundImage: data['avatarUrl'] != null &&
+                                      data['avatarUrl'] is String
+                                  ? NetworkImage(data['avatarUrl'] as String)
+                                  : null,
+                              child: data['avatarUrl'] == null ||
+                                      data['avatarUrl'] is! String
+                                  ? Text(
+                                      (data['fullName'] ?? 'Unknown')[0],
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    data['fullName'] ?? 'Unknown',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    data['contactNumber'] ?? 'No contact',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _formatTimestamp(data['createdAt']),
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      color: Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        if (data['image'] != null &&
+                            data['image'] is String &&
+                            (data['image'] as String).isNotEmpty)
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.memory(
+                              base64Decode(data['image'] as String),
+                              width: double.infinity,
+                              height: 160,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Container(
+                                padding: const EdgeInsets.all(12),
+                                alignment: Alignment.center,
+                                height: 160,
+                                color: lightBlue,
+                                child: Text(
+                                  'Unable to load image',
                                   style: GoogleFonts.poppins(
                                     fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
+                                    color: Colors.grey[600],
                                   ),
-                                )
-                              : null,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                data['fullName'] ?? 'Unknown',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
                                 ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                data['contactNumber'] ?? 'No contact',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                _formatTimestamp(data['createdAt']),
-                                style: GoogleFonts.poppins(
-                                  fontSize: 10,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    if (data['image'] != null &&
-                        data['image'] is String &&
-                        (data['image'] as String).isNotEmpty)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.memory(
-                          base64Decode(data['image'] as String),
-                          width: double.infinity,
-                          height: 140,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                            padding: const EdgeInsets.all(10),
-                            alignment: Alignment.center,
-                            height: 140,
-                            color: Colors.grey[100],
-                            child: Text(
-                              'Unable to load image',
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: Colors.grey[600],
                               ),
                             ),
                           ),
+                        const SizedBox(height: 16),
+                        Text(
+                          data['issueDescription'] ?? 'No issue description',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: Colors.black87,
+                            height: 1.5,
+                          ),
                         ),
-                      ),
-                    const SizedBox(height: 12),
-                    Text(
-                      data['issueDescription'] ?? 'No issue description',
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        color: Colors.black87,
-                        height: 1.4,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Chip(
-                      label: Text(
-                        data['status'] ?? 'Unknown',
-                        style: GoogleFonts.poppins(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
-                      ),
-                      backgroundColor:
-                          _getStatusColor(data['status'] ?? 'Unknown')
-                              .withOpacity(0.2),
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                    ),
-                    if (data['assignedPlumber'] != null)
-                      const SizedBox(height: 8),
-                    if (data['assignedPlumber'] != null)
-                      Text(
-                        'Assigned: ${plumbers.firstWhere(
-                          (p) => p['uid'] == data['assignedPlumber'],
-                          orElse: () => {'fullName': 'Unknown'},
-                        )['fullName']}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: const Color(0xFF4A2C6F),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-                    const Divider(height: 1, color: Colors.grey),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            decoration: InputDecoration(
-                              labelText: 'Assign Plumber',
-                              labelStyle: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: Colors.grey[700],
-                              ),
-                              filled: true,
-                              fillColor: Colors.grey[50],
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(
-                                    color: Colors.grey[300]!, width: 1),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(
-                                    color: Color(0xFF5E35B1), width: 1.5),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(
-                                    color: Colors.grey[300]!, width: 1),
-                              ),
+                        const SizedBox(height: 12),
+                        Chip(
+                          label: Text(
+                            data['status'] ?? 'Unknown',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.white,
                             ),
-                            value: selectedPlumberUid,
-                            dropdownColor: Colors.white,
-                            items: plumbers.isNotEmpty
-                                ? plumbers.map((plumber) {
-                                    return DropdownMenuItem<String>(
-                                      value: plumber['uid'],
-                                      child: Text(
-                                        plumber['fullName'],
-                                        style:
-                                            GoogleFonts.poppins(fontSize: 12),
-                                      ),
-                                    );
-                                  }).toList()
-                                : [
-                                    DropdownMenuItem<String>(
-                                      value: null,
-                                      child: Text(
-                                        'No plumbers available',
-                                        style: GoogleFonts.poppins(
-                                          color: Colors.grey,
-                                          fontSize: 12,
+                          ),
+                          backgroundColor:
+                              _getStatusColor(data['status'] ?? 'Unknown'),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                        ),
+                        if (data['assignedPlumber'] != null)
+                          const SizedBox(height: 12),
+                        if (data['assignedPlumber'] != null)
+                          Text(
+                            'Assigned: ${plumbers.firstWhere(
+                              (p) => p['uid'] == data['assignedPlumber'],
+                              orElse: () => {'fullName': 'Unknown'},
+                            )['fullName']}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: primaryBlue,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        const SizedBox(height: 16),
+                        const Divider(height: 1, color: Colors.grey),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                decoration: InputDecoration(
+                                  labelText: 'Assign Plumber',
+                                  labelStyle: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: Colors.grey[700],
+                                  ),
+                                  filled: true,
+                                  fillColor: lightBlue,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                        color: Colors.grey, width: 1),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                        color: primaryBlue, width: 1.5),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                        color: Colors.grey, width: 1),
+                                  ),
+                                ),
+                                value: selectedPlumberUid,
+                                dropdownColor: Colors.white,
+                                items: plumbers.isNotEmpty
+                                    ? plumbers.map((plumber) {
+                                        return DropdownMenuItem<String>(
+                                          value: plumber['uid'],
+                                          child: Text(
+                                            plumber['fullName'],
+                                            style: GoogleFonts.poppins(
+                                                fontSize: 14),
+                                          ),
+                                        );
+                                      }).toList()
+                                    : [
+                                        DropdownMenuItem<String>(
+                                          value: null,
+                                          child: Text(
+                                            'No plumbers available',
+                                            style: GoogleFonts.poppins(
+                                              color: Colors.grey,
+                                              fontSize: 14,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                    ),
-                                  ],
-                            onChanged: plumbers.isNotEmpty
-                                ? (value) {
+                                      ],
+                                onChanged: plumbers.isNotEmpty
+                                    ? (value) {
+                                        setDialogState(() {
+                                          selectedPlumberUid = value;
+                                          isButtonDisabled = false;
+                                        });
+                                      }
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: TextFormField(
+                                readOnly: true,
+                                decoration: InputDecoration(
+                                  labelText: 'Monitoring Date',
+                                  labelStyle: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: Colors.grey[700],
+                                  ),
+                                  filled: true,
+                                  fillColor: lightBlue,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 12, vertical: 10),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                        color: Colors.grey, width: 1),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                        color: primaryBlue, width: 1.5),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(
+                                        color: Colors.grey, width: 1),
+                                  ),
+                                  suffixIcon: const Icon(
+                                    Icons.calendar_today,
+                                    color: primaryBlue,
+                                    size: 20,
+                                  ),
+                                ),
+                                controller: TextEditingController(
+                                  text: selectedDate != null
+                                      ? DateFormat.yMMMd().format(selectedDate!)
+                                      : '',
+                                ),
+                                onTap: () async {
+                                  final pickedDate = await showDatePicker(
+                                    context: context,
+                                    initialDate: selectedDate ?? DateTime.now(),
+                                    firstDate: DateTime.now(),
+                                    lastDate: DateTime.now()
+                                        .add(const Duration(days: 365)),
+                                    builder: (context, child) {
+                                      return Theme(
+                                        data: Theme.of(context).copyWith(
+                                          colorScheme: const ColorScheme.light(
+                                            primary: primaryBlue,
+                                            onPrimary: Colors.white,
+                                            onSurface: Colors.black87,
+                                          ),
+                                          textButtonTheme: TextButtonThemeData(
+                                            style: TextButton.styleFrom(
+                                              foregroundColor: primaryBlue,
+                                            ),
+                                          ),
+                                        ),
+                                        child: child!,
+                                      );
+                                    },
+                                  );
+                                  if (pickedDate != null) {
                                     setDialogState(() {
-                                      selectedPlumberUid = value;
-                                      isButtonDisabled = false;
+                                      selectedDate = pickedDate;
                                     });
                                   }
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: TextFormField(
-                            readOnly: true,
-                            decoration: InputDecoration(
-                              labelText: 'Monitoring Date',
-                              labelStyle: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: Colors.grey[700],
-                              ),
-                              filled: true,
-                              fillColor: Colors.grey[50],
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(
-                                    color: Colors.grey[300]!, width: 1),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: const BorderSide(
-                                    color: Color(0xFF5E35B1), width: 1.5),
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide: BorderSide(
-                                    color: Colors.grey[300]!, width: 1),
-                              ),
-                              suffixIcon: const Icon(
-                                Icons.calendar_today,
-                                color: Color(0xFF5E35B1),
-                                size: 18,
-                              ),
-                            ),
-                            controller: TextEditingController(
-                              text: selectedDate != null
-                                  ? DateFormat.yMMMd().format(selectedDate!)
-                                  : '',
-                            ),
-                            onTap: () async {
-                              final pickedDate = await showDatePicker(
-                                context: context,
-                                initialDate: selectedDate ?? DateTime.now(),
-                                firstDate: DateTime.now(),
-                                lastDate: DateTime.now()
-                                    .add(const Duration(days: 365)),
-                                builder: (context, child) {
-                                  return Theme(
-                                    data: Theme.of(context).copyWith(
-                                      colorScheme: const ColorScheme.light(
-                                        primary: Color(0xFF5E35B1),
-                                        onPrimary: Colors.white,
-                                        onSurface: Colors.black87,
-                                      ),
-                                      textButtonTheme: TextButtonThemeData(
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: Color(0xFF5E35B1),
-                                        ),
-                                      ),
-                                    ),
-                                    child: child!,
-                                  );
                                 },
-                              );
-                              if (pickedDate != null) {
-                                setDialogState(() {
-                                  selectedDate = pickedDate;
-                                });
-                              }
-                            },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: isButtonDisabled ? null : _assignPlumber,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isButtonDisabled
+                                  ? Colors.grey[400]
+                                  : primaryBlue,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: isButtonDisabled ? 0 : 4,
+                              shadowColor: Colors.black26,
+                            ),
+                            child: Text(
+                              isButtonDisabled
+                                  ? 'Plumber Assigned'
+                                  : (data['assignedPlumber'] != null
+                                      ? 'Re-assign Plumber'
+                                      : 'Assign Plumber'),
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: isButtonDisabled ? null : _assignPlumber,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isButtonDisabled
-                              ? Colors.grey[400]
-                              : const Color(0xFF5E35B1),
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          elevation: isButtonDisabled ? 0 : 2,
-                          shadowColor: isButtonDisabled ? null : Colors.black12,
-                        ),
-                        child: Text(
-                          isButtonDisabled
-                              ? 'Plumber Assigned!'
-                              : (data['assignedPlumber'] != null
-                                  ? 'Re-assign Plumber'
-                                  : 'Assign Plumber for Monitoring'),
-                          style: GoogleFonts.poppins(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -524,210 +527,245 @@ class _MonitorPageState extends State<MonitorPage> {
     );
   }
 
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Monitoring':
-        return const Color(0xFF2F8E2F);
-      case 'Unfixed':
-        return const Color(0xFFD94B3B);
-      case 'Fixed':
-        return const Color(0xFFC18B00);
-      default:
-        return Colors.grey;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (FirebaseAuth.instance.currentUser == null) {
+      Navigator.pushReplacementNamed(context, '/login');
+      return;
     }
-  }
-
-  String _formatTimestamp(dynamic timestamp) {
-    if (timestamp is Timestamp) {
-      return DateFormat.yMMMMd().add_jm().format(timestamp.toDate());
+    if (widget.reportId != null && widget.reportId!.isNotEmpty) {
+      _fetchAndShowReportModal(widget.reportId!);
     }
-    return 'N/A';
   }
 
   @override
   Widget build(BuildContext context) {
-    return AdminLayout(
-      title: 'Monitor',
-      selectedRoute: '/monitor',
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Container(
-          color: const Color(0xFFF5F5F5),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Stack(
-              children: [
-                StreamBuilder<QuerySnapshot>(
-                  stream: FirebaseFirestore.instance
-                      .collection('reports')
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      print('StreamBuilder error: ${snapshot.error}');
-                      return Center(
-                        child: Text(
-                          'No reports available',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: Colors.grey[600],
+    return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          _mapController.move(
+              const LatLng(13.294678436001885, 123.75569591912894), 16);
+        },
+        backgroundColor: primaryBlue,
+        child: const Icon(Icons.refresh, color: Colors.white),
+        tooltip: 'Reset Map',
+      ),
+      body: AdminLayout(
+        title: 'Monitor Reports',
+        selectedRoute: '/monitor',
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Container(
+            decoration: BoxDecoration(
+              color: lightBlue,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                children: [
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('reports')
+                        .where('status', isNotEqualTo: 'Fixed')
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        print('StreamBuilder error: ${snapshot.error}');
+                        return Center(
+                          child: Text(
+                            'Error loading reports',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        );
+                      }
+
+                      if (!snapshot.hasData) {
+                        return const Center(
+                            child:
+                                CircularProgressIndicator(color: primaryBlue));
+                      }
+
+                      final markers = snapshot.data!.docs
+                          .map((doc) {
+                            final data = doc.data() as Map<String, dynamic>;
+                            final location = data['location'];
+                            final status = data['status'] ?? 'Unknown';
+                            if (location == null || location is! GeoPoint) {
+                              return null;
+                            }
+
+                            return Marker(
+                              point:
+                                  LatLng(location.latitude, location.longitude),
+                              width: 40,
+                              height: 40,
+                              child: GestureDetector(
+                                onTap: () => _fetchAndShowReportModal(doc.id),
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: _getStatusColor(status),
+                                        border: Border.all(
+                                            color: Colors.white, width: 2),
+                                      ),
+                                    ),
+                                    Text(
+                                      (data['fullName'] ?? 'Unknown')[0],
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          })
+                          .whereType<Marker>()
+                          .toList();
+
+                      markers.add(
+                        Marker(
+                          point: const LatLng(
+                              13.294678436001885, 123.75569591912894),
+                          width: 140,
+                          height: 40,
+                          child: Text(
+                            'San Jose',
+                            style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.blue[900],
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
                           ),
                         ),
                       );
-                    }
 
-                    if (!snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    final markers = snapshot.data!.docs
-                        .map((doc) {
-                          final data = doc.data() as Map<String, dynamic>;
-                          final location = data['location'];
-                          if (location == null || location is! GeoPoint) {
-                            return null;
-                          }
-
-                          return Marker(
-                            point:
-                                LatLng(location.latitude, location.longitude),
-                            width: 36,
-                            height: 36,
-                            child: GestureDetector(
-                              onTap: () => _fetchAndShowReportModal(doc.id),
-                              child: CircleAvatar(
-                                radius: 14,
-                                backgroundColor: _getUserColor(data['userId']),
-                                child: Text(
-                                  (data['fullName'] ?? 'Unknown')[0],
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
+                      return FlutterMap(
+                        mapController: _mapController,
+                        options: MapOptions(
+                          initialCenter: const LatLng(
+                              13.294678436001885, 123.75569591912894),
+                          initialZoom: 16,
+                          minZoom: 15,
+                          maxZoom: 18,
+                          initialCameraFit: CameraFit.bounds(
+                            bounds: LatLngBounds(
+                              const LatLng(
+                                  13.292678436001885, 123.75369591912894),
+                              const LatLng(
+                                  13.296678436001885, 123.75769591912894),
                             ),
-                          );
-                        })
-                        .whereType<Marker>()
-                        .toList();
-
-                    // Add label at new coordinates
-                    markers.add(
-                      Marker(
-                        point: const LatLng(
-                            13.294678436001885, 123.75569591912894),
-                        width: 140,
-                        height: 40,
-                        child: Text(
-                          'San Jose',
-                          style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.red[900],
+                            padding: const EdgeInsets.all(50),
                           ),
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    );
-
-                    return FlutterMap(
-                      options: MapOptions(
-                        initialCenter: const LatLng(
-                            13.294678436001885, 123.75569591912894),
-                        initialZoom: 16,
-                        minZoom: 15,
-                        maxZoom: 17,
-                        initialCameraFit: CameraFit.bounds(
-                          bounds: LatLngBounds(
-                            const LatLng(
-                                13.292678436001885, 123.75369591912894),
-                            const LatLng(
-                                13.296678436001885, 123.75769591912894),
+                          interactionOptions: const InteractionOptions(
+                            flags: InteractiveFlag.all &
+                                ~InteractiveFlag.doubleTapZoom &
+                                ~InteractiveFlag.flingAnimation,
                           ),
-                          padding: const EdgeInsets.all(50),
                         ),
-                        interactionOptions: const InteractionOptions(
-                          flags: InteractiveFlag.all &
-                              ~InteractiveFlag.doubleTapZoom &
-                              ~InteractiveFlag.flingAnimation,
-                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate:
+                                'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                            subdomains: const ['a', 'b', 'c'],
+                            userAgentPackageName: 'com.example.app',
+                            errorTileCallback: (tile, error, stackTrace) {
+                              print('Tile loading error: $error');
+                              _showErrorOverlay('Failed to load map tiles.');
+                            },
+                          ),
+                          MarkerLayer(markers: markers),
+                        ],
+                      );
+                    },
+                  ),
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
-                      children: [
-                        TileLayer(
-                          urlTemplate:
-                              'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          subdomains: const ['a', 'b', 'c'],
-                          userAgentPackageName: 'com.example.app',
-                          errorTileCallback: (tile, error, stackTrace) {
-                            print('Tile loading error: $error');
-                            _showErrorOverlay(
-                                'Failed to load map tiles. Check your internet connection.');
-                          },
+                      child: Text(
+                        'San Jose Water Services',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue[900],
                         ),
-                        MarkerLayer(markers: markers),
-                      ],
-                    );
-                  },
-                ),
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.8),
-                      borderRadius: BorderRadius.circular(4),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 2,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: Text(
-                      'Approx. 100m',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.black87,
                       ),
                     ),
                   ),
-                ),
-                Positioned(
-                  bottom: 8,
-                  right: 8,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.8),
-                      borderRadius: BorderRadius.circular(4),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
-                          blurRadius: 2,
-                          offset: const Offset(0, 1),
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        '© OpenStreetMap',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey[700],
                         ),
-                      ],
-                    ),
-                    child: Text(
-                      '© OpenStreetMap contributors',
-                      style: GoogleFonts.poppins(
-                        fontSize: 10,
-                        color: Colors.black87,
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _errorOverlay?.remove();
+    _mapController.dispose();
+    super.dispose();
   }
 }
