@@ -450,8 +450,43 @@ class _PaymentSectionState extends State<_PaymentSection> {
             return bDate.compareTo(aDate);
           });
 
-        if (uniqueMonths.isEmpty) {
-          uniqueMonths.add(_selectedMonth);
+        final dropdownItems = [
+          ...uniqueMonths.map((month) => DropdownMenuItem<String>(
+                value: month,
+                child: Text(
+                  month,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: const Color(0xFF2D3748),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              )),
+          DropdownMenuItem<String>(
+            value: 'Total Bill',
+            child: Text(
+              'Total Bill',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: const Color(0xFF2D3748),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ];
+
+        if (uniqueMonths.isEmpty && _selectedMonth != 'Total Bill') {
+          dropdownItems.add(DropdownMenuItem<String>(
+            value: _selectedMonth,
+            child: Text(
+              _selectedMonth,
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: const Color(0xFF2D3748),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ));
         }
 
         return Row(
@@ -474,19 +509,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
               ),
               child: DropdownButton<String>(
                 value: _selectedMonth,
-                items: uniqueMonths.map((month) {
-                  return DropdownMenuItem<String>(
-                    value: month,
-                    child: Text(
-                      month,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: const Color(0xFF2D3748),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  );
-                }).toList(),
+                items: dropdownItems,
                 onChanged: (value) {
                   if (value != null) {
                     setState(() {
@@ -815,21 +838,40 @@ class _PaymentSectionState extends State<_PaymentSection> {
   Future<List<Map<String, dynamic>>> _fetchPaymentsWithBillDates(
       List<QueryDocumentSnapshot> payments) async {
     final filteredPayments = <Map<String, dynamic>>[];
+    final paidBillIds = (await FirebaseFirestore.instance
+            .collection('payments')
+            .where('residentId', isEqualTo: widget.residentId)
+            .where('status', isEqualTo: 'approved')
+            .get())
+        .docs
+        .map((doc) => doc['billId'] as String)
+        .toSet();
+
+    final unpaidBillsSnapshot = await FirebaseFirestore.instance
+        .collection('bills')
+        .where('residentId', isEqualTo: widget.residentId)
+        .get();
+    final unpaidBillIds = unpaidBillsSnapshot.docs
+        .where((doc) => !paidBillIds.contains(doc.id))
+        .map((doc) => doc.id)
+        .toSet();
+
     for (var paymentDoc in payments) {
       final payment = paymentDoc.data() as Map<String, dynamic>;
       final billId = payment['billId'] as String?;
-      if (billId != null) {
-        final billSnapshot = await FirebaseFirestore.instance
-            .collection('bills')
-            .doc(billId)
-            .get();
-        if (billSnapshot.exists) {
-          final billData = billSnapshot.data()!;
-          final periodStart = (billData['periodStart'] as Timestamp?)?.toDate();
-          final billingDate = periodStart != null
-              ? DateFormat('MMM yyyy').format(periodStart)
-              : 'N/A';
-          if (billingDate == _selectedMonth) {
+      if (_selectedMonth == 'Total Bill') {
+        if (billId != null && unpaidBillIds.contains(billId)) {
+          final billSnapshot = await FirebaseFirestore.instance
+              .collection('bills')
+              .doc(billId)
+              .get();
+          if (billSnapshot.exists) {
+            final billData = billSnapshot.data()!;
+            final periodStart =
+                (billData['periodStart'] as Timestamp?)?.toDate();
+            final billingDate = periodStart != null
+                ? DateFormat('MMM yyyy').format(periodStart)
+                : 'N/A';
             filteredPayments.add({
               ...payment,
               'paymentId': paymentDoc.id,
@@ -837,9 +879,83 @@ class _PaymentSectionState extends State<_PaymentSection> {
             });
           }
         }
+      } else {
+        if (billId != null) {
+          final billSnapshot = await FirebaseFirestore.instance
+              .collection('bills')
+              .doc(billId)
+              .get();
+          if (billSnapshot.exists) {
+            final billData = billSnapshot.data()!;
+            final periodStart =
+                (billData['periodStart'] as Timestamp?)?.toDate();
+            final billingDate = periodStart != null
+                ? DateFormat('MMM yyyy').format(periodStart)
+                : 'N/A';
+            if (billingDate == _selectedMonth) {
+              filteredPayments.add({
+                ...payment,
+                'paymentId': paymentDoc.id,
+                'billingDate': billingDate,
+              });
+            }
+          }
+        }
       }
     }
+
+    if (_selectedMonth == 'Total Bill') {
+      // Aggregate total bill payments
+      final totalBillPayment = await _fetchTotalBillPayment(unpaidBillIds);
+      if (totalBillPayment != null) {
+        filteredPayments.add(totalBillPayment);
+      }
+    }
+
     return filteredPayments;
+  }
+
+  Future<Map<String, dynamic>?> _fetchTotalBillPayment(
+      Set<String> unpaidBillIds) async {
+    if (unpaidBillIds.isEmpty) return null;
+
+    final billsSnapshot = await FirebaseFirestore.instance
+        .collection('bills')
+        .where('residentId', isEqualTo: widget.residentId)
+        .where(FieldPath.documentId, whereIn: unpaidBillIds.toList())
+        .get();
+
+    final totalAmount = billsSnapshot.docs.fold<double>(
+        0.0, (sum, doc) => sum + (doc['currentMonthBill']?.toDouble() ?? 0.0));
+
+    final billingDates = billsSnapshot.docs
+        .map((doc) {
+          final periodStart = (doc['periodStart'] as Timestamp?)?.toDate();
+          return periodStart != null
+              ? DateFormat('MMM yyyy').format(periodStart)
+              : 'N/A';
+        })
+        .toSet()
+        .join(', ');
+
+    final paymentDocs = await FirebaseFirestore.instance
+        .collection('payments')
+        .where('residentId', isEqualTo: widget.residentId)
+        .where('billId', whereIn: unpaidBillIds.toList())
+        .get();
+
+    if (paymentDocs.docs.isNotEmpty) {
+      final payment = paymentDocs.docs.first.data();
+      return {
+        ...payment,
+        'paymentId': paymentDocs.docs.first.id,
+        'billId': 'Total Bill',
+        'billAmount': totalAmount,
+        'billingDate': billingDates,
+      };
+    }
+
+    return null;
   }
 
   Color _getStatusColor(String status) {
@@ -898,10 +1014,11 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
   DateTime? startDate;
   DateTime? endDate;
   String selectedPurok = 'PUROK 1';
+  double totalUnpaid = 0.0;
 
   double get total => previous + current;
-  double get totalBill => calculateTotalBill();
-  double get currentBill => (current / 10) * getRatePerCubicMeter();
+  double get currentBill => calculateCurrentBill();
+  double get totalBill => totalUnpaid + currentBill;
 
   Future<void> _selectDate(BuildContext context, bool isStartDate) async {
     final DateTime? picked = await showDatePicker(
@@ -922,7 +1039,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
     }
   }
 
-  double calculateTotalBill() {
+  double calculateCurrentBill() {
     double baseRate = getMinimumRate();
     double excess = current - 10 > 0 ? current - 10 : 0;
     return baseRate + (excess * getRatePerCubicMeter());
@@ -974,27 +1091,35 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
 
   Future<void> _loadPreviousBill() async {
     try {
-      print('Loading previous bill for resident: ${widget.residentId}');
+      print('Loading previous bills for resident: ${widget.residentId}');
       final snapshot = await FirebaseFirestore.instance
           .collection('bills')
           .where('residentId', isEqualTo: widget.residentId)
-          .orderBy('issueDate', descending: true)
-          .limit(1)
           .get();
+      final paidBillIds = await FirebaseFirestore.instance
+          .collection('payments')
+          .where('residentId', isEqualTo: widget.residentId)
+          .where('status', isEqualTo: 'approved')
+          .get()
+          .then((paymentSnapshot) => paymentSnapshot.docs
+              .map((doc) => doc['billId'] as String)
+              .toSet());
 
       print('Found ${snapshot.docs.length} previous bills');
 
       if (mounted) {
         setState(() {
-          if (snapshot.docs.isNotEmpty) {
-            final billData = snapshot.docs.first.data() as Map<String, dynamic>;
-            print('Latest bill data: $billData');
-            previous = billData['currentConsumedWaterMeter']?.toDouble() ?? 0.0;
-            print('Setting previous to: $previous');
-          } else {
-            print('No previous bills found, setting previous to 0');
-            previous = 0.0;
-          }
+          previous = snapshot.docs.fold<double>(
+              0.0,
+              (sum, doc) =>
+                  sum + (doc['currentConsumedWaterMeter']?.toDouble() ?? 0.0));
+          totalUnpaid = snapshot.docs
+              .where((doc) => !paidBillIds.contains(doc.id))
+              .fold<double>(
+                  0.0,
+                  (sum, doc) =>
+                      sum + (doc['currentMonthBill']?.toDouble() ?? 0.0));
+          print('Setting previous to: $previous, totalUnpaid to: $totalUnpaid');
           _loading = false;
         });
       }
@@ -1288,6 +1413,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                   'CURRENT BILL',
                   '₱${currentBill.toStringAsFixed(2)}',
                   valueColor: const Color(0xFF718096),
+                  isBold: true,
                 ),
                 _receiptRow(
                   'TOTAL BILL AMOUNT',
@@ -1381,8 +1507,8 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                               'currentConsumedWaterMeter': current,
                               'previousConsumedWaterMeter': previous,
                               'totalConsumed': total,
-                              'totalBill': totalBill,
                               'currentMonthBill': currentBill,
+                              'totalBill': totalBill,
                               'issueDate': FieldValue.serverTimestamp(),
                               'purok': selectedPurok,
                             };
