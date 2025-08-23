@@ -1,8 +1,11 @@
 // ignore_for_file: sort_child_properties_last, use_build_context_synchronously
 
+import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:animate_do/animate_do.dart';
 import 'resident_login.dart';
 
 class ResidentSignupPage extends StatefulWidget {
@@ -13,11 +16,7 @@ class ResidentSignupPage extends StatefulWidget {
 }
 
 class _ResidentSignupPageState extends State<ResidentSignupPage> {
-  bool _passwordVisible = false;
-  bool _confirmPasswordVisible = false;
-
   final _formKey = GlobalKey<FormState>();
-
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _contactController = TextEditingController();
@@ -25,23 +24,33 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
-
   bool _isLoading = false;
-
+  bool _passwordVisible = false;
+  bool _confirmPasswordVisible = false;
+  String? _errorMessage;
   final Color primaryColor = const Color(0xFF87CEEB);
-  final Color iconGray = Colors.grey;
 
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_passwordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Passwords do not match")),
-      );
+      setState(() {
+        _errorMessage = 'Passwords do not match';
+      });
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const CustomLoadingDialog(),
+    );
 
     try {
       UserCredential userCredential =
@@ -62,219 +71,563 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Registration successful!")),
+        const SnackBar(
+            content: Text('Registration successful! Please sign in.')),
       );
-      Navigator.pop(context);
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
+      );
     } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'An error occurred')),
-      );
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      setState(() {
+        _errorMessage = _getFriendlyErrorMessage(e.code);
+      });
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  InputDecoration _inputDecoration(String hint, IconData icon,
-      {Widget? suffix}) {
-    return InputDecoration(
-      prefixIcon: Icon(icon, color: iconGray),
-      hintText: hint,
-      border: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(12)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: primaryColor),
-        borderRadius: const BorderRadius.all(Radius.circular(12)),
-      ),
-      suffixIcon: suffix,
-    );
+  String _getFriendlyErrorMessage(String errorCode) {
+    switch (errorCode) {
+      case 'email-already-in-use':
+        return 'This email is already registered.';
+      case 'invalid-email':
+        return 'The email address is not valid.';
+      case 'weak-password':
+        return 'The password is too weak. Use at least 6 characters.';
+      case 'operation-not-allowed':
+        return 'Email sign-up is disabled.';
+      case 'too-many-requests':
+        return 'Too many attempts. Please try again later.';
+      default:
+        return 'An error occurred. Please try again.';
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final height = MediaQuery.of(context).size.height;
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Stack(
+    return WillPopScope(
+      onWillPop: () async {
+        print('Back button pressed, navigating to ResidentLoginPage');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
+        );
+        return false;
+      },
+      child: Scaffold(
+        body: Stack(
           children: [
-            // Scrollable content is the first child so it's painted underneath the back button.
-            SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minHeight: height - 48),
-                child: IntrinsicHeight(
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.person_add_alt,
-                            size: 80, color: primaryColor),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Resident Sign Up',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+            // Gradient Background
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFFE0F7FA), Colors.white],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+              ),
+            ),
+            // Back Button
+            Positioned(
+              top: 40,
+              left: 16,
+              child: FadeInLeft(
+                duration: const Duration(milliseconds: 300),
+                child: BackButtonStyled(),
+              ),
+            ),
+            // Main Content
+            Center(
+              child: SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Logo and Title
+                      FadeInDown(
+                        duration: const Duration(milliseconds: 400),
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.person_add_alt,
+                              size: 80,
+                              color: Color(0xFF0288D1),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Resident Sign Up',
+                              style: GoogleFonts.poppins(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            Text(
+                              'Create an account to report issues',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      // Error Message
+                      if (_errorMessage != null)
+                        FadeIn(
+                          duration: const Duration(milliseconds: 300),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade100,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              _errorMessage!,
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: Colors.red.shade800,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 32),
-                        TextFormField(
+                      if (_errorMessage != null) const SizedBox(height: 16),
+                      // Full Name Field
+                      FadeInUp(
+                        duration: const Duration(milliseconds: 400),
+                        delay: const Duration(milliseconds: 100),
+                        child: TextFormField(
                           controller: _nameController,
-                          cursorColor: Colors.black,
-                          decoration:
-                              _inputDecoration('Full Name', Icons.person_outline),
-                          validator: (val) =>
-                              val == null || val.isEmpty ? 'Enter name' : null,
+                          cursorColor: const Color(0xFF0288D1),
+                          decoration: InputDecoration(
+                            hintText: 'Full Name',
+                            hintStyle: GoogleFonts.poppins(color: Colors.grey),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Colors.grey),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFF87CEEB)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300),
+                            ),
+                            prefixIcon: const Icon(Icons.person_outline,
+                                color: Colors.grey),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter your full name';
+                            }
+                            return null;
+                          },
                         ),
-                        const SizedBox(height: 16),
-                        TextFormField(
+                      ),
+                      const SizedBox(height: 16),
+                      // Address Field
+                      FadeInUp(
+                        duration: const Duration(milliseconds: 400),
+                        delay: const Duration(milliseconds: 150),
+                        child: TextFormField(
                           controller: _addressController,
-                          cursorColor: Colors.black,
-                          decoration: _inputDecoration(
-                              'Address', Icons.location_on_outlined),
-                          validator: (val) =>
-                              val == null || val.isEmpty ? 'Enter address' : null,
+                          cursorColor: const Color(0xFF0288D1),
+                          decoration: InputDecoration(
+                            hintText: 'Address',
+                            hintStyle: GoogleFonts.poppins(color: Colors.grey),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Colors.grey),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFF87CEEB)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300),
+                            ),
+                            prefixIcon: const Icon(Icons.location_on_outlined,
+                                color: Colors.grey),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter your address';
+                            }
+                            return null;
+                          },
                         ),
-                        const SizedBox(height: 16),
-                        TextFormField(
+                      ),
+                      const SizedBox(height: 16),
+                      // Contact Number Field
+                      FadeInUp(
+                        duration: const Duration(milliseconds: 400),
+                        delay: const Duration(milliseconds: 200),
+                        child: TextFormField(
                           controller: _contactController,
+                          cursorColor: const Color(0xFF0288D1),
                           keyboardType: TextInputType.phone,
-                          cursorColor: Colors.black,
-                          decoration: _inputDecoration(
-                              'Contact Number', Icons.phone_outlined),
-                          validator: (val) => val == null || val.length < 7
-                              ? 'Enter valid contact number'
-                              : null,
+                          decoration: InputDecoration(
+                            hintText: 'Contact Number',
+                            hintStyle: GoogleFonts.poppins(color: Colors.grey),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Colors.grey),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFF87CEEB)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300),
+                            ),
+                            prefixIcon: const Icon(Icons.phone_outlined,
+                                color: Colors.grey),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter your contact number';
+                            }
+                            if (value.trim().length < 7) {
+                              return 'Please enter a valid contact number';
+                            }
+                            return null;
+                          },
                         ),
-                        const SizedBox(height: 16),
-                        TextFormField(
+                      ),
+                      const SizedBox(height: 16),
+                      // Email Field
+                      FadeInUp(
+                        duration: const Duration(milliseconds: 400),
+                        delay: const Duration(milliseconds: 250),
+                        child: TextFormField(
                           controller: _emailController,
+                          cursorColor: const Color(0xFF0288D1),
                           keyboardType: TextInputType.emailAddress,
-                          cursorColor: Colors.black,
-                          decoration: _inputDecoration(
-                              'Email Address', Icons.email_outlined),
-                          validator: (val) =>
-                              val == null || !val.contains('@')
-                                  ? 'Enter valid email'
-                                  : null,
+                          decoration: InputDecoration(
+                            hintText: 'Email Address',
+                            hintStyle: GoogleFonts.poppins(color: Colors.grey),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Colors.grey),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFF87CEEB)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300),
+                            ),
+                            prefixIcon: const Icon(Icons.email_outlined,
+                                color: Colors.grey),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter your email';
+                            }
+                            if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                                .hasMatch(value)) {
+                              return 'Please enter a valid email';
+                            }
+                            return null;
+                          },
                         ),
-                        const SizedBox(height: 16),
-                        TextFormField(
+                      ),
+                      const SizedBox(height: 16),
+                      // Password Field
+                      FadeInUp(
+                        duration: const Duration(milliseconds: 400),
+                        delay: const Duration(milliseconds: 300),
+                        child: TextFormField(
                           controller: _passwordController,
+                          cursorColor: const Color(0xFF0288D1),
                           obscureText: !_passwordVisible,
-                          cursorColor: Colors.black,
-                          decoration: _inputDecoration(
-                            'Password',
-                            Icons.lock_outline,
-                            suffix: IconButton(
+                          decoration: InputDecoration(
+                            hintText: 'Password',
+                            hintStyle: GoogleFonts.poppins(color: Colors.grey),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Colors.grey),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFF87CEEB)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300),
+                            ),
+                            prefixIcon: const Icon(Icons.lock_outline,
+                                color: Colors.grey),
+                            suffixIcon: IconButton(
                               icon: Icon(
                                 _passwordVisible
                                     ? Icons.visibility
                                     : Icons.visibility_off,
-                                color: iconGray,
+                                color: Colors.grey,
                               ),
-                              onPressed: () => setState(
-                                  () => _passwordVisible = !_passwordVisible),
+                              onPressed: () {
+                                setState(() {
+                                  _passwordVisible = !_passwordVisible;
+                                });
+                              },
                             ),
+                            filled: true,
+                            fillColor: Colors.white,
                           ),
-                          validator: (val) =>
-                              val == null || val.length < 6 ? 'Min 6 characters' : null,
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter your password';
+                            }
+                            if (value.length < 6) {
+                              return 'Password must be at least 6 characters';
+                            }
+                            return null;
+                          },
                         ),
-                        const SizedBox(height: 16),
-                        TextFormField(
+                      ),
+                      const SizedBox(height: 16),
+                      // Confirm Password Field
+                      FadeInUp(
+                        duration: const Duration(milliseconds: 400),
+                        delay: const Duration(milliseconds: 350),
+                        child: TextFormField(
                           controller: _confirmPasswordController,
+                          cursorColor: const Color(0xFF0288D1),
                           obscureText: !_confirmPasswordVisible,
-                          cursorColor: Colors.black,
-                          decoration: _inputDecoration(
-                            'Confirm Password',
-                            Icons.lock_outline,
-                            suffix: IconButton(
+                          decoration: InputDecoration(
+                            hintText: 'Confirm Password',
+                            hintStyle: GoogleFonts.poppins(color: Colors.grey),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Colors.grey),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  const BorderSide(color: Color(0xFF87CEEB)),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300),
+                            ),
+                            prefixIcon: const Icon(Icons.lock_outline,
+                                color: Colors.grey),
+                            suffixIcon: IconButton(
                               icon: Icon(
                                 _confirmPasswordVisible
                                     ? Icons.visibility
                                     : Icons.visibility_off,
-                                color: iconGray,
+                                color: Colors.grey,
                               ),
-                              onPressed: () => setState(
-                                  () => _confirmPasswordVisible = !_confirmPasswordVisible),
+                              onPressed: () {
+                                setState(() {
+                                  _confirmPasswordVisible =
+                                      !_confirmPasswordVisible;
+                                });
+                              },
                             ),
+                            filled: true,
+                            fillColor: Colors.white,
                           ),
+                          validator: (value) {
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please confirm your password';
+                            }
+                            return null;
+                          },
                         ),
-                        const SizedBox(height: 24),
-                        SizedBox(
+                      ),
+                      const SizedBox(height: 24),
+                      // Sign Up Button
+                      FadeInUp(
+                        duration: const Duration(milliseconds: 400),
+                        delay: const Duration(milliseconds: 400),
+                        child: SizedBox(
                           width: double.infinity,
                           child: ElevatedButton(
-                            child: _isLoading
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2, color: Colors.white),
-                                  )
-                                : const Text(
-                                    'SIGN UP',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
                             onPressed: _isLoading ? null : _signUp,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryColor,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12)),
+                              backgroundColor: const Color(0xFF0288D1),
+                              foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(vertical: 16),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 2,
+                              shadowColor: Colors.grey.withOpacity(0.5),
+                            ),
+                            child: Text(
+                              _isLoading ? 'Signing Up...' : 'Sign Up',
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        Row(
+                      ),
+                      const SizedBox(height: 16),
+                      // Sign In Link
+                      FadeInUp(
+                        duration: const Duration(milliseconds: 400),
+                        delay: const Duration(milliseconds: 450),
+                        child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Text('Have an account? '),
+                            Text(
+                              'Already have an account? ',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
                             GestureDetector(
                               onTap: () {
+                                print(
+                                    'Sign In link tapped, navigating to ResidentLoginPage');
                                 Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(
-                                      builder: (_) => const ResidentLoginPage()),
+                                      builder: (_) =>
+                                          const ResidentLoginPage()),
                                 );
                               },
                               child: Text(
-                                'Log In',
-                                style: TextStyle(
-                                  color: primaryColor,
-                                  fontWeight: FontWeight.bold,
+                                'Sign In',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: const Color(0xFF0288D1),
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                           ],
                         ),
-                        // Add a bit of bottom spacing so last fields aren't flush to bottom
-                        const SizedBox(height: 24),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ),
-
-            // Put the back button last so it is on top of the scrollable area and stays tappable.
-            Positioned(
-              top: 12,
-              left: 8,
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 22),
-                onPressed: () => Navigator.pop(context),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class CustomLoadingDialog extends StatelessWidget {
+  const CustomLoadingDialog({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Blur Background
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(
+                width: 160,
+                height: 160,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // Loading Animation
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Spin(
+                duration: const Duration(milliseconds: 800),
+                child: const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF87CEEB)),
+                  strokeWidth: 5,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Signing Up...',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class BackButtonStyled extends StatelessWidget {
+  const BackButtonStyled({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.arrow_back_ios_new_rounded,
+          size: 22, color: Colors.black87),
+      onPressed: () {
+        print('Back button pressed, navigating to ResidentLoginPage');
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
+        );
+      },
     );
   }
 }
