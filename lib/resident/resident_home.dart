@@ -116,6 +116,105 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     }
   }
 
+  Future<double> _fetchTotalWaterConsumption() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return 0.0;
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('bills')
+          .where('residentId', isEqualTo: user.uid)
+          .get();
+      final totalConsumption = snapshot.docs.fold<double>(
+        0.0,
+        (sum, doc) =>
+            sum + (doc.data()['currentConsumedWaterMeter']?.toDouble() ?? 0.0),
+      );
+      return totalConsumption;
+    } catch (e) {
+      print('Error fetching water consumption: $e');
+      return 0.0;
+    }
+  }
+
+  Future<double> _fetchThisMonthConsumption() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return 0.0;
+    try {
+      final now = DateTime.now();
+      final currentYear = now.year;
+      final currentMonth = now.month;
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('bills')
+          .where('residentId', isEqualTo: user.uid)
+          .get();
+
+      final totalConsumption = snapshot.docs.fold<double>(
+        0.0,
+        (sum, doc) {
+          final data = doc.data();
+          final periodStart = (data['periodStart'] as Timestamp?)?.toDate();
+          if (periodStart != null &&
+              periodStart.year == currentYear &&
+              periodStart.month == currentMonth) {
+            return sum + (data['currentConsumedWaterMeter']?.toDouble() ?? 0.0);
+          }
+          return sum;
+        },
+      );
+      return totalConsumption;
+    } catch (e) {
+      print('Error fetching this month\'s consumption: $e');
+      return 0.0;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchLastSixMonthsConsumption() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return [];
+    try {
+      final now = DateTime.now();
+      final months = <Map<String, dynamic>>[];
+      final dateFormat = DateFormat('MMM');
+
+      // Generate the last 6 months, including the current month
+      for (int i = 0; i < 6; i++) {
+        final targetDate = DateTime(now.year, now.month - i, 1);
+        final monthName = dateFormat.format(targetDate);
+        months.add(
+            {'month': targetDate, 'monthName': monthName, 'consumption': 0.0});
+      }
+
+      // Fetch bills
+      final snapshot = await FirebaseFirestore.instance
+          .collection('bills')
+          .where('residentId', isEqualTo: user.uid)
+          .get();
+
+      // Aggregate consumption by month
+      for (var doc in snapshot.docs) {
+        final data = doc.data();
+        final periodStart = (data['periodStart'] as Timestamp?)?.toDate();
+        if (periodStart != null) {
+          for (var month in months) {
+            if (periodStart.year == month['month'].year &&
+                periodStart.month == month['month'].month) {
+              month['consumption'] +=
+                  (data['currentConsumedWaterMeter']?.toDouble() ?? 0.0);
+            }
+          }
+        }
+      }
+
+      // Sort months in descending order (most recent first)
+      months.sort((a, b) => b['month'].compareTo(a['month']));
+      return months;
+    } catch (e) {
+      print('Error fetching last six months consumption: $e');
+      return [];
+    }
+  }
+
   void _logout() {
     showDialog(
       context: context,
@@ -299,7 +398,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     final bellBox =
         _notificationButtonKey.currentContext?.findRenderObject() as RenderBox?;
     final bellPosition = bellBox?.localToGlobal(Offset.zero);
-    final dropdownTop = (bellPosition?.dy ?? kToolbarHeight) - 15.0;
+    final dropdownTop = (bellPosition?.dy ?? kToolbarHeight) - 28.0;
     final dropdownLeft = bellPosition != null
         ? (bellPosition.dx - dropdownWidth + 48.0)
             .clamp(16.0, (screenWidth - dropdownWidth - 16.0).toDouble())
@@ -311,9 +410,9 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           setState(() {
             _selectedPage = ResidentPage.home;
           });
-          return false; // Prevent back navigation
+          return false;
         }
-        return false; // Prevent back navigation to login page
+        return false;
       },
       child: Scaffold(
         backgroundColor: Colors.grey.shade50,
@@ -674,8 +773,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           ),
           selected: isSelected,
           onTap: () {
-            Navigator.pop(context); // 👈 closes the drawer
-            _onSelectPage(page); // switch to the selected page
+            Navigator.pop(context);
+            _onSelectPage(page);
           },
         ),
       ),
@@ -820,13 +919,23 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                   Expanded(
                     child: ElasticIn(
                       duration: const Duration(milliseconds: 300),
-                      child: _buildStatCard(
-                        title: 'Today\'s Usage',
-                        value: '185 gal',
-                        description: '40% of daily avg',
-                        icon: Icons.water_drop,
-                        color: Colors.blue.shade700,
-                        progress: 0.4,
+                      child: FutureBuilder<double>(
+                        future: _fetchTotalWaterConsumption(),
+                        builder: (context, snapshot) {
+                          String value = 'Loading...';
+                          if (snapshot.hasData) {
+                            value = '${snapshot.data!.toStringAsFixed(2)} m³';
+                          } else if (snapshot.hasError) {
+                            value = 'Error';
+                          }
+                          return _buildStatCard(
+                            title: 'Water Consumption',
+                            value: value,
+                            description: 'Total usage recorded',
+                            icon: Icons.water_drop,
+                            color: Colors.blue.shade700,
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -835,12 +944,23 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                     child: ElasticIn(
                       duration: const Duration(milliseconds: 300),
                       delay: const Duration(milliseconds: 100),
-                      child: _buildStatCard(
-                        title: 'Water Status',
-                        value: '20.3 gal/min',
-                        description: 'Water Running',
-                        icon: Icons.speed,
-                        color: Colors.blue.shade700,
+                      child: FutureBuilder<double>(
+                        future: _fetchThisMonthConsumption(),
+                        builder: (context, snapshot) {
+                          String value = 'Loading...';
+                          if (snapshot.hasData) {
+                            value = '${snapshot.data!.toStringAsFixed(2)} m³';
+                          } else if (snapshot.hasError) {
+                            value = 'Error';
+                          }
+                          return _buildStatCard(
+                            title: 'This Month Consumption',
+                            value: value,
+                            description: 'This month\'s usage',
+                            icon: Icons.calendar_today,
+                            color: Colors.blue.shade700,
+                          );
+                        },
                       ),
                     ),
                   ),
@@ -850,7 +970,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
             const SizedBox(height: 16),
             FadeInUp(
               duration: const Duration(milliseconds: 300),
-              child: _buildWeeklyUsageChart(),
+              child: _buildMonthlyUsageChart(),
             ),
             const SizedBox(height: 16),
             FadeInUp(
@@ -940,7 +1060,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     required String description,
     required IconData icon,
     required Color color,
-    double? progress,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -955,9 +1074,9 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
+        padding: const EdgeInsets.all(12.0),
         child: Row(
-          mainAxisSize: MainAxisSize.max, // Maximize width
+          mainAxisSize: MainAxisSize.max,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             CircleAvatar(
@@ -965,198 +1084,205 @@ class _ResidentHomePageState extends State<ResidentHomePage>
               backgroundColor: color.withOpacity(0.1),
               child: Icon(icon, color: color, size: 24),
             ),
-            const SizedBox(width: 8),
-            Expanded(
+            const SizedBox(width: 12),
+            Flexible(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.max, // Maximize height
                 children: [
                   Text(
                     title,
                     style: GoogleFonts.poppins(
-                      fontSize: 14, // Increased for better visibility
+                      fontSize: 14,
                       fontWeight: FontWeight.w500,
                       color: Colors.grey.shade600,
                     ),
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
                   ),
                   Text(
                     value,
                     style: GoogleFonts.poppins(
-                      fontSize: 22, // Increased for better visibility
+                      fontSize: 20,
                       fontWeight: FontWeight.w700,
                       color: color,
                     ),
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
                   ),
                   Text(
                     description,
                     style: GoogleFonts.poppins(
-                      fontSize: 12, // Increased for better visibility
+                      fontSize: 11,
                       color: Colors.grey.shade600,
                     ),
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
                   ),
                 ],
               ),
             ),
-            if (progress != null)
-              SizedBox(
-                width: 40,
-                height: 40,
-                child: CircularProgressIndicator(
-                  value: progress,
-                  strokeWidth: 4,
-                  backgroundColor: color.withOpacity(0.1),
-                  valueColor: AlwaysStoppedAnimation<Color>(color),
-                ),
-              ),
-            const SizedBox(width: 8),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildWeeklyUsageChart() {
-    final List<BarChartGroupData> barGroups = [
-      _buildBarGroup(0, 150, 'Mon'),
-      _buildBarGroup(1, 200, 'Tue'),
-      _buildBarGroup(2, 180, 'Wed'),
-      _buildBarGroup(3, 220, 'Thu'),
-      _buildBarGroup(4, 190, 'Fri'),
-      _buildBarGroup(5, 160, 'Sat'),
-      _buildBarGroup(6, 170, 'Sun'),
-    ];
+  Widget _buildMonthlyUsageChart() {
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _fetchLastSixMonthsConsumption(),
+      builder: (context, snapshot) {
+        List<BarChartGroupData> barGroups = [];
+        double maxY = 250.0;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+        if (snapshot.hasData) {
+          final months = snapshot.data!;
+          maxY = months.fold(
+                  0.0,
+                  (max, month) =>
+                      month['consumption'] > max ? month['consumption'] : max) *
+              1.2;
+          maxY = maxY < 50 ? 50 : maxY; // Ensure minimum maxY for visibility
+          barGroups = months.asMap().entries.map((entry) {
+            final index = entry.key;
+            final month = entry.value;
+            return _buildBarGroup(
+                index, month['consumption'], month['monthName']);
+          }).toList();
+        } else if (snapshot.hasError) {
+          barGroups =
+              List.generate(6, (index) => _buildBarGroup(index, 0.0, 'Err'));
+        }
+
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Weekly Water Usage',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 200,
-              child: BarChart(
-                BarChartData(
-                  alignment: BarChartAlignment.spaceAround,
-                  maxY: 250,
-                  barTouchData: BarTouchData(
-                    enabled: true,
-                    touchTooltipData: BarTouchTooltipData(
-                      tooltipPadding: const EdgeInsets.all(8),
-                      tooltipMargin: 8,
-                      getTooltipColor: (_) => Colors.white,
-                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                        return BarTooltipItem(
-                          '${rod.toY.toStringAsFixed(0)} gal',
-                          GoogleFonts.poppins(
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        );
-                      },
-                    ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Monthly Water Consumption',
+                  style: GoogleFonts.poppins(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
                   ),
-                  titlesData: FlTitlesData(
-                    show: true,
-                    bottomTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 30,
-                        getTitlesWidget: (value, meta) {
-                          final days = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-                          return SideTitleWidget(
-                            axisSide: meta.axisSide,
-                            space: 4,
-                            child: Text(
-                              days[value.toInt()],
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: Colors.grey[800],
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    leftTitles: AxisTitles(
-                      sideTitles: SideTitles(
-                        showTitles: true,
-                        reservedSize: 40,
-                        interval: 50,
-                        getTitlesWidget: (value, meta) {
-                          return SideTitleWidget(
-                            axisSide: meta.axisSide,
-                            space: 4,
-                            child: Text(
-                              value.toInt().toString(),
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    topTitles: AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                    rightTitles: AxisTitles(
-                      sideTitles: SideTitles(showTitles: false),
-                    ),
-                  ),
-                  gridData: FlGridData(
-                    show: true,
-                    drawVerticalLine: false,
-                    getDrawingHorizontalLine: (value) {
-                      return FlLine(
-                        color: Colors.grey.shade200,
-                        strokeWidth: 1,
-                      );
-                    },
-                  ),
-                  borderData: FlBorderData(show: false),
-                  barGroups: barGroups,
-                  groupsSpace: 8,
                 ),
-              ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 200,
+                  child: BarChart(
+                    BarChartData(
+                      alignment: BarChartAlignment.spaceAround,
+                      maxY: maxY,
+                      barTouchData: BarTouchData(
+                        enabled: true,
+                        touchTooltipData: BarTouchTooltipData(
+                          tooltipPadding: const EdgeInsets.all(8),
+                          tooltipMargin: 8,
+                          getTooltipColor: (_) => Colors.white,
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                            return BarTooltipItem(
+                              '${rod.toY.toStringAsFixed(0)} m³',
+                              GoogleFonts.poppins(
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      titlesData: FlTitlesData(
+                        show: true,
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 30,
+                            getTitlesWidget: (value, meta) {
+                              if (!snapshot.hasData ||
+                                  value >= snapshot.data!.length) {
+                                return const SizedBox();
+                              }
+                              final monthName =
+                                  snapshot.data![value.toInt()]['monthName'];
+                              return SideTitleWidget(
+                                axisSide: meta.axisSide,
+                                space: 4,
+                                child: Text(
+                                  monthName,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    color: Colors.grey[800],
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 40,
+                            interval: maxY / 5,
+                            getTitlesWidget: (value, meta) {
+                              return SideTitleWidget(
+                                axisSide: meta.axisSide,
+                                space: 4,
+                                child: Text(
+                                  value.toInt().toString(),
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                        rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false)),
+                      ),
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        getDrawingHorizontalLine: (value) {
+                          return FlLine(
+                            color: Colors.grey.shade200,
+                            strokeWidth: 1,
+                          );
+                        },
+                      ),
+                      borderData: FlBorderData(show: false),
+                      barGroups: barGroups,
+                      groupsSpace: 8,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
-  BarChartGroupData _buildBarGroup(int x, double y, String day) {
+  BarChartGroupData _buildBarGroup(int x, double y, String month) {
     return BarChartGroupData(
       x: x,
       barRods: [

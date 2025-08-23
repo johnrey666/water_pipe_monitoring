@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'view_schedule_page.dart';
 import 'view_reports_page.dart';
 import 'geographic_mapping_page.dart';
@@ -26,13 +27,16 @@ class _PlumberHomePageState extends State<PlumberHomePage>
   String _plumberName = 'Plumber User';
   DateTime _selectedDay = DateTime.now();
   DateTime _focusedDay = DateTime.now();
+  DateTime? _rangeStart;
+  DateTime? _rangeEnd;
   Map<DateTime, List<Map<String, dynamic>>> _reportEvents = {};
+  Set<String> _selectedStatuses = {'Monitoring', 'Unfixed Reports', 'Fixed'};
+  CalendarFormat _calendarFormat = CalendarFormat.month;
 
   @override
   void initState() {
     super.initState();
     _fetchPlumberName();
-    _fetchReports();
   }
 
   Future<void> _fetchPlumberName() async {
@@ -57,61 +61,9 @@ class _PlumberHomePageState extends State<PlumberHomePage>
     }
   }
 
-  Future<void> _fetchReports() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print('No user authenticated in _fetchReports, staying on current page');
-      return;
-    }
-    try {
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('reports')
-          .where('assignedPlumber', isEqualTo: user.uid)
-          .get();
-      setState(() {
-        _reportEvents = {};
-        for (var doc in querySnapshot.docs) {
-          final data = doc.data();
-          final timestamp = data['dateTime'] as Timestamp?;
-          if (timestamp == null) {
-            print('Skipping report ${doc.id}: Missing dateTime');
-            continue;
-          }
-          try {
-            final date = timestamp.toDate();
-            // Normalize to UTC+8 to match sample document
-            final utcDate = date.toUtc().add(const Duration(hours: 8));
-            print('Report ${doc.id}: dateTime = $date, UTC+8 = $utcDate');
-            final dateKey = DateTime(utcDate.year, utcDate.month, utcDate.day);
-            _reportEvents[dateKey] = _reportEvents[dateKey] ?? [];
-            _reportEvents[dateKey]!.add({
-              'id': doc.id,
-              'title': data['issueDescription'] ?? 'Untitled Report',
-              'time': DateFormat.jm().format(date),
-              'fullName': data['fullName'] ?? 'Unknown',
-              'status': data['status'] ?? 'Unknown',
-            });
-          } catch (e) {
-            print('Error processing report ${doc.id}: $e');
-          }
-        }
-        print(
-            'Fetched report events: ${_reportEvents.length} days with events');
-        _reportEvents.forEach((key, value) {
-          print('Date: $key, Events: ${value.map((e) => e['id']).toList()}');
-        });
-      });
-    } catch (e) {
-      print('Error fetching reports: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading reports: $e')),
-      );
-    }
-  }
-
   void _onSelectPage(PlumberPage page) {
     print('Navigating to page: $page');
-    Navigator.of(context).pop(); // Close the drawer
+    Navigator.of(context).pop();
     setState(() {
       _selectedPage = page;
       _initialReportId = null;
@@ -187,10 +139,10 @@ class _PlumberHomePageState extends State<PlumberHomePage>
             _selectedPage = PlumberPage.schedule;
             _initialReportId = null;
           });
-          return false; // Prevent back navigation to LandingPage or PlumberLoginPage
+          return false;
         }
         print('Back button pressed on schedule page, staying on dashboard');
-        return false; // Prevent back navigation to LandingPage or PlumberLoginPage
+        return false;
       },
       child: Scaffold(
         backgroundColor: Colors.grey.shade50,
@@ -395,7 +347,6 @@ class _PlumberHomePageState extends State<PlumberHomePage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Welcome Card
             FadeInDown(
               duration: const Duration(milliseconds: 300),
               child: Container(
@@ -454,7 +405,6 @@ class _PlumberHomePageState extends State<PlumberHomePage>
               ),
             ),
             const SizedBox(height: 16),
-            // Summary Cards
             Row(
               children: [
                 Expanded(
@@ -533,7 +483,6 @@ class _PlumberHomePageState extends State<PlumberHomePage>
               ],
             ),
             const SizedBox(height: 16),
-            // Calendar
             FadeInUp(
               duration: const Duration(milliseconds: 300),
               child: Container(
@@ -548,108 +497,518 @@ class _PlumberHomePageState extends State<PlumberHomePage>
                     ),
                   ],
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Text(
-                        'Your Schedule',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                child: StreamBuilder<QuerySnapshot>(
+                  stream: FirebaseFirestore.instance
+                      .collection('reports')
+                      .where('assignedPlumber',
+                          isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          'Error loading reports: ${snapshot.error}',
+                          style: GoogleFonts.poppins(
+                              fontSize: 14, color: Colors.red.shade600),
                         ),
-                      ),
-                    ),
-                    TableCalendar(
-                      firstDay: DateTime.utc(2020, 1, 1),
-                      lastDay: DateTime.utc(2030, 12, 31),
-                      focusedDay: _focusedDay,
-                      selectedDayPredicate: (day) =>
-                          isSameDay(day, _selectedDay),
-                      calendarFormat: CalendarFormat.month,
-                      availableCalendarFormats: const {
-                        CalendarFormat.month: 'Month'
-                      },
-                      eventLoader: (day) {
-                        final dateKey = DateTime(day.year, day.month, day.day);
-                        return _reportEvents[dateKey] ?? [];
-                      },
-                      onDaySelected: (selectedDay, focusedDay) {
-                        setState(() {
-                          _selectedDay = selectedDay;
-                          _focusedDay = focusedDay;
+                      );
+                    }
+                    if (!snapshot.hasData) {
+                      return const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    _reportEvents = {};
+                    for (var doc in snapshot.data!.docs) {
+                      final data = doc.data() as Map<String, dynamic>;
+                      final timestamp = data['dateTime'] as Timestamp?;
+                      if (timestamp == null) {
+                        print('Skipping report ${doc.id}: Missing dateTime');
+                        continue;
+                      }
+                      try {
+                        final date = timestamp.toDate();
+                        final utcDate =
+                            date.toUtc().add(const Duration(hours: 8));
+                        final dateKey =
+                            DateTime(utcDate.year, utcDate.month, utcDate.day);
+                        _reportEvents[dateKey] = _reportEvents[dateKey] ?? [];
+                        _reportEvents[dateKey]!.add({
+                          'id': doc.id,
+                          'title':
+                              data['issueDescription'] ?? 'Untitled Report',
+                          'time': DateFormat.jm().format(date),
+                          'fullName': data['fullName'] ?? 'Unknown',
+                          'status': data['status'] ?? 'Unknown',
+                          'priority': data['priority'] ?? 'medium',
                         });
-                      },
-                      calendarStyle: CalendarStyle(
-                        todayDecoration: BoxDecoration(
-                          color: Colors.blue.shade100,
-                          shape: BoxShape.circle,
+                      } catch (e) {
+                        print('Error processing report ${doc.id}: $e');
+                      }
+                    }
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF87CEEB), Color(0xFFE0F7FA)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              DateFormat.yMMMM().format(_focusedDay),
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ).animate().fadeIn(
+                              duration: const Duration(milliseconds: 300)),
                         ),
-                        selectedDecoration: BoxDecoration(
-                          color: Colors.blue.shade600,
-                          shape: BoxShape.circle,
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Wrap(
+                            spacing: 8,
+                            children: [
+                              FilterChip(
+                                label: Text('Monitoring',
+                                    style: GoogleFonts.poppins(fontSize: 12)),
+                                selected:
+                                    _selectedStatuses.contains('Monitoring'),
+                                selectedColor:
+                                    Colors.lightBlue.withOpacity(0.2),
+                                checkmarkColor: Colors.lightBlue,
+                                onSelected: (selected) {
+                                  setState(() {
+                                    if (selected) {
+                                      _selectedStatuses.add('Monitoring');
+                                    } else {
+                                      _selectedStatuses.remove('Monitoring');
+                                    }
+                                  });
+                                },
+                              ),
+                              FilterChip(
+                                label: Text('Unfixed',
+                                    style: GoogleFonts.poppins(fontSize: 12)),
+                                selected: _selectedStatuses
+                                    .contains('Unfixed Reports'),
+                                selectedColor:
+                                    Colors.orange.shade600.withOpacity(0.2),
+                                checkmarkColor: Colors.orange.shade600,
+                                onSelected: (selected) {
+                                  setState(() {
+                                    if (selected) {
+                                      _selectedStatuses.add('Unfixed Reports');
+                                    } else {
+                                      _selectedStatuses
+                                          .remove('Unfixed Reports');
+                                    }
+                                  });
+                                },
+                              ),
+                              FilterChip(
+                                label: Text('Fixed',
+                                    style: GoogleFonts.poppins(fontSize: 12)),
+                                selected: _selectedStatuses.contains('Fixed'),
+                                selectedColor:
+                                    Colors.green.shade600.withOpacity(0.2),
+                                checkmarkColor: Colors.green.shade600,
+                                onSelected: (selected) {
+                                  setState(() {
+                                    if (selected) {
+                                      _selectedStatuses.add('Fixed');
+                                    } else {
+                                      _selectedStatuses.remove('Fixed');
+                                    }
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                      calendarBuilders: CalendarBuilders(
-                        markerBuilder: (context, date, events) {
-                          if (events.isEmpty) return null;
-                          return Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: events.map((event) {
-                              final status = event is Map
-                                  ? event['status'] ?? 'Unknown'
-                                  : 'Unknown';
-                              final color = status == 'Monitoring'
-                                  ? Colors.lightBlue
-                                  : status == 'Unfixed Reports'
-                                      ? Colors.orange.shade600
-                                      : status == 'Fixed'
-                                          ? Colors.green.shade600
-                                          : Colors.grey.shade600;
-                              return Container(
-                                margin:
-                                    const EdgeInsets.symmetric(horizontal: 1.5),
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: color,
-                                  shape: BoxShape.circle,
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              DropdownButton<CalendarFormat>(
+                                value: _calendarFormat,
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: CalendarFormat.month,
+                                    child: Text('Month',
+                                        style: TextStyle(fontSize: 12)),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: CalendarFormat.twoWeeks,
+                                    child: Text('2 Weeks',
+                                        style: TextStyle(fontSize: 12)),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: CalendarFormat.week,
+                                    child: Text('Week',
+                                        style: TextStyle(fontSize: 12)),
+                                  ),
+                                ],
+                                onChanged: (value) {
+                                  if (value != null) {
+                                    setState(() {
+                                      _calendarFormat = value;
+                                    });
+                                  }
+                                },
+                                underline: const SizedBox(),
+                                icon: Icon(Icons.arrow_drop_down,
+                                    color: Colors.blue.shade700),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        InteractiveViewer(
+                          minScale: 0.5,
+                          maxScale: 2.0,
+                          child: TableCalendar(
+                            firstDay: DateTime.utc(2020, 1, 1),
+                            lastDay: DateTime.utc(2030, 12, 31),
+                            focusedDay: _focusedDay,
+                            selectedDayPredicate: (day) =>
+                                isSameDay(day, _selectedDay),
+                            rangeStartDay: _rangeStart,
+                            rangeEndDay: _rangeEnd,
+                            calendarFormat: _calendarFormat,
+                            rangeSelectionMode: RangeSelectionMode.toggledOn,
+                            eventLoader: (day) {
+                              final dateKey =
+                                  DateTime(day.year, day.month, day.day);
+                              return _reportEvents[dateKey]
+                                      ?.where((event) => _selectedStatuses
+                                          .contains(event['status']))
+                                      .toList() ??
+                                  [];
+                            },
+                            onDaySelected: (selectedDay, focusedDay) {
+                              setState(() {
+                                _selectedDay = selectedDay;
+                                _focusedDay = focusedDay;
+                                _rangeStart = null;
+                                _rangeEnd = null;
+                              });
+                            },
+                            onRangeSelected: (start, end, focusedDay) {
+                              setState(() {
+                                _selectedDay = start ?? _selectedDay;
+                                _rangeStart = start;
+                                _rangeEnd = end;
+                                _focusedDay = focusedDay;
+                              });
+                            },
+                            onPageChanged: (focusedDay) {
+                              setState(() {
+                                _focusedDay = focusedDay;
+                              });
+                            },
+                            calendarStyle: CalendarStyle(
+                              defaultTextStyle: GoogleFonts.poppins(
+                                  fontSize: 14, color: Colors.black87),
+                              weekendTextStyle: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87),
+                              outsideTextStyle: GoogleFonts.poppins(
+                                  fontSize: 14, color: Colors.grey.shade400),
+                              todayDecoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF87CEEB),
+                                    Color(0xFFE0F7FA)
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
                                 ),
-                              );
-                            }).toList(),
-                          );
-                        },
-                      ),
-                      headerStyle: HeaderStyle(
-                        titleTextStyle: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: Colors.blue.shade700, width: 2),
+                              ),
+                              selectedDecoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [
+                                    Color(0xFF87CEEB),
+                                    Color(0xFFE0F7FA)
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              rangeStartDecoration: BoxDecoration(
+                                color: Colors.blue.shade300,
+                                shape: BoxShape.circle,
+                              ),
+                              rangeEndDecoration: BoxDecoration(
+                                color: Colors.blue.shade300,
+                                shape: BoxShape.circle,
+                              ),
+                              rangeHighlightColor:
+                                  Colors.blue.shade100.withOpacity(0.3),
+                              defaultDecoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                    color: Colors.grey.shade300, width: 0.5),
+                              ),
+                              cellMargin: const EdgeInsets.all(4),
+                              tableBorder: TableBorder.all(
+                                  color: Colors.grey.shade200, width: 0.5),
+                            ),
+                            calendarBuilders: CalendarBuilders(
+                              markerBuilder: (context, date, events) {
+                                if (events.isEmpty) return null;
+                                if (events.length > 5) {
+                                  return Positioned(
+                                    bottom: 1,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.shade700,
+                                        shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.2),
+                                            blurRadius: 4,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        '${events.length}',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 10,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ).animate().pulse(
+                                        duration:
+                                            const Duration(milliseconds: 500)),
+                                  );
+                                }
+                                return Positioned(
+                                  bottom: 1,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: events.map((event) {
+                                      if (event is! Map<String, dynamic>) {
+                                        return Container(
+                                          margin: const EdgeInsets.symmetric(
+                                              horizontal: 2),
+                                          width: 12,
+                                          height: 12,
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade600,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        );
+                                      }
+                                      final status =
+                                          event['status'] as String? ??
+                                              'Unknown';
+                                      final priority =
+                                          event['priority'] as String? ??
+                                              'medium';
+                                      final color = status == 'Monitoring'
+                                          ? Colors.lightBlue
+                                          : status == 'Unfixed Reports'
+                                              ? Colors.orange.shade600
+                                              : status == 'Fixed'
+                                                  ? Colors.green.shade600
+                                                  : Colors.grey.shade600;
+                                      final icon = status == 'Monitoring'
+                                          ? Icons.circle
+                                          : status == 'Unfixed Reports'
+                                              ? Icons.warning
+                                              : Icons.check;
+                                      return GestureDetector(
+                                        onLongPress: () {
+                                          final statusCounts = {
+                                            'Monitoring': 0,
+                                            'Unfixed Reports': 0,
+                                            'Fixed': 0,
+                                            'Unknown': 0,
+                                          };
+                                          for (var e in events) {
+                                            if (e is Map<String, dynamic>) {
+                                              statusCounts[
+                                                      (e['status'] as String? ??
+                                                          'Unknown')] =
+                                                  (statusCounts[(e['status']
+                                                                  as String? ??
+                                                              'Unknown')] ??
+                                                          0) +
+                                                      1;
+                                            } else {
+                                              statusCounts['Unknown'] =
+                                                  (statusCounts['Unknown'] ??
+                                                          0) +
+                                                      1;
+                                            }
+                                          }
+                                          final tooltipText = statusCounts
+                                              .entries
+                                              .where((e) => e.value > 0)
+                                              .map((e) => '${e.value} ${e.key}')
+                                              .join(', ');
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'Events on ${DateFormat.yMMMd().format(date)}: $tooltipText',
+                                                style: GoogleFonts.poppins(
+                                                    fontSize: 14),
+                                              ),
+                                              duration:
+                                                  const Duration(seconds: 3),
+                                            ),
+                                          );
+                                        },
+                                        child: Container(
+                                          margin: const EdgeInsets.symmetric(
+                                              horizontal: 2),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            border: priority == 'high'
+                                                ? Border.all(
+                                                    color: Colors.red.shade600,
+                                                    width: 1)
+                                                : null,
+                                          ),
+                                          child: Icon(
+                                            icon,
+                                            size: 12,
+                                            color: color,
+                                          ).animate(
+                                            effects: status == 'Unfixed Reports'
+                                                ? []
+                                                : [],
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+                                );
+                              },
+                              dowBuilder: (context, day) {
+                                return LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final text = DateFormat.E()
+                                        .format(day)
+                                        .substring(0, 3);
+                                    final double underlineWidth =
+                                        (constraints.maxWidth * 0.8)
+                                            .clamp(10, 20)
+                                            .toDouble();
+                                    return ClipRect(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            text,
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.grey[800],
+                                            ),
+                                            overflow: TextOverflow.clip,
+                                            maxLines: 1,
+                                          ),
+                                          Container(
+                                            height: 2,
+                                            width: underlineWidth,
+                                            decoration: const BoxDecoration(
+                                              gradient: LinearGradient(
+                                                colors: [
+                                                  Color(0xFF87CEEB),
+                                                  Color(0xFFE0F7FA)
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                              defaultBuilder: (context, day, focusedDay) {
+                                final hasEvents = _reportEvents[DateTime(
+                                            day.year, day.month, day.day)]
+                                        ?.isNotEmpty ??
+                                    false;
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  margin: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: Colors.grey.shade300,
+                                        width: 0.5),
+                                  ),
+                                  child: Transform.scale(
+                                    scale: hasEvents ? 1.1 : 1.0,
+                                    child: Center(
+                                      child: Text(
+                                        '${day.day}',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            headerVisible: false,
+                          ).animate().fadeIn(
+                              duration: const Duration(milliseconds: 500)),
                         ),
-                        formatButtonVisible: false,
-                        leftChevronIcon: Icon(Icons.chevron_left,
-                            color: Colors.blue.shade700, size: 20),
-                        rightChevronIcon: Icon(Icons.chevron_right,
-                            color: Colors.blue.shade700, size: 20),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(
-                        'Reports for ${DateFormat.yMMMd().format(_selectedDay)}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                        const SizedBox(height: 12),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            _rangeStart != null && _rangeEnd != null
+                                ? 'Reports from ${DateFormat.yMMMd().format(_rangeStart!)} to ${DateFormat.yMMMd().format(_rangeEnd!)}'
+                                : 'Reports for ${DateFormat.yMMMd().format(_selectedDay)}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
                         ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ),
-                    _buildEventList(),
-                  ],
+                        _buildEventList(),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -719,16 +1078,33 @@ class _PlumberHomePageState extends State<PlumberHomePage>
   }
 
   Widget _buildEventList() {
-    final dateKey =
-        DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
-    final events =
-        _reportEvents.containsKey(dateKey) ? _reportEvents[dateKey]! : [];
+    List<Map<String, dynamic>> events = [];
+    if (_rangeStart != null && _rangeEnd != null) {
+      final days = _rangeEnd!.difference(_rangeStart!).inDays + 1;
+      for (int i = 0; i < days; i++) {
+        final date = _rangeStart!.add(Duration(days: i));
+        final dateKey = DateTime(date.year, date.month, date.day);
+        if (_reportEvents.containsKey(dateKey)) {
+          events.addAll(_reportEvents[dateKey]!
+              .where((e) => _selectedStatuses.contains(e['status']))
+              .toList());
+        }
+      }
+    } else {
+      final dateKey =
+          DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
+      events = _reportEvents.containsKey(dateKey)
+          ? _reportEvents[dateKey]!
+              .where((e) => _selectedStatuses.contains(e['status']))
+              .toList()
+          : [];
+    }
     if (events.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(12),
         child: Center(
           child: Text(
-            'No reports for this day',
+            'No reports for this selection',
             style: GoogleFonts.poppins(
               fontSize: 14,
               color: Colors.grey.shade600,
@@ -747,7 +1123,8 @@ class _PlumberHomePageState extends State<PlumberHomePage>
         itemCount: events.length,
         itemBuilder: (context, index) {
           final event = events[index];
-          final status = event['status'] ?? 'Unknown';
+          final status = event['status'] as String? ?? 'Unknown';
+          final priority = event['priority'] as String? ?? 'medium';
           final color = status == 'Monitoring'
               ? Colors.lightBlue
               : status == 'Unfixed Reports'
@@ -764,7 +1141,15 @@ class _PlumberHomePageState extends State<PlumberHomePage>
               leading: CircleAvatar(
                 radius: 18,
                 backgroundColor: color.withOpacity(0.1),
-                child: Icon(Icons.report, color: color, size: 22),
+                child: Icon(
+                  status == 'Monitoring'
+                      ? Icons.circle
+                      : status == 'Unfixed Reports'
+                          ? Icons.warning
+                          : Icons.check,
+                  color: color,
+                  size: 22,
+                ),
               ),
               title: Text(
                 '${event['fullName']}: ${event['title']}',
@@ -772,12 +1157,15 @@ class _PlumberHomePageState extends State<PlumberHomePage>
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: Colors.black87,
+                  decoration:
+                      priority == 'high' ? TextDecoration.underline : null,
+                  decorationColor: Colors.red.shade600,
                 ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),
               subtitle: Text(
-                '${event['time']} • $status',
+                '${event['time']} • $status • Priority: $priority',
                 style: GoogleFonts.poppins(
                   fontSize: 12,
                   color: Colors.grey.shade600,
