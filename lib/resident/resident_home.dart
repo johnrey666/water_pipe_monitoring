@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:animate_do/animate_do.dart';
+import 'package:intl/intl.dart';
 import 'auth/resident_login.dart';
 import 'report_problem_page.dart';
 import 'view_billing_page.dart';
@@ -19,28 +21,28 @@ class ResidentialPortalApp extends StatelessWidget {
     return MaterialApp(
       title: 'Residential Portal',
       theme: ThemeData(
-        primarySwatch: Colors.teal,
+        primarySwatch: Colors.blue,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.teal,
-          primary: const Color(0xFF00695C),
+          seedColor: const Color(0xFF87CEEB),
+          primary: const Color(0xFF0288D1),
           secondary: const Color(0xFF4CAF50),
         ),
-        scaffoldBackgroundColor: const Color(0xFFF5F5F5),
+        scaffoldBackgroundColor: Colors.grey.shade50,
         cardTheme: CardTheme(
-          elevation: 3,
+          elevation: 4,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(12),
           ),
           color: Colors.white,
           margin: const EdgeInsets.all(8),
         ),
-        appBarTheme: const AppBarTheme(
+        appBarTheme: AppBarTheme(
           centerTitle: true,
-          elevation: 3,
+          elevation: 2,
           backgroundColor: Colors.white,
-          iconTheme: IconThemeData(color: Colors.black87),
-          titleTextStyle: TextStyle(
-            fontSize: 24,
+          iconTheme: const IconThemeData(color: Colors.black87),
+          titleTextStyle: GoogleFonts.poppins(
+            fontSize: 18,
             fontWeight: FontWeight.w600,
             color: Colors.black87,
           ),
@@ -48,21 +50,21 @@ class ResidentialPortalApp extends StatelessWidget {
         textTheme: GoogleFonts.poppinsTextTheme(
           const TextTheme(
             titleLarge: TextStyle(
-              fontSize: 24,
+              fontSize: 18,
               fontWeight: FontWeight.w600,
               color: Colors.black87,
             ),
             titleMedium: TextStyle(
-              fontSize: 20,
+              fontSize: 16,
               fontWeight: FontWeight.w500,
               color: Colors.black87,
             ),
             bodyLarge: TextStyle(
-              fontSize: 16,
+              fontSize: 14,
               color: Colors.black87,
             ),
             bodyMedium: TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               color: Colors.black54,
             ),
           ),
@@ -82,16 +84,92 @@ class ResidentHomePage extends StatefulWidget {
   State<ResidentHomePage> createState() => _ResidentHomePageState();
 }
 
-class _ResidentHomePageState extends State<ResidentHomePage> {
+class _ResidentHomePageState extends State<ResidentHomePage>
+    with TickerProviderStateMixin {
   ResidentPage _selectedPage = ResidentPage.home;
   final GlobalKey _notificationButtonKey = GlobalKey();
+  bool _isDropdownOpen = false;
+  String _residentName = 'Resident';
 
-  void _logout(BuildContext context) async {
-    await FirebaseAuth.instance.signOut();
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
-      (route) => false,
+  @override
+  void initState() {
+    super.initState();
+    _fetchResidentName();
+  }
+
+  Future<void> _fetchResidentName() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final data = doc.data();
+      if (data != null && data['fullName'] != null) {
+        setState(() {
+          _residentName = data['fullName'];
+        });
+      }
+    } catch (e) {
+      print('Error fetching resident name: $e');
+    }
+  }
+
+  void _logout() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Confirm Logout',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        content: Text(
+          'Are you sure you want to log out?',
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            color: Colors.grey.shade600,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: Colors.blue.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (!mounted) return;
+              Navigator.of(context).pop();
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
+                (route) => false,
+              );
+            },
+            child: Text(
+              'Logout',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: Colors.red.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -113,7 +191,6 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
   }
 
   void _onSelectPage(ResidentPage page) {
-    Navigator.of(context).pop();
     setState(() {
       _selectedPage = page;
     });
@@ -129,7 +206,6 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
     print('Current user UID: ${user.uid}');
 
     try {
-      // Fetch unread notifications
       final unreadSnapshot = await FirebaseFirestore.instance
           .collection('notifications')
           .where('residentId', isEqualTo: user.uid)
@@ -138,7 +214,6 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
           .limit(10)
           .get();
 
-      // Fetch read notifications
       final readSnapshot = await FirebaseFirestore.instance
           .collection('notifications')
           .where('residentId', isEqualTo: user.uid)
@@ -185,6 +260,9 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
       return {'unread': unreadNotifications, 'read': readNotifications};
     } catch (e) {
       print('Error fetching notifications: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error loading notifications: $e')),
+      );
       return {'unread': [], 'read': []};
     }
   }
@@ -197,414 +275,369 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
           .doc(notificationId)
           .update({'read': true});
       print('Notification $notificationId marked as read');
+      setState(() {
+        _isDropdownOpen = false;
+      });
     } catch (e) {
       print('Error marking notification as read: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error marking notification as read: $e')),
+      );
     }
   }
 
-  void _showNotificationsDropdown(BuildContext context) async {
-    print('Attempting to show notification dropdown');
-    final notifications = await _fetchNotifications();
-    final unreadNotifications = notifications['unread']!;
-    final readNotifications = notifications['read']!;
-    print(
-        'Notifications fetched: ${unreadNotifications.length} unread, ${readNotifications.length} read');
-
-    final RenderBox? button =
-        _notificationButtonKey.currentContext?.findRenderObject() as RenderBox?;
-    if (button == null) {
-      print('Notification button RenderBox not found');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Unable to show notifications',
-              style: GoogleFonts.poppins(fontSize: 14)),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-      return;
-    }
-
-    final Offset position = button.localToGlobal(Offset.zero);
-    print('Button position: $position, size: ${button.size}');
-
-    // Mark all unread notifications as read
-    for (var notification in unreadNotifications) {
-      if (notification['id'] != null) {
-        await _markNotificationAsRead(notification['id']);
-      }
-    }
-
-    // Explicitly type the items list
-    final List<PopupMenuEntry<dynamic>> menuItems = [
-      // Unread Notifications Section
-      PopupMenuItem<dynamic>(
-        enabled: false,
-        child: Text(
-          'Unread Notifications',
-          style: GoogleFonts.poppins(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-          ),
-        ),
-      ),
-      if (unreadNotifications.isEmpty)
-        PopupMenuItem<dynamic>(
-          enabled: false,
-          child: Text(
-            'No unread notifications',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: Colors.grey[600],
-            ),
-          ),
-        ),
-      ...unreadNotifications.map((notification) {
-        if (notification['type'] == 'report_status') {
-          return PopupMenuItem<dynamic>(
-            enabled: false,
-            child: Row(
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  color: Colors.green,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    notification['message'] ?? 'Issue fixed',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        } else {
-          final status =
-              notification['status'] == 'approved' ? 'Successful' : 'Declined';
-          final month = notification['month'] ?? 'Unknown';
-          final amount = notification['amount']?.toStringAsFixed(2) ?? '0.00';
-          return PopupMenuItem<dynamic>(
-            enabled: false,
-            child: Row(
-              children: [
-                Icon(
-                  notification['status'] == 'approved'
-                      ? Icons.check_circle
-                      : Icons.cancel,
-                  color: notification['status'] == 'approved'
-                      ? Colors.green
-                      : Colors.red,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Payment of ₱$amount for $month is $status',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-      }).toList(),
-      // Divider between sections
-      const PopupMenuDivider(),
-      // Read Notifications Section
-      PopupMenuItem<dynamic>(
-        enabled: false,
-        child: Text(
-          'Read Notifications',
-          style: GoogleFonts.poppins(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-          ),
-        ),
-      ),
-      if (readNotifications.isEmpty)
-        PopupMenuItem<dynamic>(
-          enabled: false,
-          child: Text(
-            'No read notifications',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              color: Colors.grey[600],
-            ),
-          ),
-        ),
-      ...readNotifications.map((notification) {
-        if (notification['type'] == 'report_status') {
-          return PopupMenuItem<dynamic>(
-            enabled: false,
-            child: Row(
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  color: Colors.grey[400],
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    notification['message'] ?? 'Issue fixed',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        } else {
-          final status =
-              notification['status'] == 'approved' ? 'Successful' : 'Declined';
-          final month = notification['month'] ?? 'Unknown';
-          final amount = notification['amount']?.toStringAsFixed(2) ?? '0.00';
-          return PopupMenuItem<dynamic>(
-            enabled: false,
-            child: Row(
-              children: [
-                Icon(
-                  notification['status'] == 'approved'
-                      ? Icons.check_circle
-                      : Icons.cancel,
-                  color: Colors.grey[400],
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Payment of ₱$amount for $month is $status',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-      }).toList(),
-    ];
-
-    await showMenu(
-      context: context,
-      position: RelativeRect.fromLTRB(
-        position.dx,
-        position.dy + button.size.height + 8,
-        position.dx + button.size.width,
-        0,
-      ),
-      items: menuItems,
-      elevation: 8,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      color: Colors.white,
-    );
-    print('Dropdown menu closed');
-    // Refresh UI to update notification count
-    setState(() {});
+  void _toggleNotificationsDropdown() {
+    setState(() {
+      _isDropdownOpen = !_isDropdownOpen;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      drawer: Drawer(
-        backgroundColor: Colors.white,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.horizontal(right: Radius.circular(16)),
+    final screenWidth = MediaQuery.of(context).size.width;
+    const dropdownWidth = 300.0;
+    final bellBox =
+        _notificationButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    final bellPosition = bellBox?.localToGlobal(Offset.zero);
+    final dropdownTop = (bellPosition?.dy ?? kToolbarHeight) - 15.0;
+    final dropdownLeft = bellPosition != null
+        ? (bellPosition.dx - dropdownWidth + 48.0)
+            .clamp(16.0, (screenWidth - dropdownWidth - 16.0).toDouble())
+        : (screenWidth - dropdownWidth - 16.0).toDouble();
+
+    return WillPopScope(
+      onWillPop: () async {
+        if (_selectedPage != ResidentPage.home) {
+          setState(() {
+            _selectedPage = ResidentPage.home;
+          });
+          return false; // Prevent back navigation
+        }
+        return false; // Prevent back navigation to login page
+      },
+      child: Scaffold(
+        backgroundColor: Colors.grey.shade50,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          title: Text(
+            'Resident',
+            style: GoogleFonts.poppins(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          elevation: 2,
+          leading: Builder(
+            builder: (context) => IconButton(
+              icon: Icon(Icons.menu, color: Colors.blue.shade700),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          ),
+          actions: [
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('notifications')
+                  .where('residentId',
+                      isEqualTo: FirebaseAuth.instance.currentUser?.uid)
+                  .where('read', isEqualTo: false)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                int notificationCount = 0;
+                if (snapshot.hasData) {
+                  notificationCount = snapshot.data!.docs.length;
+                  print(
+                      'StreamBuilder: Found $notificationCount unread notifications');
+                } else if (snapshot.hasError) {
+                  print('StreamBuilder error: ${snapshot.error}');
+                }
+                return Stack(
+                  children: [
+                    IconButton(
+                      key: _notificationButtonKey,
+                      icon: Icon(
+                        Icons.notifications_outlined,
+                        color: Colors.blue.shade700,
+                        size: 26,
+                      ),
+                      onPressed: _toggleNotificationsDropdown,
+                    ),
+                    if (notificationCount > 0)
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade600,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.2),
+                                blurRadius: 4,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          constraints:
+                              const BoxConstraints(minWidth: 16, minHeight: 16),
+                          child: Text(
+                            notificationCount.toString(),
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+            const SizedBox(width: 8),
+          ],
         ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Container(
-                width: double.infinity,
-                padding:
-                    const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Color(0xFF87CEEB), // Sky Blue
-                      Color.fromARGB(255, 127, 190, 226), // Light Sky Blue
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+        drawer: Drawer(
+          backgroundColor: Colors.white,
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.horizontal(right: Radius.circular(16)),
+          ),
+          child: SafeArea(
+            child: Column(
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Color(0xFF87CEEB),
+                        Color.fromARGB(255, 127, 190, 226),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.only(
+                      topRight: Radius.circular(16),
+                      bottomRight: Radius.circular(32),
+                    ),
                   ),
-                  borderRadius: BorderRadius.only(
-                    topRight: Radius.circular(16),
-                    bottomRight: Radius.circular(32),
+                  child: Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 28,
+                        backgroundColor: Colors.white,
+                        child: Icon(Icons.person,
+                            size: 36, color: Color.fromARGB(255, 58, 56, 56)),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Welcome!',
+                              style: GoogleFonts.poppins(
+                                color: Colors.grey[800],
+                                fontWeight: FontWeight.w500,
+                                fontSize: 16,
+                              ),
+                            ),
+                            Text(
+                              _residentName,
+                              style: GoogleFonts.poppins(
+                                color: Colors.grey[800],
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                child: Row(
-                  children: [
-                    const CircleAvatar(
-                      radius: 28,
-                      backgroundColor: Colors.white,
-                      child: Icon(Icons.person,
-                          size: 36, color: Color.fromARGB(255, 58, 56, 56)),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    children: [
+                      _buildDrawerItem(
+                        icon: Icons.home_outlined,
+                        title: 'Home',
+                        page: ResidentPage.home,
+                      ),
+                      _buildDrawerItem(
+                        icon: Icons.report_problem_outlined,
+                        title: 'Report Water Problem',
+                        page: ResidentPage.report,
+                      ),
+                      _buildDrawerItem(
+                        icon: Icons.receipt_long_outlined,
+                        title: 'View Billing',
+                        page: ResidentPage.billing,
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: ListTile(
+                    leading: const Icon(Icons.logout, color: Colors.red),
+                    title: Text(
+                      'Logout',
+                      style: GoogleFonts.poppins(
+                        color: Colors.red,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Welcome!',
-                            style: GoogleFonts.poppins(
-                              color: Colors.grey[800],
-                              fontWeight: FontWeight.w500,
-                              fontSize: 16,
-                            ),
-                          ),
-                          Text(
-                            'Resident',
-                            style: GoogleFonts.poppins(
-                              color: Colors.grey[800],
-                              fontWeight: FontWeight.bold,
-                              fontSize: 20,
-                            ),
+                    onTap: _logout,
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        ),
+        body: Stack(
+          children: [
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              transitionBuilder: (child, animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(
+                  scale: animation,
+                  child: child,
+                ),
+              ),
+              child: Container(
+                key: ValueKey(_selectedPage),
+                child: _getPageContent(),
+              ),
+            ),
+            if (_isDropdownOpen && bellBox != null)
+              AnimatedPositioned(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeInOut,
+                top: dropdownTop,
+                left: dropdownLeft,
+                child: FadeIn(
+                  duration: const Duration(milliseconds: 200),
+                  child: Material(
+                    elevation: 4,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: dropdownWidth,
+                      constraints: const BoxConstraints(maxHeight: 400),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.blue.shade50, Colors.white],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.withOpacity(0.2),
+                            spreadRadius: 2,
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  children: [
-                    _buildDrawerItem(
-                      icon: Icons.home_outlined,
-                      title: 'Home',
-                      page: ResidentPage.home,
-                    ),
-                    _buildDrawerItem(
-                      icon: Icons.report_problem_outlined,
-                      title: 'Report Water Problem',
-                      page: ResidentPage.report,
-                    ),
-                    _buildDrawerItem(
-                      icon: Icons.receipt_long_outlined,
-                      title: 'View Billing',
-                      page: ResidentPage.billing,
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: ListTile(
-                  leading: const Icon(Icons.logout, color: Colors.red),
-                  title: Text(
-                    'Logout',
-                    style: GoogleFonts.poppins(
-                      color: Colors.red,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  onTap: () => _logout(context),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-        ),
-      ),
-      appBar: AppBar(
-        title: Text(
-          'Resident',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.bold,
-            fontSize: 22,
-            color: Colors.grey[800],
-            letterSpacing: 1.2,
-          ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 3,
-        actions: [
-          StreamBuilder<QuerySnapshot>(
-            stream: FirebaseFirestore.instance
-                .collection('notifications')
-                .where('residentId',
-                    isEqualTo: FirebaseAuth.instance.currentUser?.uid)
-                .where('read', isEqualTo: false)
-                .snapshots(),
-            builder: (context, snapshot) {
-              int notificationCount = 0;
-              if (snapshot.hasData) {
-                notificationCount = snapshot.data!.docs.length;
-                print(
-                    'StreamBuilder: Found $notificationCount unread notifications');
-              } else if (snapshot.hasError) {
-                print('StreamBuilder error: ${snapshot.error}');
-              }
-              return Stack(
-                children: [
-                  IconButton(
-                    key: _notificationButtonKey,
-                    icon: Icon(Icons.notifications_outlined,
-                        size: 24, color: Colors.grey[800]),
-                    onPressed: () => _showNotificationsDropdown(context),
-                  ),
-                  if (notificationCount > 0)
-                    Positioned(
-                      right: 10,
-                      top: 10,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 16,
-                          minHeight: 16,
-                        ),
-                        child: Text(
-                          notificationCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
+                      child: FutureBuilder<
+                          Map<String, List<Map<String, dynamic>>>>(
+                        future: _fetchNotifications(),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return const Center(
+                                child: CircularProgressIndicator());
+                          }
+                          if (snapshot.hasError) {
+                            return Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Text(
+                                'Error loading notifications',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            );
+                          }
+                          final notifications =
+                              snapshot.data ?? {'unread': [], 'read': []};
+                          final unreadNotifications = notifications['unread']!;
+                          final readNotifications = notifications['read']!;
+                          if (unreadNotifications.isEmpty &&
+                              readNotifications.isEmpty) {
+                            return Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Center(
+                                child: Text(
+                                  'No Notifications',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+                          return ListView(
+                            padding: const EdgeInsets.all(8),
+                            shrinkWrap: true,
+                            children: [
+                              if (unreadNotifications.isNotEmpty) ...[
+                                Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Text(
+                                    'Unread Notifications',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                ...unreadNotifications.map((notification) =>
+                                    _buildNotificationItem(
+                                        notification, false)),
+                              ],
+                              if (readNotifications.isNotEmpty) ...[
+                                Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: Text(
+                                    'Read Notifications',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ),
+                                ...readNotifications.map((notification) =>
+                                    _buildNotificationItem(notification, true)),
+                              ],
+                            ],
+                          );
+                        },
                       ),
                     ),
-                ],
-              );
-            },
-          ),
-        ],
-        iconTheme: IconThemeData(color: Colors.grey[800]),
-      ),
-      body: SafeArea(
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          transitionBuilder: (child, animation) => FadeTransition(
-            opacity: animation,
-            child: child,
-          ),
-          child: _getPageContent(),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -636,10 +669,77 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               color: Colors.grey[800],
             ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
           selected: isSelected,
-          onTap: () => _onSelectPage(page),
+          onTap: () {
+            Navigator.pop(context); // 👈 closes the drawer
+            _onSelectPage(page); // switch to the selected page
+          },
         ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationItem(
+      Map<String, dynamic> notification, bool isRead) {
+    String text;
+    IconData icon;
+    Color iconColor;
+    if (notification['type'] == 'report_status') {
+      text = notification['message'] ?? 'Issue fixed';
+      icon = Icons.check_circle;
+      iconColor = isRead ? Colors.grey[400]! : Colors.green;
+    } else {
+      final status =
+          notification['status'] == 'approved' ? 'Successful' : 'Declined';
+      final month = notification['month'] ?? 'Unknown';
+      final amount = notification['amount']?.toStringAsFixed(2) ?? '0.00';
+      text = 'Payment of ₱$amount for $month is $status';
+      icon = notification['status'] == 'approved'
+          ? Icons.check_circle
+          : Icons.cancel;
+      iconColor = isRead
+          ? Colors.grey[400]!
+          : (notification['status'] == 'approved' ? Colors.green : Colors.red);
+    }
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      color: isRead ? Colors.white : Colors.grey[200],
+      elevation: 2,
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(12),
+        leading: Icon(icon, color: iconColor, size: 20),
+        title: Text(
+          text,
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+            color: isRead ? Colors.grey[600] : Colors.black87,
+          ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
+        subtitle: Text(
+          notification['createdAt'] != null
+              ? DateFormat.yMMMd().add_jm().format(notification['createdAt'])
+              : 'Unknown time',
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+          ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
+        onTap: () {
+          if (!isRead && notification['id'] != null) {
+            _markNotificationAsRead(notification['id']);
+          }
+        },
       ),
     );
   }
@@ -647,61 +747,189 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
   Widget _buildDashboard() {
     return RefreshIndicator(
       onRefresh: _refreshDashboard,
-      color: const Color(0xFF4A2C6F),
+      color: Colors.blue.shade700,
       backgroundColor: Colors.white,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 24),
-                AnimatedOpacity(
-                  opacity: 1.0,
-                  duration: const Duration(milliseconds: 500),
-                  curve: Curves.easeOut,
-                  child: IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FadeInDown(
+              duration: const Duration(milliseconds: 300),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: Colors.blue.shade100,
+                      child: Icon(
+                        Icons.person,
+                        color: Colors.blue.shade700,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Welcome, $_residentName!',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                          Text(
+                            'Manage your water usage and reports.',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 150,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElasticIn(
+                      duration: const Duration(milliseconds: 300),
+                      child: _buildStatCard(
+                        title: 'Today\'s Usage',
+                        value: '185 gal',
+                        description: '40% of daily avg',
+                        icon: Icons.water_drop,
+                        color: Colors.blue.shade700,
+                        progress: 0.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElasticIn(
+                      duration: const Duration(milliseconds: 300),
+                      delay: const Duration(milliseconds: 100),
+                      child: _buildStatCard(
+                        title: 'Water Status',
+                        value: '20.3 gal/min',
+                        description: 'Water Running',
+                        icon: Icons.speed,
+                        color: Colors.blue.shade700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            FadeInUp(
+              duration: const Duration(milliseconds: 300),
+              child: _buildWeeklyUsageChart(),
+            ),
+            const SizedBox(height: 16),
+            FadeInUp(
+              duration: const Duration(milliseconds: 300),
+              delay: const Duration(milliseconds: 100),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Quick Actions',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        Expanded(
-                          child: _buildStatCard(
-                            title: 'Today\'s Usage',
-                            value: '185 gal',
-                            description: '40% of daily avg',
-                            icon: Icons.water,
-                            color: const Color(0xFF87CEEB),
-                            progress: 0.4,
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            _onSelectPage(ResidentPage.report);
+                          },
+                          icon: const Icon(Icons.report_problem_outlined),
+                          label: Text(
+                            'Report Issue',
+                            style: GoogleFonts.poppins(fontSize: 12),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue.shade700,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: _buildStatCard(
-                            title: 'Water Status',
-                            value: '20.3 gal/min',
-                            description: 'Water Running',
-                            icon: Icons.speed,
-                            color: const Color(0xFF87CEEB),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            _onSelectPage(ResidentPage.billing);
+                          },
+                          icon: const Icon(Icons.receipt_long_outlined),
+                          label: Text(
+                            'View Bills',
+                            style: GoogleFonts.poppins(fontSize: 12),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue.shade700,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
                           ),
                         ),
                       ],
                     ),
-                  ),
+                  ],
                 ),
-                const SizedBox(height: 32),
-                AnimatedOpacity(
-                  opacity: 1.0,
-                  duration: const Duration(milliseconds: 500),
-                  curve: Curves.easeOut,
-                  child: _buildWeeklyUsageChart(),
-                ),
-                const SizedBox(height: 24),
-              ],
+              ),
             ),
-          );
-        },
+          ],
+        ),
       ),
     );
   }
@@ -716,96 +944,78 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
         color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
           ),
         ],
-        border: Border.all(color: color.withOpacity(0.15), width: 1),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.all(8.0),
+        child: Row(
+          mainAxisSize: MainAxisSize.max, // Maximize width
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Flexible(
-                  child: Text(
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: color.withOpacity(0.1),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.max, // Maximize height
+                children: [
+                  Text(
                     title,
                     style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey[800],
+                      fontSize: 14, // Increased for better visibility
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade600,
                     ),
                     overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
-                ),
-                Container(
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.all(8),
-                  child: Icon(icon, size: 24, color: color.withOpacity(0.85)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: progress != null
-                  ? SizedBox(
-                      width: 130,
-                      height: 150,
-                      child: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          CircularProgressIndicator(
-                            value: progress,
-                            strokeWidth: 100,
-                            backgroundColor: color.withOpacity(0.08),
-                            valueColor: AlwaysStoppedAnimation<Color>(color),
-                          ),
-                          Text(
-                            value,
-                            style: GoogleFonts.poppins(
-                              fontSize: 22,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.grey[800],
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    )
-                  : Text(
-                      value,
-                      style: GoogleFonts.poppins(
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.grey[800],
-                      ),
-                      textAlign: TextAlign.center,
+                  Text(
+                    value,
+                    style: GoogleFonts.poppins(
+                      fontSize: 22, // Increased for better visibility
+                      fontWeight: FontWeight.w700,
+                      color: color,
                     ),
-            ),
-            const SizedBox(height: 12),
-            Center(
-              child: Text(
-                description,
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  color: Colors.grey[800],
-                  fontWeight: FontWeight.w500,
-                ),
-                textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                  Text(
+                    description,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12, // Increased for better visibility
+                      color: Colors.grey.shade600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ],
               ),
             ),
+            if (progress != null)
+              SizedBox(
+                width: 40,
+                height: 40,
+                child: CircularProgressIndicator(
+                  value: progress,
+                  strokeWidth: 4,
+                  backgroundColor: color.withOpacity(0.1),
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+              ),
+            const SizedBox(width: 8),
           ],
         ),
       ),
@@ -826,35 +1036,31 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF4A2C6F).withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
-        border: Border.all(
-          color: const Color(0xFF4A2C6F).withOpacity(0.08),
-          width: 1,
-        ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Weekly Water Usage',
               style: GoogleFonts.poppins(
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
+                color: Colors.black87,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             SizedBox(
-              height: 240,
+              height: 200,
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
@@ -869,8 +1075,9 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                         return BarTooltipItem(
                           '${rod.toY.toStringAsFixed(0)} gal',
                           GoogleFonts.poppins(
-                            color: Colors.black,
+                            color: Colors.black87,
                             fontWeight: FontWeight.w600,
+                            fontSize: 12,
                           ),
                         );
                       },
@@ -890,7 +1097,7 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
                             child: Text(
                               days[value.toInt()],
                               style: GoogleFonts.poppins(
-                                fontSize: 13,
+                                fontSize: 12,
                                 color: Colors.grey[800],
                                 fontWeight: FontWeight.w600,
                               ),
@@ -957,8 +1164,8 @@ class _ResidentHomePageState extends State<ResidentHomePage> {
           toY: y,
           gradient: const LinearGradient(
             colors: [
-              Color(0xFF87CEEB), // Sky Blue (bottom)
-              Color(0xFFE0F7FA), // Light aqua (top)
+              Color(0xFF87CEEB),
+              Color(0xFFE0F7FA),
             ],
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,

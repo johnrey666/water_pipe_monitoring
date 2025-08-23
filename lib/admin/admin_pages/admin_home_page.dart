@@ -19,6 +19,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
   // ignore: unused_field
   DocumentSnapshot? _lastDocument;
 
+  // Firestore instance
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
   @override
   Widget build(BuildContext context) {
     return AdminLayout(
@@ -32,28 +35,68 @@ class _AdminHomePageState extends State<AdminHomePage> {
             // Top stats
             Row(
               children: [
-                _statCard(
-                  context,
-                  '142',
-                  'USERS',
-                  Icons.people,
-                  Colors.blueAccent,
+                // Users count (Resident and Plumber)
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: _firestore.collection('users').where('role',
+                        whereIn: ['Resident', 'Plumber']).snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return _statCard(context, 'Error', 'USERS',
+                            Icons.people, Colors.blueAccent);
+                      }
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return _statCard(context, '...', 'USERS', Icons.people,
+                            Colors.blueAccent);
+                      }
+                      final userCount =
+                          snapshot.data?.docs.length.toString() ?? '0';
+                      return _statCard(context, userCount, 'USERS',
+                          Icons.people, Colors.blueAccent);
+                    },
+                  ),
                 ),
                 const SizedBox(width: 20),
-                _statCard(
-                  context,
-                  '23',
-                  'REPORTS',
-                  Icons.description,
-                  Colors.green,
+                // Reports count
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: _firestore.collection('reports').snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return _statCard(context, 'Error', 'REPORTS',
+                            Icons.description, Colors.green);
+                      }
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return _statCard(context, '...', 'REPORTS',
+                            Icons.description, Colors.green);
+                      }
+                      final reportCount =
+                          snapshot.data?.docs.length.toString() ?? '0';
+                      return _statCard(context, reportCount, 'REPORTS',
+                          Icons.description, Colors.green);
+                    },
+                  ),
                 ),
                 const SizedBox(width: 20),
-                _statCard(
-                  context,
-                  '89',
-                  'INVOICES',
-                  Icons.receipt_long,
-                  Colors.orange,
+                // Invoices (bills) count
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: _firestore.collection('bills').snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return _statCard(context, 'Error', 'INVOICES',
+                            Icons.receipt_long, Colors.orange);
+                      }
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return _statCard(context, '...', 'INVOICES',
+                            Icons.receipt_long, Colors.orange);
+                      }
+                      final billCount =
+                          snapshot.data?.docs.length.toString() ?? '0';
+                      return _statCard(context, billCount, 'INVOICES',
+                          Icons.receipt_long, Colors.orange);
+                    },
+                  ),
                 ),
               ],
             ),
@@ -85,57 +128,55 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   Widget _statCard(BuildContext context, String value, String label,
       IconData icon, Color color) {
-    return Expanded(
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.15),
-                spreadRadius: 2,
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-            border: Border.all(color: Colors.grey.shade100),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    icon,
-                    color: color,
-                    size: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    label,
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                value,
-                style: GoogleFonts.poppins(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w700,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.15),
+              spreadRadius: 2,
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(color: Colors.grey.shade100),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  icon,
                   color: color,
+                  size: 24,
                 ),
+                const SizedBox(width: 12),
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              value,
+              style: GoogleFonts.poppins(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: color,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -330,7 +371,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
           const SizedBox(height: 16),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
+              stream: _firestore
                   .collection('reports')
                   .orderBy('createdAt', descending: true)
                   .limit(_pageSize)

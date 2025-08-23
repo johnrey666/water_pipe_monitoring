@@ -28,15 +28,17 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
           duration: const Duration(seconds: 5),
           animate: true,
           child: Material(
-            color: Colors.red.withOpacity(0.9),
-            borderRadius: BorderRadius.circular(8),
+            elevation: 4,
+            color: Colors.red.shade600,
+            borderRadius: BorderRadius.circular(12),
             child: Padding(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.error, color: Colors.white, size: 20),
-                  const SizedBox(width: 8),
+                  const Icon(Icons.error_outline,
+                      color: Colors.white, size: 24),
+                  const SizedBox(width: 12),
                   Text(
                     message,
                     style: GoogleFonts.poppins(
@@ -67,29 +69,29 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
         child: Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxWidth: 550,
-              maxHeight: MediaQuery.of(context).size.height * 0.4,
+              maxWidth: 600,
+              maxHeight: MediaQuery.of(context).size.height * 0.5,
             ),
             child: Dialog(
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
               ),
-              elevation: 8,
-              backgroundColor: Colors.white.withOpacity(0.95),
+              elevation: 10,
+              backgroundColor: Colors.white,
               child: Container(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.white,
-                      Colors.grey[50]!,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -103,90 +105,127 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                               Text(
                                 'Report Details',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
                                   color: Colors.black87,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black.withOpacity(0.1),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: 8),
                               Container(
-                                width: 100,
-                                height: 2,
-                                decoration: const BoxDecoration(
+                                width: 120,
+                                height: 3,
+                                decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
-                                      Color(0xFF5E35B1),
-                                      Color(0xFF8E24AA),
+                                      Colors.blue.shade700,
+                                      Colors.purple.shade600,
                                     ],
                                   ),
+                                  borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
                             ],
                           ),
                           IconButton(
                             icon: Container(
-                              padding: const EdgeInsets.all(6),
+                              padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: Colors.grey[200],
+                                color: Colors.grey.shade100,
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.close,
-                                color: Color(0xFF5E35B1),
-                                size: 20,
+                                color: Colors.blue.shade700,
+                                size: 22,
                               ),
                             ),
                             onPressed: () => Navigator.of(context).pop(),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      ListTile(
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 8),
-                        leading: CircleAvatar(
-                          radius: 20,
-                          backgroundColor:
-                              _getStatusColor(data['status']).withOpacity(0.2),
-                          child: Text(
-                            (data['fullName'] ?? 'U')[0],
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ),
-                        title: Text(
-                          data['fullName'] ?? 'Unknown',
-                          style: GoogleFonts.poppins(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black87,
-                          ),
-                        ),
-                        trailing: Chip(
-                          label: Text(
-                            data['status'] ?? 'Unknown',
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
-                          ),
-                          backgroundColor:
-                              _getStatusColor(data['status'] ?? 'Unknown')
-                                  .withOpacity(0.3),
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                      const SizedBox(height: 16),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ListTile(
+                                contentPadding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                leading: CircleAvatar(
+                                  radius: 24,
+                                  backgroundColor:
+                                      _getStatusColor(data['status'])
+                                          .withOpacity(0.15),
+                                  child: Text(
+                                    (data['fullName'] ?? 'U')[0].toUpperCase(),
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                      color: _getStatusColor(data['status']),
+                                    ),
+                                  ),
+                                ),
+                                title: Text(
+                                  data['fullName'] ?? 'Unknown',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  data['issueDescription'] ?? 'No description',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.access_time,
+                                    color: Colors.grey.shade600,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _formatTimestamp(data['createdAt']),
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Chip(
+                                label: Text(
+                                  data['status'] ?? 'Unknown',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                backgroundColor: _getStatusColor(
+                                    data['status'] ?? 'Unknown'),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                  side: BorderSide(
+                                    color: _getStatusColor(
+                                            data['status'] ?? 'Unknown')
+                                        .withOpacity(0.3),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -202,15 +241,15 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
   }
 
   Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Monitoring':
-        return const Color(0xFF2F8E2F);
-      case 'Unfixed Reports':
-        return const Color(0xFFD94B3B);
-      case 'Fixed':
-        return const Color(0xFFC18B00);
+    switch (status.toLowerCase()) {
+      case 'monitoring':
+        return Colors.green.shade600;
+      case 'unfixed reports':
+        return Colors.red.shade600;
+      case 'fixed':
+        return Colors.amber.shade700;
       default:
-        return Colors.grey;
+        return Colors.grey.shade600;
     }
   }
 
@@ -237,8 +276,8 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Colors.grey[50]!,
-              Colors.grey[100]!,
+              Colors.blue.shade50,
+              Colors.white,
             ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -251,6 +290,7 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                 stream: FirebaseFirestore.instance
                     .collection('reports')
                     .where('assignedPlumber', isEqualTo: user.uid)
+                    .where('status', isNotEqualTo: 'Fixed')
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
@@ -258,10 +298,13 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                       _showErrorOverlay(
                           'Error loading reports: ${snapshot.error}');
                     });
-                    return const Center(
+                    return Center(
                       child: Text(
                         'Error loading reports',
-                        style: TextStyle(fontSize: 18, color: Colors.grey),
+                        style: GoogleFonts.poppins(
+                          fontSize: 18,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     );
                   }
@@ -274,41 +317,50 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                       .map((doc) {
                         final data = doc.data() as Map<String, dynamic>;
                         final location = data['location'];
-                        if (location == null || location is! GeoPoint)
+                        if (location == null || location is! GeoPoint) {
                           return null;
+                        }
 
                         return Marker(
                           point: LatLng(location.latitude, location.longitude),
-                          width: 140,
-                          height: 70,
+                          width: 60,
+                          height: 60,
                           child: GestureDetector(
                             onTap: () => _showReportDialog(context, data),
                             child: ZoomIn(
                               duration: const Duration(milliseconds: 300),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                mainAxisAlignment: MainAxisAlignment.center,
+                              child: Stack(
+                                alignment: Alignment.center,
                                 children: [
-                                  Text(
-                                    data['fullName'] ?? 'Unknown',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.black87,
-                                      shadows: [
-                                        Shadow(
-                                          color: Colors.black.withOpacity(0.1),
-                                          blurRadius: 2,
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: _getStatusColor(
+                                          data['status'] ?? 'Unfixed Reports'),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.2),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 3),
                                         ),
                                       ],
                                     ),
-                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  Icon(
-                                    Icons.location_pin,
-                                    color: _getStatusColor(
-                                        data['status'] ?? 'Unfixed Reports'),
-                                    size: 28,
+                                  CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: Colors.white,
+                                    child: Text(
+                                      (data['fullName'] ?? 'U')[0]
+                                          .toUpperCase(),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: _getStatusColor(data['status'] ??
+                                            'Unfixed Reports'),
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -319,22 +371,36 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                       .whereType<Marker>()
                       .toList();
 
-                  // Add label at new coordinates
+                  // Add label for San Jose
                   markers.add(
                     Marker(
                       point:
                           const LatLng(13.294678436001885, 123.75569591912894),
                       width: 140,
                       height: 40,
-                      child: Text(
-                        'San Jose',
-                        style: GoogleFonts.poppins(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.red[900],
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.15),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                         ),
-                        overflow: TextOverflow.ellipsis,
-                        textAlign: TextAlign.center,
+                        child: Text(
+                          'San Jose',
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ),
                   );
@@ -345,7 +411,7 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                           const LatLng(13.294678436001885, 123.75569591912894),
                       initialZoom: 16,
                       minZoom: 15,
-                      maxZoom: 16,
+                      maxZoom: 18,
                       initialCameraFit: CameraFit.bounds(
                         bounds: LatLngBounds(
                           const LatLng(13.292678436001885, 123.75369591912894),
@@ -368,13 +434,12 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                             'WaterPipeMonitoring/1.0 (contact@yourdomain.com)',
                         tileProvider: CachedTileProvider(),
                         errorTileCallback: (tile, error, stackTrace) {
-                          print('Tile loading error: $error');
                           if (error.toString().contains('403')) {
                             _showErrorOverlay(
-                                'Access blocked by OpenStreetMap. Please contact support or check your internet.');
+                                'Access blocked by OpenStreetMap. Please contact support.');
                           } else {
                             _showErrorOverlay(
-                                'Failed to load map tiles. Check your internet connection.');
+                                'Failed to load map tiles. Check your internet.');
                           }
                         },
                       ),
@@ -388,62 +453,66 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                 top: 16,
                 left: 16,
                 right: 16,
-                child: FadeIn(
+                child: FadeInDown(
                   duration: const Duration(milliseconds: 400),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                        horizontal: 20, vertical: 14),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
+                          blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
                       ],
                     ),
-                    child: Text(
-                      'Assigned Reports',
-                      style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Assigned Reports',
+                          style: GoogleFonts.poppins(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black87,
                           ),
-                        ],
-                      ),
+                        ),
+                        Icon(
+                          Icons.map_outlined,
+                          color: Colors.blue.shade700,
+                          size: 24,
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
               // Manual scale indicator
               Positioned(
-                top: 60,
+                bottom: 80,
                 left: 16,
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(4),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 2,
-                        offset: const Offset(0, 1),
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
                   child: Text(
-                    'Approx. 100m',
+                    'Scale: ~100m',
                     style: GoogleFonts.poppins(
-                      fontSize: 12,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
                       color: Colors.black87,
                     ),
                   ),
@@ -451,28 +520,28 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
               ),
               // Attribution text
               Positioned(
-                bottom: 8,
-                right: 8,
+                bottom: 16,
+                right: 16,
                 child: Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.9),
-                    borderRadius: BorderRadius.circular(4),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.2),
-                        blurRadius: 2,
-                        offset: const Offset(0, 1),
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
                   child: Text(
-                    '© OpenStreetMap contributors',
+                    '© OpenStreetMap',
                     style: GoogleFonts.poppins(
                       fontSize: 12,
-                      color: Colors.black87,
                       fontWeight: FontWeight.w500,
+                      color: Colors.black54,
                     ),
                   ),
                 ),
