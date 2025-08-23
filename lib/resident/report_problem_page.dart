@@ -1,5 +1,6 @@
-// ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const, unused_element, use_build_context_synchronously, unnecessary_string_interpolations, unnecessary_to_list_in_spreads, unused_local_variable, unused_import
+// ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const, unused_element, use_build_context_synchronously, unnecessary_string_interpolations, unnecessary_to_list_in_spreads, unused_local_variable
 
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:image_picker/image_picker.dart';
@@ -34,16 +35,14 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   MapController? _mapController;
   DateTime? _selectedDateTime;
   bool _isSubmitting = false;
-  final Color focusBlue = const Color(0xFF87CEEB);
-  final Color fieldLabelColor = Colors.grey[800]!;
-  final Color iconGrey = Colors.grey[800]!;
-  final Color asteriskColor = Colors.red;
+  bool _isSearchingLocation = false;
+  String? _errorMessage;
+  final Color primaryColor = const Color(0xFF87CEEB);
+  final Color accentColor = const Color(0xFF0288D1);
+  final Color iconGrey = Colors.grey;
 
   // Pagination for recent reports
   int _recentPage = 0;
-
-  // Color scheme updates
-  Color get accentColor => const Color(0xFF4A2C6F);
 
   Future<void> _pickImage() async {
     final androidInfo = await DeviceInfoPlugin().androidInfo;
@@ -51,20 +50,26 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
     final permission = sdkInt >= 33 ? Permission.photos : Permission.storage;
     final status = await permission.request();
     if (!status.isGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Permission denied to access gallery')),
-      );
+      setState(() {
+        _errorMessage = 'Permission denied to access gallery';
+      });
       return;
     }
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       setState(() {
         _imageFile = image;
+        _errorMessage = null;
       });
     }
   }
 
   Future<void> _searchLocation(String query) async {
+    if (query.isEmpty) return;
+    setState(() {
+      _isSearchingLocation = true;
+      _errorMessage = null;
+    });
     try {
       final response = await http.get(
         Uri.parse(
@@ -86,17 +91,21 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
             _mapController!.move(_selectedLocation!, 16);
           }
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location not found')),
-          );
+          setState(() {
+            _errorMessage = 'Location not found';
+          });
         }
       } else {
         throw Exception('Failed to search location: ${response.statusCode}');
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error searching location: $e')),
-      );
+      setState(() {
+        _errorMessage = 'Error searching location: $e';
+      });
+    } finally {
+      setState(() {
+        _isSearchingLocation = false;
+      });
     }
   }
 
@@ -123,11 +132,39 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
       initialDate: DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime(2100),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: ColorScheme.light(
+              primary: accentColor,
+              onPrimary: Colors.white,
+              surface: Colors.white,
+              onSurface: Colors.black87,
+            ),
+            dialogBackgroundColor: Colors.white,
+          ),
+          child: child!,
+        );
+      },
     );
     if (pickedDate != null) {
       final TimeOfDay? pickedTime = await showTimePicker(
         context: context,
         initialTime: TimeOfDay.now(),
+        builder: (context, child) {
+          return Theme(
+            data: ThemeData.light().copyWith(
+              colorScheme: ColorScheme.light(
+                primary: accentColor,
+                onPrimary: Colors.white,
+                surface: Colors.white,
+                onSurface: Colors.black87,
+              ),
+              dialogBackgroundColor: Colors.white,
+            ),
+            child: child!,
+          );
+        },
       );
       if (pickedTime != null) {
         final selectedDateTime = DateTime(
@@ -140,7 +177,8 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         setState(() {
           _selectedDateTime = selectedDateTime;
           _dateTimeController.text =
-              '${selectedDateTime.toLocal().toString().substring(0, 16)}';
+              DateFormat('yyyy-MM-dd HH:mm').format(selectedDateTime);
+          _errorMessage = null;
         });
       }
     }
@@ -165,9 +203,9 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         'contactNumber': userDoc.data()?['contactNumber'] ?? 'Unknown',
       };
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error fetching user info: $e')),
-      );
+      setState(() {
+        _errorMessage = 'Error fetching user info: $e';
+      });
       return null;
     }
   }
@@ -178,9 +216,9 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
       final bytes = await File(imageFile.path).readAsBytes();
       return base64Encode(bytes);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error encoding image: $e')),
-      );
+      setState(() {
+        _errorMessage = 'Error encoding image: $e';
+      });
       return null;
     }
   }
@@ -189,7 +227,15 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
     if (!_formKey.currentState!.validate() || _isSubmitting) return;
     setState(() {
       _isSubmitting = true;
+      _errorMessage = null;
     });
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const CustomLoadingDialog(),
+    );
+
     try {
       final userInfo = await _getUserInfo();
       if (userInfo == null) {
@@ -200,10 +246,8 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         'fullName': userInfo['fullName'],
         'contactNumber': userInfo['contactNumber'],
         'issueDescription': _issueController.text,
-        'location': GeoPoint(
-          _selectedLocation!.latitude,
-          _selectedLocation!.longitude,
-        ),
+        'location':
+            GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude),
         'placeName': _selectedPlaceName ?? 'Unknown location',
         'dateTime': Timestamp.fromDate(_selectedDateTime!),
         'createdAt': Timestamp.now(),
@@ -214,6 +258,8 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         reportData['image'] = base64Image;
       }
       await FirebaseFirestore.instance.collection('reports').add(reportData);
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Report submitted successfully')),
       );
@@ -225,16 +271,18 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         _selectedLocation = null;
         _selectedPlaceName = null;
         _selectedDateTime = null;
-        _recentPage = 0; // Reset to first page to show newest report
+        _recentPage = 0;
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error submitting report: $e')),
-      );
-    } finally {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
       setState(() {
-        _isSubmitting = false;
+        _errorMessage = 'Error submitting report: $e';
       });
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
   }
 
@@ -244,6 +292,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
     latlong.LatLng? tempLocation = _selectedLocation;
     String? tempPlaceName = _selectedPlaceName;
     MapController tempMapController = MapController();
+    TextEditingController searchController = TextEditingController();
 
     showModalBottomSheet(
       context: context,
@@ -279,10 +328,14 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                           ~InteractiveFlag.flingAnimation,
                     ),
                     onTap: (tapPosition, position) async {
+                      modalSetState(() {
+                        _isSearchingLocation = true;
+                      });
                       final placeName = await _getPlaceName(position);
                       modalSetState(() {
                         tempLocation = position;
                         tempPlaceName = placeName;
+                        _isSearchingLocation = false;
                       });
                       tempMapController.move(position, 16);
                     },
@@ -295,16 +348,14 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                       userAgentPackageName: 'com.example.water_pipe_monitoring',
                       errorTileCallback: (tile, error, stackTrace) {
                         print('Tile loading error: $error');
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                              content: Text(
-                                  'Failed to load map tiles. Check your internet connection.')),
-                        );
+                        setState(() {
+                          _errorMessage =
+                              'Failed to load map tiles. Check your internet connection.';
+                        });
                       },
                     ),
                     MarkerLayer(
                       markers: [
-                        // San Jose label (no icon)
                         Marker(
                           point: const latlong.LatLng(
                               13.294678436001885, 123.75569591912894),
@@ -324,7 +375,6 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                             ),
                           ),
                         ),
-                        // User-selected location marker
                         if (tempLocation != null)
                           Marker(
                             point: tempLocation!,
@@ -345,45 +395,48 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                   left: 10,
                   right: 10,
                   child: TextField(
-                    cursorColor: Colors.black,
+                    controller: searchController,
+                    cursorColor: accentColor,
                     decoration: InputDecoration(
-                      labelText: 'Search Location',
-                      labelStyle: TextStyle(color: Colors.grey[800]),
-                      border: OutlineInputBorder(),
-                      focusedBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: focusBlue, width: 2),
-                      ),
                       hintText: 'e.g., San Jose, Malilipot',
-                      suffixIcon: Icon(Icons.search, color: iconGrey),
-                      isDense: true,
+                      hintStyle: GoogleFonts.poppins(color: Colors.grey),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.grey),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: primaryColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                      suffixIcon: _isSearchingLocation
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : null,
                       filled: true,
                       fillColor: Colors.white.withOpacity(0.95),
                     ),
                     onSubmitted: (value) async {
-                      if (value.isNotEmpty) {
-                        final response = await http.get(
-                          Uri.parse(
-                              'https://nominatim.openstreetmap.org/search?q=$value&format=json&limit=1'),
-                          headers: {'User-Agent': 'WaterPipeMonitoring/1.0'},
-                        );
-                        if (response.statusCode == 200) {
-                          final data = jsonDecode(response.body);
-                          if (data.isNotEmpty) {
-                            final lat = double.parse(data[0]['lat']);
-                            final lon = double.parse(data[0]['lon']);
-                            final placeName = data[0]['display_name'];
-                            modalSetState(() {
-                              tempLocation = latlong.LatLng(lat, lon);
-                              tempPlaceName = placeName;
-                            });
-                            tempMapController.move(tempLocation!, 16);
-                          }
-                        }
-                      }
+                      await _searchLocation(value);
+                      modalSetState(() {
+                        tempLocation = _selectedLocation;
+                        tempPlaceName = _selectedPlaceName;
+                        searchController.text = tempPlaceName ?? '';
+                      });
                     },
                   ),
                 ),
-                // Manual scale indicator
                 Positioned(
                   top: 60,
                   left: 10,
@@ -410,7 +463,6 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                     ),
                   ),
                 ),
-                // Attribution text
                 Positioned(
                   bottom: 10,
                   right: 10,
@@ -437,35 +489,40 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                     ),
                   ),
                 ),
-                // Confirm button
                 Positioned(
                   bottom: 10,
                   left: 10,
                   right: 10,
                   child: SizedBox(
                     width: double.infinity,
-                    height: 40,
                     child: ElevatedButton(
-                      onPressed: () {
-                        if (tempLocation != null) {
-                          setState(() {
-                            _selectedLocation = tempLocation;
-                            _selectedPlaceName = tempPlaceName;
-                            _locationController.text = tempPlaceName ?? '';
-                          });
-                          Navigator.pop(context);
-                        }
-                      },
+                      onPressed: tempLocation != null
+                          ? () {
+                              setState(() {
+                                _selectedLocation = tempLocation;
+                                _selectedPlaceName = tempPlaceName;
+                                _locationController.text = tempPlaceName ?? '';
+                              });
+                              Navigator.pop(context);
+                            }
+                          : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: focusBlue,
+                        backgroundColor: accentColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 2,
+                        shadowColor: Colors.grey.withOpacity(0.5),
                       ),
-                      child: const Text('CONFIRM LOCATION',
-                          style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.white)),
+                      child: Text(
+                        'Confirm Location',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -481,7 +538,6 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
     required TextEditingController controller,
     required String label,
     required IconData icon,
-    Color? iconColor,
     bool readOnly = false,
     VoidCallback? onTap,
     String? hint,
@@ -489,42 +545,46 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
     Widget? suffixIcon,
     int maxLines = 1,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: TextFormField(
-        controller: controller,
-        readOnly: readOnly,
-        onTap: onTap,
-        maxLines: maxLines,
-        validator: validator,
-        cursorColor: Colors.black,
-        style: const TextStyle(fontSize: 15, color: Colors.black),
-        decoration: InputDecoration(
-          label: RichText(
-            text: TextSpan(
-              text: label.replaceAll('*', '').trim(),
-              style: TextStyle(color: fieldLabelColor, fontSize: 13),
-              children: label.contains('*')
-                  ? [
-                      TextSpan(
-                        text: ' *',
-                        style: TextStyle(color: asteriskColor),
-                      )
-                    ]
-                  : [],
+    return FadeInUp(
+      duration: const Duration(milliseconds: 400),
+      delay: Duration(milliseconds: 100 * (maxLines == 2 ? 1 : maxLines + 2)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: TextFormField(
+          controller: controller,
+          readOnly: readOnly,
+          onTap: onTap,
+          maxLines: maxLines,
+          validator: validator,
+          cursorColor: accentColor,
+          style: GoogleFonts.poppins(fontSize: 15, color: Colors.black87),
+          decoration: InputDecoration(
+            labelText: label.replaceAll('*', '').trim(),
+            labelStyle: GoogleFonts.poppins(color: iconGrey, fontSize: 13),
+            hintText: hint,
+            hintStyle: GoogleFonts.poppins(color: Colors.grey),
+            prefixIcon: Icon(icon, size: 22, color: iconGrey),
+            suffixIcon: suffixIcon,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Colors.grey),
             ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: primaryColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.shade300),
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            floatingLabelBehavior: FloatingLabelBehavior.always,
+            suffixIconConstraints:
+                const BoxConstraints(minHeight: 32, minWidth: 32),
           ),
-          hintText: hint,
-          prefixIcon: Icon(icon, size: 22, color: iconColor ?? iconGrey),
-          suffixIcon: suffixIcon,
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-          focusedBorder: OutlineInputBorder(
-            borderSide: BorderSide(color: focusBlue, width: 2),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         ),
       ),
     );
@@ -541,10 +601,30 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return const Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Text('Error loading recent reports',
-                style: TextStyle(color: Colors.red)),
+          return FadeInUp(
+            duration: const Duration(milliseconds: 400),
+            delay: const Duration(milliseconds: 500),
+            child: Container(
+              margin: const EdgeInsets.only(top: 18),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade100,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Text(
+                'Error loading recent reports',
+                style: GoogleFonts.poppins(
+                    fontSize: 14, color: Colors.red.shade800),
+                textAlign: TextAlign.center,
+              ),
+            ),
           );
         }
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -556,118 +636,146 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         final doc = docs[index];
         final data = doc.data() as Map<String, dynamic>;
 
-        return Container(
-          margin: const EdgeInsets.only(top: 18),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.grey.withOpacity(0.07),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.history, color: focusBlue, size: 22),
-                  const SizedBox(width: 8),
-                  const Text('Recent Report',
-                      style:
-                          TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  const Spacer(),
-                  if (totalPages > 1)
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.chevron_left),
-                          onPressed: _recentPage > 0
-                              ? () => setState(() => _recentPage--)
-                              : null,
-                        ),
-                        Text('${_recentPage + 1}/$totalPages',
-                            style: const TextStyle(fontSize: 13)),
-                        IconButton(
-                          icon: const Icon(Icons.chevron_right),
-                          onPressed: _recentPage < totalPages - 1
-                              ? () => setState(() => _recentPage++)
-                              : null,
-                        ),
-                      ],
+        return FadeInUp(
+          duration: const Duration(milliseconds: 400),
+          delay: const Duration(milliseconds: 500),
+          child: Container(
+            margin: const EdgeInsets.only(top: 18),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.history, color: accentColor, size: 24),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Recent Report',
+                      style: GoogleFonts.poppins(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
                     ),
-                ],
-              ),
-              ...[doc].map((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                return Container(
-                  margin: const EdgeInsets.symmetric(vertical: 4),
+                    const Spacer(),
+                    if (totalPages > 1)
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.chevron_left, color: accentColor),
+                            onPressed: _recentPage > 0
+                                ? () => setState(() => _recentPage--)
+                                : null,
+                          ),
+                          Text(
+                            '${_recentPage + 1}/$totalPages',
+                            style: GoogleFonts.poppins(
+                                fontSize: 14, color: Colors.black87),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.chevron_right, color: accentColor),
+                            onPressed: _recentPage < totalPages - 1
+                                ? () => setState(() => _recentPage++)
+                                : null,
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.grey[200]!),
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade200),
                   ),
                   child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.report,
-                          color: const Color.fromARGB(255, 209, 70, 60),
-                          size: 22),
-                      const SizedBox(width: 8),
+                      Icon(Icons.report, color: Colors.red.shade700, size: 24),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              data['issueDescription'] ?? '',
-                              style: const TextStyle(
-                                  fontSize: 14, fontWeight: FontWeight.w500),
+                              data['issueDescription'] ?? 'No description',
+                              style: GoogleFonts.poppins(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.black87,
+                              ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                             if (data['placeName'] != null)
-                              Text(
-                                data['placeName'],
-                                style: const TextStyle(
-                                    fontSize: 12, color: Colors.black54),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  data['placeName'],
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                DateFormat('yyyy-MM-dd HH:mm').format(
+                                    (data['dateTime'] as Timestamp).toDate()),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 12),
                       Chip(
                         label: Text(
                           (data['status'] ?? '')
                               .toString()
                               .replaceAll('Reports', ''),
-                          style: TextStyle(
-                            color: data['status'] == 'Fixed'
-                                ? Colors.green[700]
-                                : (data['status'] == 'Unfixed Reports'
-                                    ? Colors.red[700]
-                                    : Colors.orange[800]),
-                            fontWeight: FontWeight.bold,
+                          style: GoogleFonts.poppins(
                             fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: data['status'] == 'Fixed'
+                                ? Colors.green.shade700
+                                : (data['status'] == 'Unfixed Reports'
+                                    ? Colors.red.shade700
+                                    : Colors.orange.shade800),
                           ),
                         ),
-                        backgroundColor: Colors.grey[100],
+                        backgroundColor: Colors.grey.shade100,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(6)),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 0),
                       ),
                     ],
                   ),
-                );
-              }).toList(),
-            ],
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -676,47 +784,80 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: const Color.fromARGB(255, 255, 255, 255),
-      child: SafeArea(
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA), // Dirty white background
+      body: SafeArea(
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
             children: [
-              const SizedBox(height: 10),
-              Center(
-                child: Column(
+              FadeInDown(
+                duration: const Duration(milliseconds: 400),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.water_drop, color: focusBlue, size: 38),
-                    const SizedBox(height: 4),
-                    const Text(
-                      'Report a Water Issue',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 22,
-                        color: Color.fromRGBO(66, 66, 66, 1),
-                        letterSpacing: 0.5,
+                    Icon(
+                      Icons.report_problem_outlined,
+                      color: accentColor,
+                      size: 32,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Report a Problem',
+                      style: GoogleFonts.poppins(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        color: Color.fromARGB(255, 43, 43, 43),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 24),
+              // Error Message
+              if (_errorMessage != null)
+                FadeIn(
+                  duration: const Duration(milliseconds: 300),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.grey.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      _errorMessage!,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: Colors.red.shade800,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ),
+              if (_errorMessage != null) const SizedBox(height: 16),
+              // Form Fields
               Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.07),
+                      color: Colors.grey.withOpacity(0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
                 child: Column(
                   children: [
                     _modernField(
@@ -724,7 +865,9 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                       label: 'Issue Description *',
                       icon: Icons.report_problem_outlined,
                       maxLines: 2,
-                      validator: (v) => v!.isEmpty ? 'Required' : null,
+                      validator: (v) => v!.isEmpty
+                          ? 'Please enter the issue description'
+                          : null,
                     ),
                     _modernField(
                       controller: _locationController,
@@ -733,8 +876,9 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                       readOnly: true,
                       onTap: _openMapPicker,
                       hint: 'Tap to select or search location',
-                      validator: (v) =>
-                          _selectedLocation == null ? 'Required' : null,
+                      validator: (v) => _selectedLocation == null
+                          ? 'Please select a location'
+                          : null,
                       suffixIcon: IconButton(
                         icon: Icon(Icons.map, color: iconGrey),
                         onPressed: _openMapPicker,
@@ -747,8 +891,9 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                       readOnly: true,
                       onTap: _selectDateTime,
                       hint: 'Tap to select date and time',
-                      validator: (v) =>
-                          _selectedDateTime == null ? 'Required' : null,
+                      validator: (v) => _selectedDateTime == null
+                          ? 'Please select date and time'
+                          : null,
                     ),
                     Row(
                       children: [
@@ -759,103 +904,125 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                             label: 'Upload Image',
                             icon: Icons.image_outlined,
                             readOnly: true,
+                            validator: (v) => null,
                           ),
                         ),
-                        const SizedBox(width: 6),
-                        ElevatedButton.icon(
-                          onPressed: _pickImage,
-                          icon: Icon(Icons.upload, size: 18, color: iconGrey),
-                          label: Text('UPLOAD',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  color: iconGrey,
-                                  fontWeight: FontWeight.w900)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: focusBlue,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8)),
-                            minimumSize: const Size(0, 40),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 0),
+                        const SizedBox(width: 12),
+                        FadeInUp(
+                          duration: const Duration(milliseconds: 400),
+                          delay: const Duration(milliseconds: 400),
+                          child: SizedBox(
+                            height: 48,
+                            child: ElevatedButton.icon(
+                              onPressed: _pickImage,
+                              icon: const Icon(Icons.upload,
+                                  size: 20, color: Colors.white),
+                              label: Text(
+                                'Upload',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: accentColor,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
+                              ),
+                            ),
                           ),
                         ),
                       ],
                     ),
                     if (_imageFile != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8.0, bottom: 2),
-                        child: Stack(
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: Image.file(
-                                File(_imageFile!.path),
-                                height: 110,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            Positioned(
-                              top: 4,
-                              right: 4,
-                              child: GestureDetector(
-                                onTap: () => setState(() => _imageFile = null),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: Colors.white70,
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  child: const Icon(Icons.close,
-                                      size: 20, color: Colors.red),
+                      FadeInUp(
+                        duration: const Duration(milliseconds: 400),
+                        delay: const Duration(milliseconds: 450),
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.file(
+                                  File(_imageFile!.path),
+                                  height: 120,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
                                 ),
                               ),
-                            ),
-                          ],
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: GestureDetector(
+                                  onTap: () =>
+                                      setState(() => _imageFile = null),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.8),
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.2),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(Icons.close,
+                                        size: 20, color: Colors.red),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 46,
-                      child: ElevatedButton(
-                        onPressed: _isSubmitting ? null : _submitReport,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: focusBlue,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                          padding: EdgeInsets.zero,
+                    const SizedBox(height: 20),
+                    FadeInUp(
+                      duration: const Duration(milliseconds: 400),
+                      delay: const Duration(milliseconds: 500),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _isSubmitting ? null : _submitReport,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accentColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 2,
+                            shadowColor: Colors.grey.withOpacity(0.5),
+                          ),
+                          child: Text(
+                            _isSubmitting ? 'Submitting...' : 'Submit Report',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-                        child: _isSubmitting
-                            ? const SizedBox(
-                                height: 22,
-                                width: 22,
-                                child: CircularProgressIndicator(
-                                    color: Colors.white, strokeWidth: 2),
-                              )
-                            : const Text('SUBMIT REPORT',
-                                style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white)),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Center(
+                    const SizedBox(height: 12),
+                    FadeInUp(
+                      duration: const Duration(milliseconds: 400),
+                      delay: const Duration(milliseconds: 550),
                       child: Text(
                         'Fields marked with * are required',
-                        style: TextStyle(
+                        style: GoogleFonts.poppins(
                           fontSize: 12,
-                          color: Colors.red[700],
+                          color: Colors.red.shade700,
                           fontStyle: FontStyle.italic,
-                          fontWeight: FontWeight.w500,
-                          shadows: [
-                            Shadow(
-                              color: Colors.white,
-                              offset: Offset(0.5, 0.5),
-                              blurRadius: 1,
-                            ),
-                          ],
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ],
@@ -865,6 +1032,65 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class CustomLoadingDialog extends StatelessWidget {
+  const CustomLoadingDialog({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Container(
+                width: 160,
+                height: 160,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Spin(
+                duration: const Duration(milliseconds: 800),
+                child: const CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF87CEEB)),
+                  strokeWidth: 5,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Submitting Report...',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
