@@ -913,7 +913,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
             ),
             const SizedBox(height: 16),
             SizedBox(
-              height: 150,
+              height: 160,
               child: Row(
                 children: [
                   Expanded(
