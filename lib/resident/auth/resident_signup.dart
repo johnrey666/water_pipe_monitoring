@@ -1,11 +1,17 @@
 // ignore_for_file: sort_child_properties_last, use_build_context_synchronously
 
+import 'dart:async'; // Added for TimeoutException
+import 'dart:math';
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' as latlong;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'resident_login.dart';
 
 class ResidentSignupPage extends StatefulWidget {
@@ -28,7 +34,11 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
   bool _passwordVisible = false;
   bool _confirmPasswordVisible = false;
   String? _errorMessage;
+  latlong.LatLng? _selectedLocation;
+  String? _selectedPlaceName;
+  bool _isSearchingLocation = false;
   final Color primaryColor = const Color(0xFF87CEEB);
+  final Color accentColor = const Color(0xFF0288D1);
 
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
@@ -59,17 +69,26 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
         password: _passwordController.text.trim(),
       );
 
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userCredential.user!.uid)
-          .set({
+      Map<String, dynamic> userData = {
         'fullName': _nameController.text.trim(),
         'address': _addressController.text.trim(),
         'contactNumber': _contactController.text.trim(),
         'email': _emailController.text.trim(),
         'role': 'Resident',
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      };
+
+      // Add location data if selected
+      if (_selectedLocation != null) {
+        userData['location'] =
+            GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude);
+        userData['placeName'] = _selectedPlaceName ?? 'Unknown location';
+      }
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .set(userData);
 
       if (!mounted) return;
       Navigator.pop(context); // Close loading dialog
@@ -109,6 +128,325 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
       default:
         return 'An error occurred. Please try again.';
     }
+  }
+
+  Future<void> _searchLocation(String query) async {
+    if (query.isEmpty) return;
+    setState(() {
+      _isSearchingLocation = true;
+      _errorMessage = null;
+    });
+    try {
+      final response = await http.get(
+        Uri.parse(
+            'https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=1'),
+        headers: {'User-Agent': 'WaterPipeMonitoring/1.0'},
+      ).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          throw TimeoutException('Location search timed out');
+        },
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data.isNotEmpty) {
+          final lat = double.parse(data[0]['lat']);
+          final lon = double.parse(data[0]['lon']);
+          final placeName = data[0]['display_name'];
+          setState(() {
+            _selectedLocation = latlong.LatLng(lat, lon);
+            _selectedPlaceName = placeName;
+            _addressController.text = placeName;
+          });
+        } else {
+          setState(() {
+            _errorMessage = 'Location not found';
+          });
+        }
+      } else {
+        throw Exception('Failed to search location: ${response.statusCode}');
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error searching location: $e';
+      });
+    } finally {
+      setState(() {
+        _isSearchingLocation = false;
+      });
+    }
+  }
+
+  Future<String> _getPlaceName(latlong.LatLng position) async {
+    try {
+      final response = await http.get(
+        Uri.parse(
+            'https://nominatim.openstreetmap.org/reverse?lat=${position.latitude}&lon=${position.longitude}&format=json'),
+        headers: {'User-Agent': 'WaterPipeMonitoring/1.0'},
+      ).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          print('Reverse geocoding timed out');
+          return http.Response('{"display_name": "Unknown location"}', 200);
+        },
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['display_name'] ?? 'Unknown location';
+      }
+      return 'Unknown location';
+    } catch (e) {
+      print('Error in _getPlaceName: $e');
+      return 'Unknown location';
+    }
+  }
+
+  void _openMapPicker() {
+    latlong.LatLng initial = _selectedLocation ??
+        const latlong.LatLng(13.294678436001885, 123.75569591912894);
+    latlong.LatLng? tempLocation = _selectedLocation;
+    String? tempPlaceName = _selectedPlaceName;
+    MapController tempMapController = MapController();
+    TextEditingController searchController = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => FractionallySizedBox(
+        heightFactor: 0.95,
+        child: Material(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+          clipBehavior: Clip.antiAlias,
+          child: StatefulBuilder(
+            builder: (context, modalSetState) => Stack(
+              children: [
+                FlutterMap(
+                  mapController: tempMapController,
+                  options: MapOptions(
+                    initialCenter: tempLocation ?? initial,
+                    initialZoom: 16,
+                    minZoom: 15,
+                    maxZoom: 17,
+                    initialCameraFit: CameraFit.bounds(
+                      bounds: LatLngBounds(
+                        latlong.LatLng(13.292678436001885, 123.75369591912894),
+                        latlong.LatLng(13.296678436001885, 123.75769591912894),
+                      ),
+                      padding: const EdgeInsets.all(50),
+                    ),
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.all &
+                          ~InteractiveFlag.doubleTapZoom &
+                          ~InteractiveFlag.flingAnimation,
+                    ),
+                    onTap: (tapPosition, position) async {
+                      modalSetState(() {
+                        _isSearchingLocation = true;
+                      });
+                      final placeName = await _getPlaceName(position);
+                      modalSetState(() {
+                        tempLocation = position;
+                        tempPlaceName = placeName;
+                        _isSearchingLocation = false;
+                      });
+                      tempMapController.move(position, 16);
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      subdomains: const ['a', 'b', 'c'],
+                      userAgentPackageName: 'com.example.water_pipe_monitoring',
+                      errorTileCallback: (tile, error, stackTrace) {
+                        print('Tile loading error: $e');
+                        setState(() {
+                          _errorMessage =
+                              'Failed to load map tiles. Check your internet connection.';
+                        });
+                      },
+                      maxNativeZoom: 19,
+                      maxZoom: 19,
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: const latlong.LatLng(
+                              13.294678436001885, 123.75569591912894),
+                          width: 140,
+                          height: 40,
+                          child: FadeIn(
+                            duration: const Duration(milliseconds: 300),
+                            child: Text(
+                              'San Jose',
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.red[900],
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                        if (tempLocation != null)
+                          Marker(
+                            point: tempLocation!,
+                            width: 36,
+                            height: 36,
+                            child: const Icon(
+                              Icons.location_pin,
+                              color: Colors.red,
+                              size: 36,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  right: 10,
+                  child: TextField(
+                    controller: searchController,
+                    cursorColor: accentColor,
+                    decoration: InputDecoration(
+                      hintText: 'e.g., San Jose, Malilipot',
+                      hintStyle: GoogleFonts.poppins(color: Colors.grey),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: Colors.grey),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: primaryColor),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                      suffixIcon: _isSearchingLocation
+                          ? const Padding(
+                              padding: EdgeInsets.all(12),
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: Colors.white.withOpacity(0.95),
+                    ),
+                    onSubmitted: (value) async {
+                      await _searchLocation(value);
+                      modalSetState(() {
+                        tempLocation = _selectedLocation;
+                        tempPlaceName = _selectedPlaceName;
+                        searchController.text = tempPlaceName ?? '';
+                      });
+                    },
+                  ),
+                ),
+                Positioned(
+                  top: 60,
+                  left: 10,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      'Approx. 100m',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 10,
+                  right: 10,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(4),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                    child: Text(
+                      '© OpenStreetMap contributors',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        color: Colors.black87,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 10,
+                  left: 10,
+                  right: 10,
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: tempLocation != null
+                          ? () {
+                              setState(() {
+                                _selectedLocation = tempLocation;
+                                _selectedPlaceName = tempPlaceName;
+                                _addressController.text = tempPlaceName ?? '';
+                              });
+                              Navigator.pop(context);
+                            }
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accentColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 2,
+                        shadowColor: Colors.grey.withOpacity(0.5),
+                      ),
+                      child: Text(
+                        'Confirm Location',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -243,15 +581,17 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // Address Field
+                      // Address Field with Map Picker
                       FadeInUp(
                         duration: const Duration(milliseconds: 400),
                         delay: const Duration(milliseconds: 150),
                         child: TextFormField(
                           controller: _addressController,
                           cursorColor: const Color(0xFF0288D1),
+                          readOnly: true,
+                          onTap: _openMapPicker,
                           decoration: InputDecoration(
-                            hintText: 'Address',
+                            hintText: 'Tap to select or search location',
                             hintStyle: GoogleFonts.poppins(color: Colors.grey),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -269,12 +609,27 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                             ),
                             prefixIcon: const Icon(Icons.location_on_outlined,
                                 color: Colors.grey),
+                            suffixIcon: _isSearchingLocation
+                                ? const Padding(
+                                    padding: EdgeInsets.all(12),
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    ),
+                                  )
+                                : IconButton(
+                                    icon: const Icon(Icons.map,
+                                        color: Colors.grey),
+                                    onPressed: _openMapPicker,
+                                  ),
                             filled: true,
                             fillColor: Colors.white,
                           ),
                           validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Please enter your address';
+                            if (_selectedLocation == null) {
+                              return 'Please select a location';
                             }
                             return null;
                           },

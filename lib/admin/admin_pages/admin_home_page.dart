@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../components/admin_layout.dart';
 
 class AdminHomePage extends StatefulWidget {
@@ -16,8 +16,8 @@ class AdminHomePage extends StatefulWidget {
 class _AdminHomePageState extends State<AdminHomePage> {
   int _currentPage = 0;
   final int _pageSize = 5;
-  // ignore: unused_field
-  DocumentSnapshot? _lastDocument;
+  List<DocumentSnapshot?> _lastDocuments = [null];
+  int _totalPages = 1;
 
   // Firestore instance
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -31,66 +31,153 @@ class _AdminHomePageState extends State<AdminHomePage> {
   void initState() {
     super.initState();
     _loadChartData();
+    _fetchTotalPages();
+  }
+
+  Future<void> _fetchTotalPages() async {
+    try {
+      final snapshot = await _firestore
+          .collection('reports')
+          .orderBy('createdAt', descending: true)
+          .get();
+      final totalDocs = snapshot.docs.length;
+      if (mounted) {
+        setState(() {
+          _totalPages = (totalDocs / _pageSize).ceil();
+          while (_lastDocuments.length < _totalPages) {
+            _lastDocuments.add(null);
+          }
+        });
+      }
+    } catch (e) {
+      print('Error fetching total pages: $e');
+    }
   }
 
   Future<void> _loadChartData() async {
-    DateTime now = DateTime.now();
-    DateTime startDate = DateTime(now.year, now.month - 5, 1);
-    DateTime endDate = DateTime(now.year, now.month + 1, 1);
+    try {
+      setState(() {
+        isLoadingChart = true;
+      });
 
-    QuerySnapshot billsSnapshot = await _firestore
-        .collection('bills')
-        .where('periodStart',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
-        .where('periodStart', isLessThan: Timestamp.fromDate(endDate))
-        .get();
+      DateTime now = DateTime.now();
+      DateTime startDate = DateTime(now.year, now.month - 5, 1);
+      DateTime endDate = DateTime(now.year, now.month + 1, 1);
 
-    QuerySnapshot reportsSnapshot = await _firestore
-        .collection('reports')
-        .where('createdAt',
-            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
-        .where('createdAt', isLessThan: Timestamp.fromDate(endDate))
-        .get();
+      // Fetch all residents
+      QuerySnapshot userSnapshot = await _firestore
+          .collection('users')
+          .where('role', isEqualTo: 'Resident')
+          .get();
 
-    Map<int, double> usageMap = {};
-    Map<int, int> reportsMap = {};
+      // Fetch consumption history from each resident's subcollection
+      Map<int, double> usageMap = {};
+      List<DateTime> months = [];
+      DateTime current = startDate;
+      while (current.isBefore(endDate)) {
+        months.add(current);
+        int key = current.month + current.year * 12;
+        usageMap[key] = 0.0;
+        current = DateTime(current.year, current.month + 1, 1);
+      }
 
-    List<DateTime> months = [];
-    DateTime current = startDate;
-    while (current.isBefore(endDate)) {
-      months.add(current);
-      int key = current.month + current.year * 12;
-      usageMap[key] = 0.0;
-      reportsMap[key] = 0;
-      current = DateTime(current.year, current.month + 1, 1);
-    }
+      for (var userDoc in userSnapshot.docs) {
+        QuerySnapshot historySnapshot = await _firestore
+            .collection('users')
+            .doc(userDoc.id)
+            .collection('consumption_history')
+            .where('periodStart',
+                isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+            .where('periodStart', isLessThan: Timestamp.fromDate(endDate))
+            .get();
 
-    for (var doc in billsSnapshot.docs) {
-      Timestamp periodStart = doc['periodStart'];
-      DateTime date = periodStart.toDate();
-      int key = date.month + date.year * 12;
-      double usage = (doc['currentConsumedWaterMeter'] ?? 0).toDouble();
-      usageMap[key] = (usageMap[key] ?? 0) + usage;
-    }
+        for (var doc in historySnapshot.docs) {
+          Timestamp periodStart = doc['periodStart'];
+          DateTime date = periodStart.toDate();
+          int key = date.month + date.year * 12;
+          double usage = (doc['cubicMeterUsed'] ?? 0).toDouble();
+          usageMap[key] = (usageMap[key] ?? 0) + usage;
+        }
+      }
 
-    for (var doc in reportsSnapshot.docs) {
-      Timestamp? createdAt = doc['createdAt'];
-      if (createdAt != null) {
-        DateTime date = createdAt.toDate();
-        int key = date.month + date.year * 12;
-        reportsMap[key] = (reportsMap[key] ?? 0) + 1;
+      // Fetch reports
+      QuerySnapshot reportsSnapshot = await _firestore
+          .collection('reports')
+          .where('createdAt',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+          .where('createdAt', isLessThan: Timestamp.fromDate(endDate))
+          .get();
+
+      Map<int, int> reportsMap = {};
+      for (var month in months) {
+        int key = month.month + month.year * 12;
+        reportsMap[key] = 0;
+      }
+
+      for (var doc in reportsSnapshot.docs) {
+        Timestamp? createdAt = doc['createdAt'];
+        if (createdAt != null) {
+          DateTime date = createdAt.toDate();
+          int key = date.month + date.year * 12;
+          reportsMap[key] = (reportsMap[key] ?? 0) + 1;
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          monthLabels = months.map((m) => DateFormat('MMM').format(m)).toList();
+          waterUsages =
+              months.map((m) => usageMap[m.month + m.year * 12] ?? 0).toList();
+          reportCounts = months
+              .map((m) => (reportsMap[m.month + m.year * 12] ?? 0).toDouble())
+              .toList();
+          isLoadingChart = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading chart data: $e');
+      if (mounted) {
+        setState(() {
+          isLoadingChart = false;
+        });
       }
     }
+  }
 
-    setState(() {
-      monthLabels = months.map((m) => DateFormat('MMM').format(m)).toList();
-      waterUsages =
-          months.map((m) => usageMap[m.month + m.year * 12] ?? 0).toList();
-      reportCounts = months
-          .map((m) => (reportsMap[m.month + m.year * 12] ?? 0).toDouble())
-          .toList();
-      isLoadingChart = false;
-    });
+  Future<int> _getTotalBillsCount() async {
+    try {
+      QuerySnapshot userSnapshot = await _firestore
+          .collection('users')
+          .where('role', isEqualTo: 'Resident')
+          .get();
+
+      int totalBills = 0;
+      for (var userDoc in userSnapshot.docs) {
+        QuerySnapshot billsSnapshot = await _firestore
+            .collection('users')
+            .doc(userDoc.id)
+            .collection('bills')
+            .get();
+        totalBills += billsSnapshot.docs.length;
+      }
+      return totalBills;
+    } catch (e) {
+      print('Error fetching total bills count: $e');
+      return 0;
+    }
+  }
+
+  Stream<QuerySnapshot> _getReportsStream() {
+    Query query = _firestore
+        .collection('reports')
+        .orderBy('createdAt', descending: true)
+        .limit(_pageSize);
+
+    if (_currentPage > 0 && _lastDocuments[_currentPage - 1] != null) {
+      query = query.startAfterDocument(_lastDocuments[_currentPage - 1]!);
+    }
+
+    return query.snapshots();
   }
 
   @override
@@ -106,7 +193,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
             // Top stats
             Row(
               children: [
-                // Users count (Resident and Plumber)
                 Expanded(
                   child: StreamBuilder<QuerySnapshot>(
                     stream: _firestore.collection('users').where('role',
@@ -128,7 +214,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   ),
                 ),
                 const SizedBox(width: 20),
-                // Reports count
                 Expanded(
                   child: StreamBuilder<QuerySnapshot>(
                     stream: _firestore.collection('reports').snapshots(),
@@ -149,10 +234,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   ),
                 ),
                 const SizedBox(width: 20),
-                // Invoices (bills) count
                 Expanded(
-                  child: StreamBuilder<QuerySnapshot>(
-                    stream: _firestore.collection('bills').snapshots(),
+                  child: FutureBuilder<int>(
+                    future: _getTotalBillsCount(),
                     builder: (context, snapshot) {
                       if (snapshot.hasError) {
                         return _statCard(context, 'Error', 'INVOICES',
@@ -162,8 +246,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                         return _statCard(context, '...', 'INVOICES',
                             Icons.receipt_long, Colors.orange);
                       }
-                      final billCount =
-                          snapshot.data?.docs.length.toString() ?? '0';
+                      final billCount = snapshot.data?.toString() ?? '0';
                       return _statCard(context, billCount, 'INVOICES',
                           Icons.receipt_long, Colors.orange);
                     },
@@ -172,10 +255,8 @@ class _AdminHomePageState extends State<AdminHomePage> {
               ],
             ),
             const SizedBox(height: 32),
-
-            // Chart and Recent Reports
             SizedBox(
-              height: 400, // Fixed height for uniformity
+              height: 400,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -230,7 +311,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 const SizedBox(width: 12),
                 Text(
                   label,
-                  style: GoogleFonts.poppins(
+                  style: GoogleFonts.inter(
                     fontSize: 14,
                     color: Colors.grey.shade600,
                     fontWeight: FontWeight.w500,
@@ -241,7 +322,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
             const SizedBox(height: 12),
             Text(
               value,
-              style: GoogleFonts.poppins(
+              style: GoogleFonts.inter(
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
                 color: color,
@@ -255,7 +336,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   Widget _buildChartCard() {
     return Container(
-      height: 400, // Fixed height
+      height: 400,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -282,7 +363,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               const SizedBox(width: 8),
               Text(
                 'Monthly Water Usage & Reports',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: Colors.grey.shade800,
@@ -294,71 +375,84 @@ class _AdminHomePageState extends State<AdminHomePage> {
           Expanded(
             child: isLoadingChart
                 ? const Center(child: CircularProgressIndicator())
-                : BarChart(
-                    BarChartData(
-                      alignment: BarChartAlignment.spaceAround,
-                      titlesData: FlTitlesData(
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (value, meta) => Text(
-                              value.toInt().toString(),
-                              style: GoogleFonts.poppins(fontSize: 12),
-                            ),
-                            reservedSize: 40,
+                : monthLabels.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No data available',
+                          style: GoogleFonts.inter(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
                           ),
                         ),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (value, meta) {
-                              final int index = value.toInt();
-                              if (index >= 0 && index < monthLabels.length) {
-                                return Text(
-                                  monthLabels[index],
-                                  style: GoogleFonts.poppins(fontSize: 12),
-                                );
-                              }
-                              return const Text('');
-                            },
-                          ),
-                        ),
-                        topTitles: const AxisTitles(),
-                        rightTitles: const AxisTitles(),
-                      ),
-                      borderData: FlBorderData(show: false),
-                      gridData:
-                          const FlGridData(show: true, drawVerticalLine: false),
-                      barTouchData: BarTouchData(
-                        enabled: true,
-                        touchTooltipData: BarTouchTooltipData(
-                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                            final isUsage = rodIndex == 0;
-                            return BarTooltipItem(
-                              '${isUsage ? 'Usage' : 'Reports'}: ${rod.toY.toInt()}',
-                              GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w500,
-                                fontSize: 12,
+                      )
+                    : BarChart(
+                        BarChartData(
+                          alignment: BarChartAlignment.spaceAround,
+                          titlesData: FlTitlesData(
+                            leftTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                getTitlesWidget: (value, meta) => Text(
+                                  value.toInt().toString(),
+                                  style: GoogleFonts.inter(fontSize: 12),
+                                ),
+                                reservedSize: 40,
                               ),
-                            );
-                          },
+                            ),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                getTitlesWidget: (value, meta) {
+                                  final int index = value.toInt();
+                                  if (index >= 0 &&
+                                      index < monthLabels.length) {
+                                    return Text(
+                                      monthLabels[index],
+                                      style: GoogleFonts.inter(fontSize: 12),
+                                    );
+                                  }
+                                  return const Text('');
+                                },
+                              ),
+                            ),
+                            topTitles: const AxisTitles(),
+                            rightTitles: const AxisTitles(),
+                          ),
+                          borderData: FlBorderData(show: false),
+                          gridData: const FlGridData(
+                              show: true, drawVerticalLine: false),
+                          barTouchData: BarTouchData(
+                            enabled: true,
+                            touchTooltipData: BarTouchTooltipData(
+                              getTooltipItem:
+                                  (group, groupIndex, rod, rodIndex) {
+                                final isUsage = rodIndex == 0;
+                                return BarTooltipItem(
+                                  '${isUsage ? 'Usage' : 'Reports'}: ${rod.toY.toInt()}',
+                                  GoogleFonts.inter(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w500,
+                                    fontSize: 12,
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          barGroups: List.generate(
+                            monthLabels.length,
+                            (i) => BarChartGroupData(
+                              x: i,
+                              barRods: [
+                                BarChartRodData(
+                                    toY: waterUsages[i], color: Colors.blue),
+                                BarChartRodData(
+                                    toY: reportCounts[i],
+                                    color: Colors.redAccent),
+                              ],
+                            ),
+                          ),
                         ),
                       ),
-                      barGroups: List.generate(
-                        monthLabels.length,
-                        (i) => BarChartGroupData(
-                          x: i,
-                          barRods: [
-                            BarChartRodData(
-                                toY: waterUsages[i], color: Colors.blue),
-                            BarChartRodData(
-                                toY: reportCounts[i], color: Colors.redAccent),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
           ),
         ],
       ),
@@ -382,7 +476,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
 
   Widget _buildRecentReportsCard() {
     return Container(
-      height: 400, // Fixed height
+      height: 400,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -409,7 +503,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
               const SizedBox(width: 8),
               Text(
                 'Recent Reports',
-                style: GoogleFonts.poppins(
+                style: GoogleFonts.inter(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                   color: Colors.grey.shade800,
@@ -420,17 +514,16 @@ class _AdminHomePageState extends State<AdminHomePage> {
           const SizedBox(height: 16),
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: _firestore
-                  .collection('reports')
-                  .orderBy('createdAt', descending: true)
-                  .limit(_pageSize)
-                  .snapshots(),
+              stream: _getReportsStream(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return const Center(
+                  return Center(
                     child: Text(
-                      'Error loading reports',
-                      style: TextStyle(fontSize: 13, color: Colors.redAccent),
+                      'Error loading reports: ${snapshot.error}',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: Colors.redAccent,
+                      ),
                     ),
                   );
                 }
@@ -442,10 +535,10 @@ class _AdminHomePageState extends State<AdminHomePage> {
                 final reports = snapshot.data?.docs ?? [];
 
                 if (reports.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Text(
                       'No reports available',
-                      style: TextStyle(
+                      style: GoogleFonts.inter(
                         fontSize: 13,
                         color: Colors.grey,
                       ),
@@ -453,10 +546,12 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   );
                 }
 
-                // Update _lastDocument for the next page
-                DocumentSnapshot? newLastDocument;
                 if (reports.isNotEmpty) {
-                  newLastDocument = reports.last;
+                  if (_currentPage >= _lastDocuments.length) {
+                    _lastDocuments.add(reports.last);
+                  } else {
+                    _lastDocuments[_currentPage] = reports.last;
+                  }
                 }
 
                 return Column(
@@ -466,9 +561,9 @@ class _AdminHomePageState extends State<AdminHomePage> {
                         itemCount: reports.length,
                         itemBuilder: (context, index) {
                           final report = reports[index];
-                          final fullName = report['fullName'] ?? '';
+                          final fullName = report['fullName'] ?? 'Unknown';
                           final issueDescription =
-                              report['issueDescription'] ?? '';
+                              report['issueDescription'] ?? 'No description';
                           final createdAt = report['createdAt']?.toDate();
                           final status = report['status'] ?? 'Unfixed Reports';
                           final formattedDate = createdAt != null
@@ -503,7 +598,7 @@ class _AdminHomePageState extends State<AdminHomePage> {
                                             Expanded(
                                               child: Text(
                                                 fullName,
-                                                style: GoogleFonts.poppins(
+                                                style: GoogleFonts.inter(
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w500,
                                                   color: Colors.grey.shade800,
@@ -517,14 +612,14 @@ class _AdminHomePageState extends State<AdminHomePage> {
                                           issueDescription,
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
-                                          style: GoogleFonts.poppins(
+                                          style: GoogleFonts.inter(
                                             fontSize: 12,
                                             color: Colors.grey.shade600,
                                           ),
                                         ),
                                         Text(
                                           formattedDate,
-                                          style: GoogleFonts.poppins(
+                                          style: GoogleFonts.inter(
                                             fontSize: 12,
                                             color: Colors.grey.shade600,
                                           ),
@@ -547,46 +642,40 @@ class _AdminHomePageState extends State<AdminHomePage> {
                               ? () {
                                   setState(() {
                                     _currentPage--;
-                                    _lastDocument =
-                                        null; // Reset for previous pages
                                   });
                                 }
                               : null,
                           child: Text(
                             'Previous',
-                            style: GoogleFonts.poppins(
+                            style: GoogleFonts.inter(
                               fontSize: 12,
                               color: _currentPage > 0
-                                  ? const Color(0xFF4A2C6F)
+                                  ? const Color(0xFF1E88E5)
                                   : Colors.grey,
                             ),
                           ),
                         ),
                         Text(
-                          'Page ${_currentPage + 1}',
-                          style: GoogleFonts.poppins(
+                          'Page ${_currentPage + 1} of $_totalPages',
+                          style: GoogleFonts.inter(
                             fontSize: 12,
                             color: Colors.grey.shade800,
                           ),
                         ),
                         TextButton(
-                          onPressed: reports.length == _pageSize &&
-                                  newLastDocument != null
+                          onPressed: _currentPage < _totalPages - 1
                               ? () {
                                   setState(() {
                                     _currentPage++;
-                                    _lastDocument =
-                                        newLastDocument; // Update for next page
                                   });
                                 }
                               : null,
                           child: Text(
                             'Next',
-                            style: GoogleFonts.poppins(
+                            style: GoogleFonts.inter(
                               fontSize: 12,
-                              color: reports.length == _pageSize &&
-                                      newLastDocument != null
-                                  ? const Color(0xFF4A2C6F)
+                              color: _currentPage < _totalPages - 1
+                                  ? const Color(0xFF1E88E5)
                                   : Colors.grey,
                             ),
                           ),

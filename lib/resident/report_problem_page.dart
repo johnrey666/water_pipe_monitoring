@@ -1,5 +1,6 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const, unused_element, use_build_context_synchronously, unnecessary_string_interpolations, unnecessary_to_list_in_spreads, unused_local_variable
 
+import 'dart:async'; // Added for TimeoutException
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -30,12 +31,13 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   latlong.LatLng? _selectedLocation;
   String? _selectedPlaceName;
   final _issueController = TextEditingController();
-  final _locationController = TextEditingController();
+  final _additionalInfoController = TextEditingController();
   final _dateTimeController = TextEditingController();
   MapController? _mapController;
   DateTime? _selectedDateTime;
   bool _isSubmitting = false;
   bool _isSearchingLocation = false;
+  bool _isPublicReport = false;
   String? _errorMessage;
   final Color primaryColor = const Color(0xFF87CEEB);
   final Color accentColor = const Color(0xFF0288D1);
@@ -75,6 +77,11 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         Uri.parse(
             'https://nominatim.openstreetmap.org/search?q=$query&format=json&limit=1'),
         headers: {'User-Agent': 'WaterPipeMonitoring/1.0'},
+      ).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          throw TimeoutException('Location search timed out');
+        },
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -85,7 +92,6 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
           setState(() {
             _selectedLocation = latlong.LatLng(lat, lon);
             _selectedPlaceName = placeName;
-            _locationController.text = placeName;
           });
           if (_mapController != null) {
             _mapController!.move(_selectedLocation!, 16);
@@ -115,6 +121,12 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         Uri.parse(
             'https://nominatim.openstreetmap.org/reverse?lat=${position.latitude}&lon=${position.longitude}&format=json'),
         headers: {'User-Agent': 'WaterPipeMonitoring/1.0'},
+      ).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          print('Reverse geocoding timed out');
+          return http.Response('{"display_name": "Unknown location"}', 200);
+        },
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -122,6 +134,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
       }
       return 'Unknown location';
     } catch (e) {
+      print('Error in _getPlaceName: $e');
       return 'Unknown location';
     }
   }
@@ -184,7 +197,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
     }
   }
 
-  Future<Map<String, String>?> _getUserInfo() async {
+  Future<Map<String, dynamic>?> _getUserInfo() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
@@ -197,10 +210,16 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
       if (!userDoc.exists) {
         throw Exception('User data not found');
       }
+      final data = userDoc.data()!;
+      final location = data['location'] as GeoPoint?;
       return {
         'userId': user.uid,
-        'fullName': userDoc.data()?['fullName'] ?? 'Unknown',
-        'contactNumber': userDoc.data()?['contactNumber'] ?? 'Unknown',
+        'fullName': data['fullName'] ?? 'Unknown',
+        'contactNumber': data['contactNumber'] ?? 'Unknown',
+        'location': location != null
+            ? latlong.LatLng(location.latitude, location.longitude)
+            : null,
+        'placeName': data['placeName'] ?? 'Unknown location',
       };
     } catch (e) {
       setState(() {
@@ -241,17 +260,31 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
       if (userInfo == null) {
         throw Exception('Failed to fetch user info');
       }
+      if (!_isPublicReport && userInfo['location'] == null) {
+        throw Exception('User location not found');
+      }
       final reportData = {
         'userId': userInfo['userId'],
         'fullName': userInfo['fullName'],
         'contactNumber': userInfo['contactNumber'],
         'issueDescription': _issueController.text,
-        'location':
-            GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude),
-        'placeName': _selectedPlaceName ?? 'Unknown location',
+        'location': _isPublicReport
+            ? GeoPoint(
+                _selectedLocation!.latitude, _selectedLocation!.longitude)
+            : GeoPoint(
+                (userInfo['location'] as latlong.LatLng).latitude,
+                (userInfo['location'] as latlong.LatLng).longitude,
+              ),
+        'placeName': _isPublicReport
+            ? (_selectedPlaceName ?? 'Unknown location')
+            : userInfo['placeName'],
         'dateTime': Timestamp.fromDate(_selectedDateTime!),
         'createdAt': Timestamp.now(),
         'status': 'Unfixed Reports',
+        'isPublic': _isPublicReport,
+        'additionalLocationInfo': _additionalInfoController.text.isNotEmpty
+            ? _additionalInfoController.text
+            : null,
       };
       final base64Image = await _convertImageToBase64(_imageFile);
       if (base64Image != null) {
@@ -265,12 +298,13 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
       );
       setState(() {
         _issueController.clear();
-        _locationController.clear();
+        _additionalInfoController.clear();
         _dateTimeController.clear();
         _imageFile = null;
         _selectedLocation = null;
         _selectedPlaceName = null;
         _selectedDateTime = null;
+        _isPublicReport = false;
         _recentPage = 0;
       });
     } catch (e) {
@@ -353,6 +387,8 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                               'Failed to load map tiles. Check your internet connection.';
                         });
                       },
+                      maxNativeZoom: 19,
+                      maxZoom: 19,
                     ),
                     MarkerLayer(
                       markers: [
@@ -501,7 +537,6 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                               setState(() {
                                 _selectedLocation = tempLocation;
                                 _selectedPlaceName = tempPlaceName;
-                                _locationController.text = tempPlaceName ?? '';
                               });
                               Navigator.pop(context);
                             }
@@ -869,21 +904,69 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                           ? 'Please enter the issue description'
                           : null,
                     ),
-                    _modernField(
-                      controller: _locationController,
-                      label: 'Location *',
-                      icon: Icons.location_on_outlined,
-                      readOnly: true,
-                      onTap: _openMapPicker,
-                      hint: 'Tap to select or search location',
-                      validator: (v) => _selectedLocation == null
-                          ? 'Please select a location'
-                          : null,
-                      suffixIcon: IconButton(
-                        icon: Icon(Icons.map, color: iconGrey),
-                        onPressed: _openMapPicker,
+                    FadeInUp(
+                      duration: const Duration(milliseconds: 400),
+                      delay: const Duration(milliseconds: 200),
+                      child: CheckboxListTile(
+                        title: Text(
+                          'Public Report',
+                          style: GoogleFonts.poppins(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        value: _isPublicReport,
+                        onChanged: (value) {
+                          setState(() {
+                            _isPublicReport = value ?? false;
+                            if (!_isPublicReport) {
+                              _selectedLocation = null;
+                              _selectedPlaceName = null;
+                            }
+                          });
+                        },
+                        activeColor: accentColor,
+                        checkColor: Colors.white,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 8),
                       ),
                     ),
+                    if (_isPublicReport)
+                      _modernField(
+                        controller: TextEditingController(
+                            text: _selectedPlaceName ?? ''),
+                        label: 'Location *',
+                        icon: Icons.location_on_outlined,
+                        readOnly: true,
+                        onTap: _openMapPicker,
+                        hint: 'Tap to select or search location',
+                        validator: (v) => _selectedLocation == null
+                            ? 'Please select a location'
+                            : null,
+                        suffixIcon: _isSearchingLocation
+                            ? const Padding(
+                                padding: EdgeInsets.all(12),
+                                child: SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                ),
+                              )
+                            : IconButton(
+                                icon: Icon(Icons.map, color: iconGrey),
+                                onPressed: _openMapPicker,
+                              ),
+                      ),
+                    if (_isPublicReport)
+                      _modernField(
+                        controller: _additionalInfoController,
+                        label: 'Additional Location Information',
+                        icon: Icons.info_outline,
+                        hint: 'Optional details about the location',
+                        validator: (v) => null,
+                      ),
                     _modernField(
                       controller: _dateTimeController,
                       label: 'Date & Time *',

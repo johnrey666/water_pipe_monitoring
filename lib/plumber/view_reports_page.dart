@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +22,7 @@ class ViewReportsPage extends StatefulWidget {
 class _ViewReportsPageState extends State<ViewReportsPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  int _publicPage = 1;
   int _monitoringPage = 1;
   int _fixedPage = 1;
   final int _pageSize = 10;
@@ -30,7 +30,7 @@ class _ViewReportsPageState extends State<ViewReportsPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     if (widget.initialReportId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _showReportModal(widget.initialReportId!);
@@ -113,6 +113,7 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                 fontWeight: FontWeight.w500,
               ),
               tabs: const [
+                Tab(text: 'Public Reports'),
                 Tab(text: 'Monitoring'),
                 Tab(text: 'Fixed'),
               ],
@@ -127,6 +128,13 @@ class _ViewReportsPageState extends State<ViewReportsPage>
           child: TabBarView(
             controller: _tabController,
             children: [
+              _buildReportList(
+                user.uid,
+                null, // No status filter for public reports
+                _publicPage,
+                (page) => setState(() => _publicPage = page),
+                isPublic: true,
+              ),
               _buildReportList(
                 user.uid,
                 ['Unfixed Reports', 'Monitoring'],
@@ -146,15 +154,22 @@ class _ViewReportsPageState extends State<ViewReportsPage>
     );
   }
 
-  Widget _buildReportList(String userId, List<String> statuses, int currentPage,
-      Function(int) onPageChange) {
+  Widget _buildReportList(String userId, List<String>? statuses,
+      int currentPage, Function(int) onPageChange,
+      {bool isPublic = false}) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('reports')
-          .where('assignedPlumber', isEqualTo: userId)
-          .where('status', whereIn: statuses)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+      stream: isPublic
+          ? FirebaseFirestore.instance
+              .collection('reports')
+              .where('isPublic', isEqualTo: true)
+              .orderBy('createdAt', descending: true)
+              .snapshots()
+          : FirebaseFirestore.instance
+              .collection('reports')
+              .where('assignedPlumber', isEqualTo: userId)
+              .where('status', whereIn: statuses)
+              .orderBy('createdAt', descending: true)
+              .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
@@ -375,23 +390,17 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
     });
 
     try {
-      // Update the report status
       await FirebaseFirestore.instance
           .collection('reports')
           .doc(widget.report.id)
           .update({'status': newStatus});
 
-      // Create a notification for the resident
       if (newStatus == 'Fixed') {
         final reportData = widget.report.data() as Map<String, dynamic>;
-        final residentId = reportData['userId']
-            ?.toString(); // Changed from residentId to userId
+        final residentId = reportData['userId']?.toString();
         final issueDescription =
             reportData['issueDescription']?.toString() ?? 'Water issue';
-        print(
-            'Attempting to create notification for userId: $residentId, issue: $issueDescription'); // Debug
         if (residentId != null) {
-          print('Creating notification...'); // Debug
           await FirebaseFirestore.instance.collection('notifications').add({
             'residentId': residentId,
             'type': 'report_status',
@@ -401,9 +410,6 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
             'createdAt': FieldValue.serverTimestamp(),
             'read': false,
           });
-          print('Notification created successfully'); // Debug
-        } else {
-          print('No userId found in report'); // Debug
         }
       }
 
@@ -414,7 +420,6 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
         Navigator.pop(context);
       }
     } catch (e) {
-      print('Error in _updateStatus: $e'); // Debug
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error updating status: $e')),
@@ -431,18 +436,19 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
 
   @override
   Widget build(BuildContext context) {
-    final fullName = widget.report['fullName']?.toString() ?? '';
-    final contactNumber = widget.report['contactNumber']?.toString() ?? '';
-    final issueDescription =
-        widget.report['issueDescription']?.toString() ?? '';
-    final placeName = widget.report['placeName']?.toString() ?? '';
-    final dateTime = widget.report['createdAt'] is Timestamp
-        ? (widget.report['createdAt'] as Timestamp).toDate()
+    final reportData = widget.report.data() as Map<String, dynamic>;
+    final fullName = reportData['fullName']?.toString() ?? '';
+    final contactNumber = reportData['contactNumber']?.toString() ?? '';
+    final issueDescription = reportData['issueDescription']?.toString() ?? '';
+    final placeName = reportData['placeName']?.toString() ?? '';
+    final additionalLocationInfo =
+        reportData['additionalLocationInfo']?.toString();
+    final dateTime = reportData['createdAt'] is Timestamp
+        ? (reportData['createdAt'] as Timestamp).toDate()
         : null;
-    final location = widget.report['location'] as GeoPoint?;
-    final imageBase64 = widget.report['image']?.toString();
-    final currentStatus =
-        widget.report['status']?.toString() ?? 'Unfixed Reports';
+    final location = reportData['location'] as GeoPoint?;
+    final imageBase64 = reportData['image']?.toString();
+    final currentStatus = reportData['status']?.toString() ?? 'Unfixed Reports';
 
     final formattedDate = dateTime != null
         ? DateFormat.yMMMd().add_jm().format(dateTime)
@@ -513,11 +519,27 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                         CircleAvatar(
                           radius: 20,
                           backgroundColor: const Color(0xFFE3F2FD),
-                          child: const Icon(
-                            Icons.person,
-                            color: Color(0xFF87CEEB),
-                            size: 24,
-                          ),
+                          child: reportData['avatarUrl'] != null &&
+                                  reportData['avatarUrl'] is String
+                              ? CachedNetworkImage(
+                                  imageUrl: reportData['avatarUrl'],
+                                  placeholder: (context, url) => const Icon(
+                                    Icons.person,
+                                    color: Color(0xFF87CEEB),
+                                    size: 24,
+                                  ),
+                                  errorWidget: (context, url, error) =>
+                                      const Icon(
+                                    Icons.person,
+                                    color: Color(0xFF87CEEB),
+                                    size: 24,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.person,
+                                  color: Color(0xFF87CEEB),
+                                  size: 24,
+                                ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -548,6 +570,17 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                                   color: Colors.black54,
                                 ),
                               ),
+                              if (reportData['isPublic'] == true)
+                                const SizedBox(height: 4),
+                              if (reportData['isPublic'] == true)
+                                Text(
+                                  'Public Report',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    color: Colors.red.shade600,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                             ],
                           ),
                         ),
@@ -587,6 +620,21 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                         height: 1.4,
                       ),
                     ),
+                    if (reportData['isPublic'] == true &&
+                        additionalLocationInfo != null &&
+                        additionalLocationInfo.isNotEmpty)
+                      const SizedBox(height: 12),
+                    if (reportData['isPublic'] == true &&
+                        additionalLocationInfo != null &&
+                        additionalLocationInfo.isNotEmpty)
+                      Text(
+                        'Additional Location Info: $additionalLocationInfo',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: Colors.black54,
+                          height: 1.4,
+                        ),
+                      ),
                     const SizedBox(height: 12),
                     GestureDetector(
                       onTap: () {
@@ -634,7 +682,6 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                                       'WaterPipeMonitoring/1.0 (contact@yourdomain.com)',
                                   tileProvider: CachedTileProvider(),
                                   errorTileCallback: (tile, error, stackTrace) {
-                                    print('Tile loading error: $e');
                                     if (error.toString().contains('403')) {
                                       ScaffoldMessenger.of(context)
                                           .showSnackBar(
@@ -693,7 +740,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                         color: Colors.black54,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    if (currentStatus != 'Fixed') const SizedBox(height: 16),
                     if (currentStatus != 'Fixed')
                       SizedBox(
                         width: double.infinity,

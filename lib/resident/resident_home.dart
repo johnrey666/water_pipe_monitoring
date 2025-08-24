@@ -118,50 +118,59 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   Future<double> _fetchTotalWaterConsumption() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return 0.0;
+    if (user == null) {
+      print('No user logged in for total water consumption');
+      return 0.0;
+    }
     try {
       final snapshot = await FirebaseFirestore.instance
-          .collection('bills')
-          .where('residentId', isEqualTo: user.uid)
+          .collection('users')
+          .doc(user.uid)
+          .collection('consumption_history')
           .get();
+
+      if (snapshot.docs.isEmpty) {
+        print('No consumption history found for resident ${user.uid}');
+        return 0.0;
+      }
+
       final totalConsumption = snapshot.docs.fold<double>(
         0.0,
-        (sum, doc) =>
-            sum + (doc.data()['currentConsumedWaterMeter']?.toDouble() ?? 0.0),
+        (sum, doc) => sum + (doc['cubicMeterUsed']?.toDouble() ?? 0.0),
       );
+      print('Total water consumption for ${user.uid}: $totalConsumption m³');
       return totalConsumption;
     } catch (e) {
-      print('Error fetching water consumption: $e');
+      print('Error fetching total water consumption: $e');
       return 0.0;
     }
   }
 
   Future<double> _fetchThisMonthConsumption() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return 0.0;
+    if (user == null) {
+      print('No user logged in for this month consumption');
+      return 0.0;
+    }
     try {
       final now = DateTime.now();
       final currentYear = now.year;
       final currentMonth = now.month;
 
       final snapshot = await FirebaseFirestore.instance
-          .collection('bills')
-          .where('residentId', isEqualTo: user.uid)
+          .collection('users')
+          .doc(user.uid)
+          .collection('consumption_history')
+          .where('year', isEqualTo: currentYear)
+          .where('month', isEqualTo: currentMonth)
           .get();
 
       final totalConsumption = snapshot.docs.fold<double>(
         0.0,
-        (sum, doc) {
-          final data = doc.data();
-          final periodStart = (data['periodStart'] as Timestamp?)?.toDate();
-          if (periodStart != null &&
-              periodStart.year == currentYear &&
-              periodStart.month == currentMonth) {
-            return sum + (data['currentConsumedWaterMeter']?.toDouble() ?? 0.0);
-          }
-          return sum;
-        },
+        (sum, doc) => sum + (doc['cubicMeterUsed']?.toDouble() ?? 0.0),
       );
+      print(
+          'This month ($currentYear-$currentMonth) consumption for ${user.uid}: $totalConsumption m³');
       return totalConsumption;
     } catch (e) {
       print('Error fetching this month\'s consumption: $e');
@@ -171,27 +180,37 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   Future<List<Map<String, dynamic>>> _fetchLastSixMonthsConsumption() async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return [];
+    if (user == null) {
+      print('No user logged in for last six months consumption');
+      return [];
+    }
     try {
       final now = DateTime.now();
+      final startDate = DateTime(now.year, now.month - 5, 1);
+      final endDate = DateTime(now.year, now.month + 1, 1);
       final months = <Map<String, dynamic>>[];
       final dateFormat = DateFormat('MMM');
 
-      // Generate the last 6 months, including the current month
+      // Initialize months
       for (int i = 0; i < 6; i++) {
         final targetDate = DateTime(now.year, now.month - i, 1);
         final monthName = dateFormat.format(targetDate);
-        months.add(
-            {'month': targetDate, 'monthName': monthName, 'consumption': 0.0});
+        months.add({
+          'month': targetDate,
+          'monthName': monthName,
+          'consumption': 0.0,
+        });
       }
 
-      // Fetch bills
       final snapshot = await FirebaseFirestore.instance
-          .collection('bills')
-          .where('residentId', isEqualTo: user.uid)
+          .collection('users')
+          .doc(user.uid)
+          .collection('consumption_history')
+          .where('periodStart',
+              isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+          .where('periodStart', isLessThan: Timestamp.fromDate(endDate))
           .get();
 
-      // Aggregate consumption by month
       for (var doc in snapshot.docs) {
         final data = doc.data();
         final periodStart = (data['periodStart'] as Timestamp?)?.toDate();
@@ -199,15 +218,17 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           for (var month in months) {
             if (periodStart.year == month['month'].year &&
                 periodStart.month == month['month'].month) {
-              month['consumption'] +=
-                  (data['currentConsumedWaterMeter']?.toDouble() ?? 0.0);
+              final consumption = data['cubicMeterUsed']?.toDouble() ?? 0.0;
+              month['consumption'] += consumption;
+              print(
+                  'Consumption for ${month['monthName']}: periodStart=$periodStart, cubicMeterUsed=$consumption');
             }
           }
         }
       }
 
-      // Sort months in descending order (most recent first)
       months.sort((a, b) => b['month'].compareTo(a['month']));
+      print('Last six months consumption for ${user.uid}: $months');
       return months;
     } catch (e) {
       print('Error fetching last six months consumption: $e');
@@ -929,9 +950,9 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                             value = 'Error';
                           }
                           return _buildStatCard(
-                            title: 'Water Consumption',
+                            title: 'Total Water Consumption',
                             value: value,
-                            description: 'Total usage recorded',
+                            description: 'All-time usage',
                             icon: Icons.water_drop,
                             color: Colors.blue.shade700,
                           );
@@ -1142,7 +1163,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                   (max, month) =>
                       month['consumption'] > max ? month['consumption'] : max) *
               1.2;
-          maxY = maxY < 50 ? 50 : maxY; // Ensure minimum maxY for visibility
+          maxY = maxY < 50 ? 50 : maxY;
           barGroups = months.asMap().entries.map((entry) {
             final index = entry.key;
             final month = entry.value;

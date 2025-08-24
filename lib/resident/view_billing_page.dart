@@ -15,8 +15,7 @@ class ViewBillingPage extends StatefulWidget {
 
 class _ViewBillingPageState extends State<ViewBillingPage> {
   File? _receiptImage;
-  List<Map<String, dynamic>> _bills = [];
-  int _currentBillIndex = 0;
+  Map<String, dynamic>? _currentBill;
   bool _loading = true;
   String? _error;
   String _residentId = FirebaseAuth.instance.currentUser!.uid;
@@ -29,36 +28,46 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   @override
   void initState() {
     super.initState();
-    _loadBills();
+    _loadLatestBill();
   }
 
-  Future<void> _loadBills() async {
+  Future<void> _loadLatestBill() async {
     try {
       setState(() {
         _loading = true;
         _error = null;
       });
 
-      final snapshot = await FirebaseFirestore.instance
-          .collection('bills')
+      // Fetch unpaid bills from the user's bills subcollection
+      final paidBillIds = await FirebaseFirestore.instance
+          .collection('payments')
           .where('residentId', isEqualTo: _residentId)
-          .orderBy('issueDate', descending: true)
+          .where('status', isEqualTo: 'approved')
+          .get()
+          .then((snapshot) =>
+              snapshot.docs.map((doc) => doc['billId'] as String).toSet());
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_residentId)
+          .collection('bills')
+          .where(FieldPath.documentId,
+              whereNotIn: paidBillIds.isEmpty ? null : paidBillIds.toList())
+          .orderBy('periodStart', descending: true)
+          .limit(1)
           .get();
 
-      print('Found ${snapshot.docs.length} bills for resident: $_residentId');
+      print(
+          'Found ${snapshot.docs.length} unpaid bills for resident: $_residentId');
 
       if (snapshot.docs.isNotEmpty) {
-        final bills = snapshot.docs.map((doc) {
-          final data = doc.data();
-          data['billId'] = doc.id;
-          return data;
-        }).toList();
+        final bill = snapshot.docs.first.data();
+        bill['billId'] = snapshot.docs.first.id;
 
         setState(() {
-          _bills = bills;
-          _currentBillIndex = 0;
-          _selectedBillId = bills[0]['billId'];
-          selectedPurok = bills[0]['purok'] ?? 'PUROK 1';
+          _currentBill = bill;
+          _selectedBillId = bill['billId'];
+          selectedPurok = bill['purok'] ?? 'PUROK 1';
           _loading = false;
         });
 
@@ -71,7 +80,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
 
         if (userSnapshot.exists) {
           setState(() {
-            _error = 'No bills found for this resident yet.';
+            _error = 'No existing bill. Your account is up to date!';
             _loading = false;
           });
         } else {
@@ -82,7 +91,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         }
       }
     } catch (e) {
-      print('Error loading bills: $e');
+      print('Error loading bill: $e');
       setState(() {
         _error = 'Error loading bill data: $e';
         _loading = false;
@@ -139,7 +148,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
     if (_selectedBillId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select a bill to pay'),
+          content: Text('No bill selected for payment'),
           backgroundColor: Colors.red,
         ),
       );
@@ -160,7 +169,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
       final bytes = await _receiptImage!.readAsBytes();
       final base64Image = base64Encode(bytes);
 
-      final bill = _bills.firstWhere((b) => b['billId'] == _selectedBillId);
+      final bill = _currentBill!;
       final paymentData = {
         'residentId': _residentId,
         'billId': _selectedBillId,
@@ -214,10 +223,10 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
           ? _buildLoadingState()
           : _error != null
               ? _buildErrorState()
-              : _bills.isEmpty
+              : _currentBill == null
                   ? _buildNoBillsState()
                   : RefreshIndicator(
-                      onRefresh: _loadBills,
+                      onRefresh: _loadLatestBill,
                       color: const Color(0xFF4A90E2),
                       child: SingleChildScrollView(
                         physics: const AlwaysScrollableScrollPhysics(),
@@ -249,14 +258,21 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.error_outline,
+                  _error == 'No existing bill. Your account is up to date!'
+                      ? Icons.check_circle
+                      : Icons.error_outline,
                   size: 40,
-                  color: Colors.red[400],
+                  color:
+                      _error == 'No existing bill. Your account is up to date!'
+                          ? Colors.green
+                          : Colors.red[400],
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Error Loading Bills',
-                  style: TextStyle(
+                Text(
+                  _error == 'No existing bill. Your account is up to date!'
+                      ? 'No Existing Bill'
+                      : 'Error Loading Bill',
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: Color(0xFF4A90E2),
@@ -273,9 +289,9 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton.icon(
-                  onPressed: _loadBills,
+                  onPressed: _loadLatestBill,
                   icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Retry', style: TextStyle(fontSize: 12)),
+                  label: const Text('Refresh', style: TextStyle(fontSize: 12)),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF4A90E2),
                     foregroundColor: Colors.white,
@@ -307,14 +323,14 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(
-                  Icons.receipt_long,
+                const Icon(
+                  Icons.check_circle,
                   size: 40,
-                  color: Colors.grey[400],
+                  color: Colors.green,
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'No Bills Found',
+                  'No Existing Bill',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -323,7 +339,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  'You don\'t have any bills yet. Check back later.',
+                  'Your account is up to date! No unpaid bills found.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 10,
@@ -332,7 +348,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton.icon(
-                  onPressed: _loadBills,
+                  onPressed: _loadLatestBill,
                   icon: const Icon(Icons.refresh, size: 16),
                   label: const Text('Refresh', style: TextStyle(fontSize: 12)),
                   style: ElevatedButton.styleFrom(
@@ -354,27 +370,27 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   }
 
   Widget _buildBillingContent() {
-    final bill = _bills[_currentBillIndex];
+    final bill = _currentBill!;
     final currentConsumed =
         bill['currentConsumedWaterMeter']?.toDouble() ?? 0.0;
     final previousConsumed =
         bill['previousConsumedWaterMeter']?.toDouble() ?? 0.0;
-    final totalConsumed = bill['totalConsumed']?.toDouble() ?? 0.0;
+    final cubicMeterUsed = bill['cubicMeterUsed']?.toDouble() ?? 0.0;
     final currentMonthBill = bill['currentMonthBill']?.toDouble() ?? 0.0;
     final periodStart = bill['periodStart'] as Timestamp?;
-    final periodEnd = bill['periodEnd'] as Timestamp?;
+    final periodDue = bill['periodDue'] as Timestamp?;
     final issueDate = bill['issueDate'] as Timestamp?;
-    final formattedPeriod = periodStart != null && periodEnd != null
-        ? '${DateFormat('MM-dd').format(periodStart.toDate())} - ${DateFormat('MM-dd').format(periodEnd.toDate())}'
+    final formattedPeriodStart = periodStart != null
+        ? DateFormat('MM-dd-yyyy').format(periodStart.toDate())
+        : 'N/A';
+    final formattedPeriodDue = periodDue != null
+        ? DateFormat('MM-dd-yyyy').format(periodDue.toDate())
         : 'N/A';
     final formattedIssueDate = issueDate != null
         ? DateFormat.yMMMd().format(issueDate.toDate())
         : 'N/A';
-    final dueDate = issueDate != null
-        ? issueDate.toDate().add(const Duration(days: 7))
-        : DateTime.now();
-    final formattedDueDate = DateFormat.yMMMd().format(dueDate);
-    final isOverdue = DateTime.now().isAfter(dueDate);
+    final isOverdue =
+        periodDue != null && DateTime.now().isAfter(periodDue.toDate());
     final dueColor = isOverdue ? Colors.red : Colors.black;
 
     return Padding(
@@ -462,62 +478,14 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'WATER BILL STATEMENT',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF4A90E2),
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.arrow_left,
-                                color: _currentBillIndex == 0
-                                    ? Colors.grey
-                                    : Color(0xFF4A90E2)),
-                            onPressed: _currentBillIndex == 0
-                                ? null
-                                : () async {
-                                    setState(() {
-                                      _currentBillIndex--;
-                                      _selectedBillId =
-                                          _bills[_currentBillIndex]['billId'];
-                                    });
-                                    await _checkPaymentStatus(_selectedBillId!);
-                                  },
-                          ),
-                          Text(
-                            '${_currentBillIndex + 1} of ${_bills.length}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.arrow_right,
-                                color: _currentBillIndex == _bills.length - 1
-                                    ? Colors.grey
-                                    : Color(0xFF4A90E2)),
-                            onPressed: _currentBillIndex == _bills.length - 1
-                                ? null
-                                : () async {
-                                    setState(() {
-                                      _currentBillIndex++;
-                                      _selectedBillId =
-                                          _bills[_currentBillIndex]['billId'];
-                                    });
-                                    await _checkPaymentStatus(_selectedBillId!);
-                                  },
-                          ),
-                        ],
-                      ),
-                    ],
+                  const Text(
+                    'WATER BILL STATEMENT',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF4A90E2),
+                      letterSpacing: 0.5,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   _dashedDivider(),
@@ -525,54 +493,22 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   _receiptRow('Address', bill['address'] ?? 'N/A'),
                   _receiptRow('Contact', bill['contactNumber'] ?? 'N/A'),
                   _receiptRow('Meter No.', bill['meterNumber'] ?? 'N/A'),
-                  _receiptRow('Period', formattedPeriod),
+                  _receiptRow('Billing Period Start', formattedPeriodStart),
+                  _receiptRow('Billing Period Due', formattedPeriodDue),
                   _receiptRow('Issue Date', formattedIssueDate),
                   _dashedDivider(),
                   _receiptRow('Previous Reading',
                       '${previousConsumed.toStringAsFixed(2)} m³'),
                   _receiptRow('Current Reading',
                       '${currentConsumed.toStringAsFixed(2)} m³'),
-                  _receiptRow('Total Consumed',
-                      '${totalConsumed.toStringAsFixed(2)} m³',
+                  _receiptRow('Cubic Meter Used',
+                      '${cubicMeterUsed.toStringAsFixed(2)} m³',
                       isBold: true),
                   _dashedDivider(),
                   _receiptRow(
                       'Current Bill', '₱${currentMonthBill.toStringAsFixed(2)}',
                       valueColor: Colors.red, isBold: true, fontSize: 13),
-                  FutureBuilder<Set<String>>(
-                    future: FirebaseFirestore.instance
-                        .collection('payments')
-                        .where('residentId', isEqualTo: _residentId)
-                        .where('status', isEqualTo: 'approved')
-                        .get()
-                        .then((snapshot) => snapshot.docs
-                            .map((doc) => doc['billId'] as String)
-                            .toSet()),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return _receiptRow('Total Amount Due', 'Loading...',
-                            valueColor: const Color(0xFF4A90E2), isBold: true);
-                      }
-                      if (snapshot.hasError) {
-                        return _receiptRow('Total Amount Due', 'Error',
-                            valueColor: const Color(0xFF4A90E2), isBold: true);
-                      }
-                      final paidBillIds = snapshot.data ?? <String>{};
-                      final totalAmountDue = _bills
-                          .where(
-                              (bill) => !paidBillIds.contains(bill['billId']))
-                          .fold<double>(
-                              0.0,
-                              (sum, bill) =>
-                                  sum +
-                                  (bill['currentMonthBill']?.toDouble() ??
-                                      0.0));
-                      return _receiptRow('Total Amount Due',
-                          '₱${totalAmountDue.toStringAsFixed(2)}',
-                          valueColor: const Color(0xFF4A90E2), isBold: true);
-                    },
-                  ),
-                  _receiptRow('Due Date', formattedDueDate,
+                  _receiptRow('Due Date', formattedPeriodDue,
                       valueColor: dueColor),
                   if (isOverdue)
                     Padding(
@@ -708,270 +644,175 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  FutureBuilder<QuerySnapshot>(
-                    future: FirebaseFirestore.instance
-                        .collection('payments')
-                        .where('residentId', isEqualTo: _residentId)
-                        .get(),
-                    builder: (context, snapshot) {
-                      final paidBillIds = snapshot.hasData
-                          ? snapshot.data!.docs
-                              .where((doc) => doc['status'] == 'approved')
-                              .map((doc) => doc['billId'] as String)
-                              .toSet()
-                          : <String>{};
-
-                      final unpaidBills = _bills
-                          .asMap()
-                          .entries
-                          .where((entry) =>
-                              !paidBillIds.contains(entry.value['billId']))
-                          .map((entry) {
-                        final bill = entry.value;
-                        final periodStart =
-                            (bill['periodStart'] as Timestamp?)?.toDate();
-                        final formattedPeriod = periodStart != null
-                            ? DateFormat('MMM yyyy').format(periodStart)
-                            : 'N/A';
-                        return {
-                          'billId': bill['billId'],
-                          'period': formattedPeriod,
-                        };
-                      }).toList()
-                        ..sort((a, b) {
-                          final aDate = _bills.firstWhere((b) =>
-                                  b['billId'] == a['billId'])['periodStart']
-                              as Timestamp?;
-                          final bDate = _bills.firstWhere((b) =>
-                                  b['billId'] == b['billId'])['periodStart']
-                              as Timestamp?;
-                          return bDate?.compareTo(aDate ?? Timestamp.now()) ??
-                              0;
-                        });
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                  if (_paymentSubmitted) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color:
+                            _getStatusColor(_paymentStatus!).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: _getStatusColor(_paymentStatus!)
+                                .withOpacity(0.3)),
+                      ),
+                      child: Row(
                         children: [
-                          if (unpaidBills.isNotEmpty)
-                            DropdownButton<String>(
-                              value: _selectedBillId,
-                              items: unpaidBills.map((bill) {
-                                return DropdownMenuItem<String>(
-                                  value: bill['billId'],
-                                  child: Text(
-                                    bill['period'],
-                                    style: const TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                );
-                              }).toList(),
-                              onChanged: (value) async {
-                                if (value != null) {
-                                  setState(() {
-                                    _selectedBillId = value;
-                                    _currentBillIndex = _bills.indexWhere(
-                                        (b) => b['billId'] == value);
-                                  });
-                                  await _checkPaymentStatus(value);
-                                }
-                              },
-                              isExpanded: true,
-                              hint: const Text('Select a bill to pay'),
-                              dropdownColor: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              elevation: 4,
-                            ),
-                          if (unpaidBills.isEmpty)
-                            const Text(
-                              'No unpaid bills available',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          const SizedBox(height: 12),
-                          if (_paymentSubmitted) ...[
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: _getStatusColor(_paymentStatus!)
-                                    .withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: _getStatusColor(_paymentStatus!)
-                                        .withOpacity(0.3)),
-                              ),
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    _getStatusIcon(_paymentStatus!),
-                                    color: _getStatusColor(_paymentStatus!),
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          _getStatusText(_paymentStatus!),
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: _getStatusColor(
-                                                _paymentStatus!),
-                                          ),
-                                        ),
-                                        Text(
-                                          _getStatusDescription(
-                                              _paymentStatus!),
-                                          style: const TextStyle(
-                                            fontSize: 9,
-                                            color: Colors.grey,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                          if (!_paymentSubmitted && unpaidBills.isNotEmpty) ...[
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.05),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: Colors.green.withOpacity(0.3)),
-                              ),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.withOpacity(0.1),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: const Icon(Icons.phone_android,
-                                        color: Colors.green, size: 16),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Expanded(
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          'GCash Payment',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.grey,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        Text(
-                                          '09853886411',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.black,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.content_copy,
-                                        color: Color(0xFF4A90E2), size: 16),
-                                    onPressed: () {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text('GCash number copied!'),
-                                          duration: Duration(seconds: 2),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            AnimatedScale(
-                              scale: _receiptImage == null ? 1.0 : 0.98,
-                              duration: const Duration(milliseconds: 250),
-                              child: ElevatedButton.icon(
-                                onPressed: _pickReceiptImage,
-                                icon: const Icon(Icons.upload_file, size: 16),
-                                label: const Text('Select Receipt',
-                                    style: TextStyle(fontSize: 12)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF4A90E2),
-                                  foregroundColor: Colors.white,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                      vertical: 12, horizontal: 16),
-                                  elevation: 2,
-                                ),
-                              ),
-                            ),
-                            if (_receiptImage != null) ...[
-                              const SizedBox(height: 12),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.file(
-                                  _receiptImage!,
-                                  height: 120,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              TextButton.icon(
-                                onPressed: () =>
-                                    setState(() => _receiptImage = null),
-                                icon: const Icon(Icons.delete,
-                                    color: Colors.red, size: 14),
-                                label: const Text(
-                                  'Remove',
+                          Icon(
+                            _getStatusIcon(_paymentStatus!),
+                            color: _getStatusColor(_paymentStatus!),
+                            size: 18,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _getStatusText(_paymentStatus!),
                                   style: TextStyle(
-                                      color: Colors.red, fontSize: 10),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              AnimatedScale(
-                                scale: 1.0,
-                                duration: const Duration(milliseconds: 250),
-                                child: ElevatedButton.icon(
-                                  onPressed: _uploadReceipt,
-                                  icon: const Icon(Icons.send, size: 16),
-                                  label: const Text('Submit Payment',
-                                      style: TextStyle(fontSize: 12)),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.green,
-                                    foregroundColor: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 12, horizontal: 16),
-                                    elevation: 2,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: _getStatusColor(_paymentStatus!),
                                   ),
                                 ),
-                              ),
-                            ],
-                          ],
+                                Text(
+                                  _getStatusDescription(_paymentStatus!),
+                                  style: const TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
-                      );
-                    },
-                  ),
+                      ),
+                    ),
+                  ],
+                  if (!_paymentSubmitted) ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(8),
+                        border:
+                            Border.all(color: Colors.green.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.phone_android,
+                                color: Colors.green, size: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'GCash Payment',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  '09853886411',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.content_copy,
+                                color: Color(0xFF4A90E2), size: 16),
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('GCash number copied!'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    AnimatedScale(
+                      scale: _receiptImage == null ? 1.0 : 0.98,
+                      duration: const Duration(milliseconds: 250),
+                      child: ElevatedButton.icon(
+                        onPressed: _pickReceiptImage,
+                        icon: const Icon(Icons.upload_file, size: 16),
+                        label: const Text('Select Receipt',
+                            style: TextStyle(fontSize: 12)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF4A90E2),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 16),
+                          elevation: 2,
+                        ),
+                      ),
+                    ),
+                    if (_receiptImage != null) ...[
+                      const SizedBox(height: 12),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          _receiptImage!,
+                          height: 120,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: () => setState(() => _receiptImage = null),
+                        icon: const Icon(Icons.delete,
+                            color: Colors.red, size: 14),
+                        label: const Text(
+                          'Remove',
+                          style: TextStyle(color: Colors.red, fontSize: 10),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      AnimatedScale(
+                        scale: 1.0,
+                        duration: const Duration(milliseconds: 250),
+                        child: ElevatedButton.icon(
+                          onPressed: _uploadReceipt,
+                          icon: const Icon(Icons.send, size: 16),
+                          label: const Text('Submit Payment',
+                              style: TextStyle(fontSize: 12)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 12, horizontal: 16),
+                            elevation: 2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ],
               ),
             ),

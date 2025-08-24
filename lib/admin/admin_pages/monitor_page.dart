@@ -21,6 +21,8 @@ class MonitorPage extends StatefulWidget {
 class _MonitorPageState extends State<MonitorPage> {
   OverlayEntry? _errorOverlay;
   final MapController _mapController = MapController();
+  List<Map<String, dynamic>> _userReports = [];
+  int _currentReportIndex = 0;
 
   // Light blue color palette
   static const Color primaryBlue = Color(0xFF90CAF9);
@@ -115,21 +117,52 @@ class _MonitorPageState extends State<MonitorPage> {
   }
 
   // Fetch and show report modal
-  Future<void> _fetchAndShowReportModal(String reportId) async {
+  Future<void> _fetchAndShowReportModal(String id, bool isPublic) async {
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('reports')
-          .doc(reportId)
-          .get();
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        _showReportModal(context, data, reportId);
+      if (isPublic) {
+        final doc = await FirebaseFirestore.instance
+            .collection('reports')
+            .doc(id)
+            .get();
+        if (doc.exists) {
+          setState(() {
+            _userReports = [
+              {
+                'id': doc.id,
+                ...doc.data() as Map<String, dynamic>,
+              }
+            ];
+            _currentReportIndex = 0;
+          });
+          _showReportModal(context, _userReports[0], _userReports[0]['id']);
+        } else {
+          _showErrorOverlay('Report not found.');
+        }
       } else {
-        _showErrorOverlay('Report not found. Please try again.');
+        final querySnapshot = await FirebaseFirestore.instance
+            .collection('reports')
+            .where('userId', isEqualTo: id)
+            .where('isPublic', isEqualTo: false)
+            .where('status', isNotEqualTo: 'Fixed')
+            .get();
+        if (querySnapshot.docs.isNotEmpty) {
+          setState(() {
+            _userReports = querySnapshot.docs
+                .map((doc) => {
+                      'id': doc.id,
+                      ...doc.data() as Map<String, dynamic>,
+                    })
+                .toList();
+            _currentReportIndex = 0;
+          });
+          _showReportModal(context, _userReports[0], _userReports[0]['id']);
+        } else {
+          _showErrorOverlay('No reports found.');
+        }
       }
     } catch (e) {
-      print('Error fetching report: $e');
-      _showErrorOverlay('Error loading report: $e');
+      print('Error fetching reports: $e');
+      _showErrorOverlay('Error loading reports: $e');
     }
   }
 
@@ -269,6 +302,17 @@ class _MonitorPageState extends State<MonitorPage> {
                                       color: Colors.grey[500],
                                     ),
                                   ),
+                                  if (data['isPublic'])
+                                    const SizedBox(height: 4),
+                                  if (data['isPublic'])
+                                    Text(
+                                      'Public Report',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        color: Colors.red,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
@@ -310,6 +354,19 @@ class _MonitorPageState extends State<MonitorPage> {
                             height: 1.5,
                           ),
                         ),
+                        if (data['isPublic'] &&
+                            data['additionalLocationInfo'] != null)
+                          const SizedBox(height: 12),
+                        if (data['isPublic'] &&
+                            data['additionalLocationInfo'] != null)
+                          Text(
+                            'Additional Location Info: ${data['additionalLocationInfo']}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: Colors.grey[600],
+                              height: 1.5,
+                            ),
+                          ),
                         const SizedBox(height: 12),
                         Chip(
                           label: Text(
@@ -328,9 +385,11 @@ class _MonitorPageState extends State<MonitorPage> {
                             borderRadius: BorderRadius.circular(20),
                           ),
                         ),
-                        if (data['assignedPlumber'] != null)
+                        if (!data['isPublic'] &&
+                            data['assignedPlumber'] != null)
                           const SizedBox(height: 12),
-                        if (data['assignedPlumber'] != null)
+                        if (!data['isPublic'] &&
+                            data['assignedPlumber'] != null)
                           Text(
                             'Assigned: ${plumbers.firstWhere(
                               (p) => p['uid'] == data['assignedPlumber'],
@@ -342,179 +401,263 @@ class _MonitorPageState extends State<MonitorPage> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                        const SizedBox(height: 16),
-                        const Divider(height: 1, color: Colors.grey),
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                decoration: InputDecoration(
-                                  labelText: 'Assign Plumber',
-                                  labelStyle: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    color: Colors.grey[700],
+                        if (!data['isPublic']) const SizedBox(height: 16),
+                        if (!data['isPublic'])
+                          const Divider(height: 1, color: Colors.grey),
+                        if (!data['isPublic']) const SizedBox(height: 16),
+                        if (!data['isPublic'])
+                          Row(
+                            children: [
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  decoration: InputDecoration(
+                                    labelText: 'Assign Plumber',
+                                    labelStyle: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      color: Colors.grey[700],
+                                    ),
+                                    filled: true,
+                                    fillColor: lightBlue,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 10),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                          color: Colors.grey, width: 1),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                          color: primaryBlue, width: 1.5),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                          color: Colors.grey, width: 1),
+                                    ),
                                   ),
-                                  filled: true,
-                                  fillColor: lightBlue,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 10),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                        color: Colors.grey, width: 1),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                        color: primaryBlue, width: 1.5),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                        color: Colors.grey, width: 1),
-                                  ),
-                                ),
-                                value: selectedPlumberUid,
-                                dropdownColor: Colors.white,
-                                items: plumbers.isNotEmpty
-                                    ? plumbers.map((plumber) {
-                                        return DropdownMenuItem<String>(
-                                          value: plumber['uid'],
-                                          child: Text(
-                                            plumber['fullName'],
-                                            style: GoogleFonts.poppins(
-                                                fontSize: 14),
-                                          ),
-                                        );
-                                      }).toList()
-                                    : [
-                                        DropdownMenuItem<String>(
-                                          value: null,
-                                          child: Text(
-                                            'No plumbers available',
-                                            style: GoogleFonts.poppins(
-                                              color: Colors.grey,
-                                              fontSize: 14,
+                                  value: selectedPlumberUid,
+                                  dropdownColor: Colors.white,
+                                  items: plumbers.isNotEmpty
+                                      ? plumbers.map((plumber) {
+                                          return DropdownMenuItem<String>(
+                                            value: plumber['uid'],
+                                            child: Text(
+                                              plumber['fullName'],
+                                              style: GoogleFonts.poppins(
+                                                  fontSize: 14),
+                                            ),
+                                          );
+                                        }).toList()
+                                      : [
+                                          DropdownMenuItem<String>(
+                                            value: null,
+                                            child: Text(
+                                              'No plumbers available',
+                                              style: GoogleFonts.poppins(
+                                                color: Colors.grey,
+                                                fontSize: 14,
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                      ],
-                                onChanged: plumbers.isNotEmpty
-                                    ? (value) {
+                                        ],
+                                  onChanged: plumbers.isNotEmpty
+                                      ? (value) {
+                                          setDialogState(() {
+                                            selectedPlumberUid = value;
+                                            isButtonDisabled = false;
+                                          });
+                                        }
+                                      : null,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: TextFormField(
+                                  readOnly: true,
+                                  decoration: InputDecoration(
+                                    labelText: 'Monitoring Date',
+                                    labelStyle: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      color: Colors.grey[700],
+                                    ),
+                                    filled: true,
+                                    fillColor: lightBlue,
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 10),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                          color: Colors.grey, width: 1),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                          color: primaryBlue, width: 1.5),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(
+                                          color: Colors.grey, width: 1),
+                                    ),
+                                    suffixIcon: const Icon(
+                                      Icons.calendar_today,
+                                      color: primaryBlue,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  controller: TextEditingController(
+                                    text: selectedDate != null
+                                        ? DateFormat.yMMMd()
+                                            .format(selectedDate!)
+                                        : '',
+                                  ),
+                                  onTap: () async {
+                                    final pickedDate = await showDatePicker(
+                                      context: context,
+                                      initialDate:
+                                          selectedDate ?? DateTime.now(),
+                                      firstDate: DateTime.now(),
+                                      lastDate: DateTime.now()
+                                          .add(const Duration(days: 365)),
+                                      builder: (context, child) {
+                                        return Theme(
+                                          data: Theme.of(context).copyWith(
+                                            colorScheme:
+                                                const ColorScheme.light(
+                                              primary: primaryBlue,
+                                              onPrimary: Colors.white,
+                                              onSurface: Colors.black87,
+                                            ),
+                                            textButtonTheme:
+                                                TextButtonThemeData(
+                                              style: TextButton.styleFrom(
+                                                foregroundColor: primaryBlue,
+                                              ),
+                                            ),
+                                          ),
+                                          child: child!,
+                                        );
+                                      },
+                                    );
+                                    if (pickedDate != null) {
+                                      setDialogState(() {
+                                        selectedDate = pickedDate;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        if (!data['isPublic']) const SizedBox(height: 16),
+                        if (!data['isPublic'])
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed:
+                                  isButtonDisabled ? null : _assignPlumber,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: isButtonDisabled
+                                    ? Colors.grey[400]
+                                    : primaryBlue,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: isButtonDisabled ? 0 : 4,
+                                shadowColor: Colors.black26,
+                              ),
+                              child: Text(
+                                isButtonDisabled
+                                    ? 'Plumber Assigned'
+                                    : (data['assignedPlumber'] != null
+                                        ? 'Re-assign Plumber'
+                                        : 'Assign Plumber'),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (!data['isPublic'] && _userReports.length > 1)
+                          const SizedBox(height: 16),
+                        if (!data['isPublic'] && _userReports.length > 1)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              IconButton(
+                                icon: Icon(Icons.chevron_left,
+                                    color: _currentReportIndex > 0
+                                        ? primaryBlue
+                                        : Colors.grey),
+                                onPressed: _currentReportIndex > 0
+                                    ? () {
                                         setDialogState(() {
-                                          selectedPlumberUid = value;
-                                          isButtonDisabled = false;
+                                          _currentReportIndex--;
+                                          data =
+                                              _userReports[_currentReportIndex];
+                                          reportId =
+                                              _userReports[_currentReportIndex]
+                                                  ['id'];
+                                          selectedPlumberUid =
+                                              data['assignedPlumber']
+                                                  as String?;
+                                          selectedDate = data['monitoringDate']
+                                                  is Timestamp
+                                              ? (data['monitoringDate']
+                                                      as Timestamp)
+                                                  .toDate()
+                                              : null;
+                                          isButtonDisabled =
+                                              data['assignedPlumber'] != null;
                                         });
                                       }
                                     : null,
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: TextFormField(
-                                readOnly: true,
-                                decoration: InputDecoration(
-                                  labelText: 'Monitoring Date',
-                                  labelStyle: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    color: Colors.grey[700],
-                                  ),
-                                  filled: true,
-                                  fillColor: lightBlue,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 10),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                        color: Colors.grey, width: 1),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                        color: primaryBlue, width: 1.5),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(
-                                        color: Colors.grey, width: 1),
-                                  ),
-                                  suffixIcon: const Icon(
-                                    Icons.calendar_today,
-                                    color: primaryBlue,
-                                    size: 20,
-                                  ),
+                              Text(
+                                '${_currentReportIndex + 1}/${_userReports.length}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: Colors.black87,
                                 ),
-                                controller: TextEditingController(
-                                  text: selectedDate != null
-                                      ? DateFormat.yMMMd().format(selectedDate!)
-                                      : '',
-                                ),
-                                onTap: () async {
-                                  final pickedDate = await showDatePicker(
-                                    context: context,
-                                    initialDate: selectedDate ?? DateTime.now(),
-                                    firstDate: DateTime.now(),
-                                    lastDate: DateTime.now()
-                                        .add(const Duration(days: 365)),
-                                    builder: (context, child) {
-                                      return Theme(
-                                        data: Theme.of(context).copyWith(
-                                          colorScheme: const ColorScheme.light(
-                                            primary: primaryBlue,
-                                            onPrimary: Colors.white,
-                                            onSurface: Colors.black87,
-                                          ),
-                                          textButtonTheme: TextButtonThemeData(
-                                            style: TextButton.styleFrom(
-                                              foregroundColor: primaryBlue,
-                                            ),
-                                          ),
-                                        ),
-                                        child: child!,
-                                      );
-                                    },
-                                  );
-                                  if (pickedDate != null) {
-                                    setDialogState(() {
-                                      selectedDate = pickedDate;
-                                    });
-                                  }
-                                },
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: isButtonDisabled ? null : _assignPlumber,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: isButtonDisabled
-                                  ? Colors.grey[400]
-                                  : primaryBlue,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                              IconButton(
+                                icon: Icon(Icons.chevron_right,
+                                    color: _currentReportIndex <
+                                            _userReports.length - 1
+                                        ? primaryBlue
+                                        : Colors.grey),
+                                onPressed: _currentReportIndex <
+                                        _userReports.length - 1
+                                    ? () {
+                                        setDialogState(() {
+                                          _currentReportIndex++;
+                                          data =
+                                              _userReports[_currentReportIndex];
+                                          reportId =
+                                              _userReports[_currentReportIndex]
+                                                  ['id'];
+                                          selectedPlumberUid =
+                                              data['assignedPlumber']
+                                                  as String?;
+                                          selectedDate = data['monitoringDate']
+                                                  is Timestamp
+                                              ? (data['monitoringDate']
+                                                      as Timestamp)
+                                                  .toDate()
+                                              : null;
+                                          isButtonDisabled =
+                                              data['assignedPlumber'] != null;
+                                        });
+                                      }
+                                    : null,
                               ),
-                              elevation: isButtonDisabled ? 0 : 4,
-                              shadowColor: Colors.black26,
-                            ),
-                            child: Text(
-                              isButtonDisabled
-                                  ? 'Plumber Assigned'
-                                  : (data['assignedPlumber'] != null
-                                      ? 'Re-assign Plumber'
-                                      : 'Assign Plumber'),
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
+                            ],
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -535,7 +678,18 @@ class _MonitorPageState extends State<MonitorPage> {
       return;
     }
     if (widget.reportId != null && widget.reportId!.isNotEmpty) {
-      _fetchAndShowReportModal(widget.reportId!);
+      FirebaseFirestore.instance
+          .collection('reports')
+          .doc(widget.reportId)
+          .get()
+          .then((doc) {
+        if (doc.exists) {
+          final data = doc.data() as Map<String, dynamic>;
+          _fetchAndShowReportModal(widget.reportId!, data['isPublic'] ?? false);
+        } else {
+          _showErrorOverlay('Report not found.');
+        }
+      });
     }
   }
 
@@ -597,10 +751,33 @@ class _MonitorPageState extends State<MonitorPage> {
                                 CircularProgressIndicator(color: primaryBlue));
                       }
 
-                      final markers = snapshot.data!.docs
-                          .map((doc) {
-                            final data = doc.data() as Map<String, dynamic>;
+                      // Group reports by userId for private reports
+                      final userReports =
+                          <String, List<Map<String, dynamic>>>{};
+                      for (var doc in snapshot.data!.docs) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final userId = data['userId'] as String?;
+                        final isPublic = data['isPublic'] ?? false;
+                        if (userId != null) {
+                          if (!isPublic) {
+                            userReports.putIfAbsent(userId, () => []).add({
+                              'id': doc.id,
+                              ...data,
+                            });
+                          } else {
+                            userReports[doc.id] = [
+                              {'id': doc.id, ...data}
+                            ]; // Treat public reports individually
+                          }
+                        }
+                      }
+
+                      final markers = userReports.entries
+                          .map((entry) {
+                            final reports = entry.value;
+                            final data = reports[0];
                             final location = data['location'];
+                            final isPublic = data['isPublic'] ?? false;
                             final status = data['status'] ?? 'Unknown';
                             if (location == null || location is! GeoPoint) {
                               return null;
@@ -612,7 +789,8 @@ class _MonitorPageState extends State<MonitorPage> {
                               width: 40,
                               height: 40,
                               child: GestureDetector(
-                                onTap: () => _fetchAndShowReportModal(doc.id),
+                                onTap: () => _fetchAndShowReportModal(
+                                    entry.key, isPublic),
                                 child: Stack(
                                   alignment: Alignment.center,
                                   children: [
@@ -621,19 +799,27 @@ class _MonitorPageState extends State<MonitorPage> {
                                       height: 36,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        color: _getStatusColor(status),
+                                        color: isPublic
+                                            ? Colors.red
+                                            : _getStatusColor(status),
                                         border: Border.all(
                                             color: Colors.white, width: 2),
                                       ),
                                     ),
-                                    Text(
-                                      (data['fullName'] ?? 'Unknown')[0],
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.white,
-                                      ),
-                                    ),
+                                    isPublic
+                                        ? const Icon(
+                                            Icons.warning,
+                                            color: Colors.white,
+                                            size: 20,
+                                          )
+                                        : Text(
+                                            (data['fullName'] ?? 'Unknown')[0],
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.white,
+                                            ),
+                                          ),
                                   ],
                                 ),
                               ),
@@ -690,6 +876,8 @@ class _MonitorPageState extends State<MonitorPage> {
                                 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                             subdomains: const ['a', 'b', 'c'],
                             userAgentPackageName: 'com.example.app',
+                            maxNativeZoom: 19,
+                            maxZoom: 19,
                             errorTileCallback: (tile, error, stackTrace) {
                               print('Tile loading error: $error');
                               _showErrorOverlay('Failed to load map tiles.');
