@@ -446,7 +446,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
   @override
   void initState() {
     super.initState();
-    _fetchPaymentsAndBills(); // Fetch payments when the widget is initialized
+    _fetchPaymentsAndBills();
   }
 
   Future<void> _addConsumptionHistory({
@@ -492,7 +492,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
         _error = null;
       });
 
-      // Fetch pending payments
       final paymentSnapshot = await FirebaseFirestore.instance
           .collection('payments')
           .where('residentId', isEqualTo: widget.residentId)
@@ -505,7 +504,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
         return data;
       }).toList();
 
-      // Fetch bill data for all payments in one batch
       final billData = <String, String>{};
       final billIds = payments
           .map((payment) => payment['billId'] as String?)
@@ -513,7 +511,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
           .toSet();
 
       if (billIds.isNotEmpty) {
-        // Only fetch bills if there are billIds
         final billFutures = billIds.map((billId) => FirebaseFirestore.instance
             .collection('users')
             .doc(widget.residentId)
@@ -537,7 +534,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
         }
       }
 
-      // Combine payment and bill data
       final combinedData = payments.map((payment) {
         return {
           ...payment,
@@ -673,7 +669,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                   print('Notification saved successfully');
 
                   if (status == 'approved') {
-                    // Update payment status
                     await FirebaseFirestore.instance
                         .collection('payments')
                         .doc(paymentId)
@@ -684,7 +679,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                     });
                     print('Payment updated to approved');
 
-                    // Store consumption history before deleting bills
                     if (billId != null && periodStart != null) {
                       await _addConsumptionHistory(
                         userId: widget.residentId,
@@ -693,7 +687,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                       );
                     }
 
-                    // Store current reading for next bill
                     if (billId != null) {
                       await FirebaseFirestore.instance
                           .collection('users')
@@ -707,7 +700,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                       print('Stored current reading: $currentReading');
                     }
 
-                    // Delete all unpaid bills for the resident
                     final unpaidBillsSnapshot = await FirebaseFirestore.instance
                         .collection('users')
                         .doc(widget.residentId)
@@ -732,7 +724,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                             borderRadius: BorderRadius.circular(8)),
                       ),
                     );
-                    // Refresh payment data
                     await _fetchPaymentsAndBills();
                   } else if (status == 'rejected') {
                     await FirebaseFirestore.instance
@@ -754,7 +745,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                             borderRadius: BorderRadius.circular(8)),
                       ),
                     );
-                    // Refresh payment data
                     await _fetchPaymentsAndBills();
                   }
                 } catch (e) {
@@ -1135,6 +1125,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
   DateTime? periodDue;
   String selectedPurok = 'PUROK 1';
   String meterNumber = '';
+  String? _error;
 
   double get cubicMeterUsed => current >= previous ? current - previous : 0.0;
   double get currentBill => calculateCurrentBill();
@@ -1166,6 +1157,11 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
           'Added consumption history for $userId: $docId, $cubicMeterUsed m³');
     } catch (e) {
       print('Error adding consumption history: $e');
+      if (mounted) {
+        setState(() {
+          _error = 'Error saving consumption history: $e';
+        });
+      }
     }
   }
 
@@ -1236,58 +1232,81 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
 
   Future<void> _loadPreviousReading() async {
     try {
-      print('Loading previous reading for resident: ${widget.residentId}');
-      final snapshot = await FirebaseFirestore.instance
+      print('Loading data for resident: ${widget.residentId}');
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+
+      // Fetch meter reading
+      final meterSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.residentId)
           .collection('meter_readings')
           .doc('latest')
           .get();
 
-      print('Meter reading document exists: ${snapshot.exists}');
-      if (mounted) {
+      print('Meter reading document exists: ${meterSnapshot.exists}');
+      if (meterSnapshot.exists && mounted) {
+        final data = meterSnapshot.data()!;
         setState(() {
-          if (snapshot.exists) {
-            final data = snapshot.data()!;
-            previous = data['currentConsumedWaterMeter']?.toDouble() ?? 0.0;
-            print('Previous reading set to: $previous');
-          } else {
-            previous = 0.0;
-            print('No previous reading found, defaulting to 0.0');
-          }
-          _loading = false;
+          previous = data['currentConsumedWaterMeter']?.toDouble() ?? 0.0;
+          print('Previous reading set to: $previous');
+        });
+      } else {
+        setState(() {
+          previous = 0.0;
+          print('No previous reading found, defaulting to 0.0');
         });
       }
 
-      // Fetch meter number from the latest bill or user profile
-      final billSnapshot = await FirebaseFirestore.instance
+      // Fetch meter number from user document
+      final userSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.residentId)
-          .collection('bills')
-          .orderBy('periodStart', descending: true)
-          .limit(1)
           .get();
-      if (billSnapshot.docs.isNotEmpty && mounted) {
+      if (userSnapshot.exists &&
+          userSnapshot.data()!.containsKey('meterNumber') &&
+          mounted) {
         setState(() {
-          meterNumber = billSnapshot.docs.first.data()['meterNumber'] ?? '';
-          print('Meter number set to: $meterNumber');
+          meterNumber = userSnapshot.data()!['meterNumber'] ?? '';
+          print('Meter number from user document: $meterNumber');
         });
       } else {
-        final userSnapshot = await FirebaseFirestore.instance
+        print('No meter number in user document, checking latest bill');
+        // Fallback to latest bill
+        final billSnapshot = await FirebaseFirestore.instance
             .collection('users')
             .doc(widget.residentId)
+            .collection('bills')
+            .orderBy('periodStart', descending: true)
+            .limit(1)
             .get();
-        if (userSnapshot.exists && mounted) {
+        if (billSnapshot.docs.isNotEmpty && mounted) {
           setState(() {
-            meterNumber = userSnapshot.data()!['meterNumber'] ?? '';
-            print('Meter number from user profile: $meterNumber');
+            meterNumber = billSnapshot.docs.first.data()['meterNumber'] ?? '';
+            print('Meter number from latest bill: $meterNumber');
+          });
+        } else {
+          print('No meter number found in bills');
+          setState(() {
+            meterNumber = '';
           });
         }
       }
-    } catch (e) {
-      print('Error loading previous reading: $e');
+
       if (mounted) {
-        setState(() => _loading = false);
+        setState(() {
+          _loading = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading previous reading or meter number: $e');
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Error loading data: $e';
+        });
       }
     }
   }
@@ -1413,34 +1432,56 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                   null,
                   trailing: SizedBox(
                     width: 120,
-                    child: TextFormField(
-                      initialValue: meterNumber,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: const Color(0xFF2D3748),
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Enter meter number',
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                            vertical: 8, horizontal: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide:
-                              const BorderSide(color: Color(0xFFEDF2F7)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide:
-                              const BorderSide(color: Color(0xFF1E88E5)),
-                        ),
-                      ),
-                      validator: (v) =>
-                          v == null || v.isEmpty ? 'Enter meter number' : null,
-                      onChanged: (v) => meterNumber = v,
-                    ),
+                    child: _loading
+                        ? Text(
+                            '...',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: const Color(0xFF718096),
+                            ),
+                          )
+                        : TextFormField(
+                            initialValue: meterNumber,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: const Color(0xFF2D3748),
+                            ),
+                            decoration: InputDecoration(
+                              hintText: meterNumber.isEmpty
+                                  ? 'Enter meter number'
+                                  : meterNumber,
+                              isDense: true,
+                              contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 8, horizontal: 12),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    const BorderSide(color: Color(0xFFEDF2F7)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                borderSide:
+                                    const BorderSide(color: Color(0xFF1E88E5)),
+                              ),
+                            ),
+                            validator: (v) => v == null || v.isEmpty
+                                ? 'Enter meter number'
+                                : null,
+                            onChanged: (v) => setState(() => meterNumber = v),
+                          ),
                   ),
                 ),
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      _error!,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.redAccent,
+                      ),
+                    ),
+                  ),
                 _receiptRow(
                   'BILLING PERIOD START',
                   null,
@@ -1604,7 +1645,9 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                       duration: const Duration(milliseconds: 200),
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1E88E5),
+                          backgroundColor: _loading
+                              ? Colors.grey.shade400
+                              : const Color(0xFF1E88E5),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(
                               horizontal: 16, vertical: 10),
@@ -1614,60 +1657,123 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                               borderRadius: BorderRadius.circular(8)),
                           elevation: 2,
                         ),
-                        onPressed: () async {
-                          if (_formKey.currentState!.validate()) {
-                            final billData = {
-                              'residentId': widget.residentId,
-                              'fullName': widget.fullName,
-                              'address': widget.address,
-                              'contactNumber': widget.contactNumber,
-                              'meterNumber': meterNumber,
-                              'periodStart': periodStart != null
-                                  ? Timestamp.fromDate(periodStart!)
-                                  : FieldValue.serverTimestamp(),
-                              'periodDue': periodDue != null
-                                  ? Timestamp.fromDate(periodDue!)
-                                  : FieldValue.serverTimestamp(),
-                              'currentConsumedWaterMeter': current,
-                              'previousConsumedWaterMeter': previous,
-                              'cubicMeterUsed': cubicMeterUsed,
-                              'currentMonthBill': currentBill,
-                              'issueDate': FieldValue.serverTimestamp(),
-                              'purok': selectedPurok,
-                            };
+                        onPressed: _loading
+                            ? null
+                            : () async {
+                                if (_formKey.currentState!.validate()) {
+                                  try {
+                                    setState(() {
+                                      _loading = true;
+                                      _error = null;
+                                    });
 
-                            print('Creating bill with data: $billData');
+                                    final billData = {
+                                      'residentId': widget.residentId,
+                                      'fullName': widget.fullName,
+                                      'address': widget.address,
+                                      'contactNumber': widget.contactNumber,
+                                      'meterNumber': meterNumber,
+                                      'periodStart': periodStart != null
+                                          ? Timestamp.fromDate(periodStart!)
+                                          : FieldValue.serverTimestamp(),
+                                      'periodDue': periodDue != null
+                                          ? Timestamp.fromDate(periodDue!)
+                                          : FieldValue.serverTimestamp(),
+                                      'currentConsumedWaterMeter': current,
+                                      'previousConsumedWaterMeter': previous,
+                                      'cubicMeterUsed': cubicMeterUsed,
+                                      'currentMonthBill': currentBill,
+                                      'issueDate': FieldValue.serverTimestamp(),
+                                      'purok': selectedPurok,
+                                    };
 
-                            await FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(widget.residentId)
-                                .collection('bills')
-                                .add(billData);
+                                    print('Creating bill with data: $billData');
 
-                            // Add to consumption history
-                            if (periodStart != null) {
-                              await _addConsumptionHistory(
-                                userId: widget.residentId,
-                                periodStart: periodStart!,
-                                cubicMeterUsed: cubicMeterUsed,
-                              );
-                            }
+                                    // Save bill to Firestore
+                                    await FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(widget.residentId)
+                                        .collection('bills')
+                                        .add(billData);
 
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Bill created successfully!',
-                                    style: GoogleFonts.inter(fontSize: 13)),
-                                backgroundColor: const Color(0xFF1E88E5),
-                                duration: const Duration(seconds: 2),
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8)),
-                              ),
-                            );
-                          }
-                        },
-                        child: const Text('Create Bill'),
+                                    // Save meter number to user document
+                                    await FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(widget.residentId)
+                                        .set({
+                                      'meterNumber': meterNumber,
+                                    }, SetOptions(merge: true));
+
+                                    print(
+                                        'Saved meter number ${meterNumber} to user document');
+
+                                    // Add to consumption history
+                                    if (periodStart != null) {
+                                      await _addConsumptionHistory(
+                                        userId: widget.residentId,
+                                        periodStart: periodStart!,
+                                        cubicMeterUsed: cubicMeterUsed,
+                                      );
+                                    }
+
+                                    if (mounted) {
+                                      Navigator.pop(context);
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              'Bill created successfully!',
+                                              style: GoogleFonts.inter(
+                                                  fontSize: 13)),
+                                          backgroundColor:
+                                              const Color(0xFF1E88E5),
+                                          duration: const Duration(seconds: 2),
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8)),
+                                        ),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    print('Error creating bill: $e');
+                                    if (mounted) {
+                                      setState(() {
+                                        _error = 'Error creating bill: $e';
+                                      });
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                              'Error creating bill: $e',
+                                              style: GoogleFonts.inter(
+                                                  fontSize: 13)),
+                                          backgroundColor: Colors.redAccent,
+                                          duration: const Duration(seconds: 3),
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8)),
+                                        ),
+                                      );
+                                    }
+                                  } finally {
+                                    if (mounted) {
+                                      setState(() {
+                                        _loading = false;
+                                      });
+                                    }
+                                  }
+                                }
+                              },
+                        child: Text(
+                          _loading ? 'Creating...' : 'Create Bill',
+                          style: GoogleFonts.inter(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
                     ),
                   ],

@@ -38,7 +38,6 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         _error = null;
       });
 
-      // Fetch unpaid bills from the user's bills subcollection
       final paidBillIds = await FirebaseFirestore.instance
           .collection('payments')
           .where('residentId', isEqualTo: _residentId)
@@ -838,23 +837,24 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
       );
 
   Widget _receiptRow(String label, String value,
-          {Color? valueColor, bool isBold = false, double fontSize = 11}) =>
-      Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11,
-                  color: Colors.black,
-                ),
+      {Color? valueColor, bool isBold = false, double fontSize = 11}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+                color: Colors.black,
               ),
             ),
-            Text(
+          ),
+          Expanded(
+            child: Text(
               value,
               style: TextStyle(
                 fontFamily: 'monospace',
@@ -862,10 +862,15 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                 fontSize: fontSize,
                 color: valueColor ?? Colors.grey[700],
               ),
+              textAlign: TextAlign.right,
+              overflow: label == 'Address' ? TextOverflow.ellipsis : null,
+              maxLines: label == 'Address' ? 2 : null,
             ),
-          ],
-        ),
-      );
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _rateRow(String category, String details) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
