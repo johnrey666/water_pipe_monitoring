@@ -1,7 +1,6 @@
 // ignore_for_file: sort_child_properties_last, use_build_context_synchronously
 
-import 'dart:async'; // Added for TimeoutException
-import 'dart:math';
+import 'dart:async';
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -35,7 +34,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
   bool _confirmPasswordVisible = false;
   String? _errorMessage;
   latlong.LatLng? _selectedLocation;
-  String? _selectedPlaceName;
   bool _isSearchingLocation = false;
   final Color primaryColor = const Color(0xFF87CEEB);
   final Color accentColor = const Color(0xFF0288D1);
@@ -55,7 +53,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
       _errorMessage = null;
     });
 
-    // Show loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -78,11 +75,10 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
         'createdAt': FieldValue.serverTimestamp(),
       };
 
-      // Add location data if selected
       if (_selectedLocation != null) {
         userData['location'] =
             GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude);
-        userData['placeName'] = _selectedPlaceName ?? 'Unknown location';
+        userData['placeName'] = _addressController.text.trim();
       }
 
       await FirebaseFirestore.instance
@@ -91,7 +87,7 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
           .set(userData);
 
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Registration successful! Please sign in.')),
@@ -102,7 +98,7 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
       );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
       setState(() {
         _errorMessage = _getFriendlyErrorMessage(e.code);
       });
@@ -152,11 +148,8 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
         if (data.isNotEmpty) {
           final lat = double.parse(data[0]['lat']);
           final lon = double.parse(data[0]['lon']);
-          final placeName = data[0]['display_name'];
           setState(() {
             _selectedLocation = latlong.LatLng(lat, lon);
-            _selectedPlaceName = placeName;
-            _addressController.text = placeName;
           });
         } else {
           setState(() {
@@ -177,35 +170,10 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
     }
   }
 
-  Future<String> _getPlaceName(latlong.LatLng position) async {
-    try {
-      final response = await http.get(
-        Uri.parse(
-            'https://nominatim.openstreetmap.org/reverse?lat=${position.latitude}&lon=${position.longitude}&format=json'),
-        headers: {'User-Agent': 'WaterPipeMonitoring/1.0'},
-      ).timeout(
-        const Duration(seconds: 5),
-        onTimeout: () {
-          print('Reverse geocoding timed out');
-          return http.Response('{"display_name": "Unknown location"}', 200);
-        },
-      );
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['display_name'] ?? 'Unknown location';
-      }
-      return 'Unknown location';
-    } catch (e) {
-      print('Error in _getPlaceName: $e');
-      return 'Unknown location';
-    }
-  }
-
   void _openMapPicker() {
     latlong.LatLng initial = _selectedLocation ??
         const latlong.LatLng(13.294678436001885, 123.75569591912894);
     latlong.LatLng? tempLocation = _selectedLocation;
-    String? tempPlaceName = _selectedPlaceName;
     MapController tempMapController = MapController();
     TextEditingController searchController = TextEditingController();
 
@@ -244,10 +212,8 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                       modalSetState(() {
                         _isSearchingLocation = true;
                       });
-                      final placeName = await _getPlaceName(position);
                       modalSetState(() {
                         tempLocation = position;
-                        tempPlaceName = placeName;
                         _isSearchingLocation = false;
                       });
                       tempMapController.move(position, 16);
@@ -260,7 +226,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                       subdomains: const ['a', 'b', 'c'],
                       userAgentPackageName: 'com.example.water_pipe_monitoring',
                       errorTileCallback: (tile, error, stackTrace) {
-                        print('Tile loading error: $e');
                         setState(() {
                           _errorMessage =
                               'Failed to load map tiles. Check your internet connection.';
@@ -346,8 +311,7 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                       await _searchLocation(value);
                       modalSetState(() {
                         tempLocation = _selectedLocation;
-                        tempPlaceName = _selectedPlaceName;
-                        searchController.text = tempPlaceName ?? '';
+                        searchController.text = '';
                       });
                     },
                   ),
@@ -415,8 +379,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                           ? () {
                               setState(() {
                                 _selectedLocation = tempLocation;
-                                _selectedPlaceName = tempPlaceName;
-                                _addressController.text = tempPlaceName ?? '';
                               });
                               Navigator.pop(context);
                             }
@@ -453,7 +415,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        print('Back button pressed, navigating to ResidentLoginPage');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
@@ -463,7 +424,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
       child: Scaffold(
         body: Stack(
           children: [
-            // Gradient Background
             Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
@@ -473,7 +433,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                 ),
               ),
             ),
-            // Back Button
             Positioned(
               top: 40,
               left: 16,
@@ -482,7 +441,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                 child: BackButtonStyled(),
               ),
             ),
-            // Main Content
             Center(
               child: SingleChildScrollView(
                 padding:
@@ -492,7 +450,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Logo and Title
                       FadeInDown(
                         duration: const Duration(milliseconds: 400),
                         child: Column(
@@ -522,7 +479,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                         ),
                       ),
                       const SizedBox(height: 32),
-                      // Error Message
                       if (_errorMessage != null)
                         FadeIn(
                           duration: const Duration(milliseconds: 300),
@@ -543,7 +499,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                           ),
                         ),
                       if (_errorMessage != null) const SizedBox(height: 16),
-                      // Full Name Field
                       FadeInUp(
                         duration: const Duration(milliseconds: 400),
                         delay: const Duration(milliseconds: 100),
@@ -581,17 +536,14 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // Address Field with Map Picker
                       FadeInUp(
                         duration: const Duration(milliseconds: 400),
                         delay: const Duration(milliseconds: 150),
                         child: TextFormField(
                           controller: _addressController,
                           cursorColor: const Color(0xFF0288D1),
-                          readOnly: true,
-                          onTap: _openMapPicker,
                           decoration: InputDecoration(
-                            hintText: 'Tap to select or search location',
+                            hintText: 'Enter your exact address',
                             hintStyle: GoogleFonts.poppins(color: Colors.grey),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -609,34 +561,40 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                             ),
                             prefixIcon: const Icon(Icons.location_on_outlined,
                                 color: Colors.grey),
-                            suffixIcon: _isSearchingLocation
-                                ? const Padding(
-                                    padding: EdgeInsets.all(12),
-                                    child: SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    ),
-                                  )
-                                : IconButton(
-                                    icon: const Icon(Icons.map,
-                                        color: Colors.grey),
-                                    onPressed: _openMapPicker,
-                                  ),
                             filled: true,
                             fillColor: Colors.white,
                           ),
                           validator: (value) {
-                            if (_selectedLocation == null) {
-                              return 'Please select a location';
+                            if (value == null || value.trim().isEmpty) {
+                              return 'Please enter your address';
                             }
                             return null;
                           },
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      FadeInUp(
+                        duration: const Duration(milliseconds: 400),
+                        delay: const Duration(milliseconds: 175),
+                        child: GestureDetector(
+                          onTap: _isSearchingLocation ? null : _openMapPicker,
+                          child: Text(
+                            'Pin Location',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: _isSearchingLocation
+                                  ? Colors.grey.shade400
+                                  : const Color(0xFF0288D1),
+                              fontWeight: FontWeight.w600,
+                              decoration: TextDecoration.underline,
+                              decorationColor: _isSearchingLocation
+                                  ? Colors.grey.shade400
+                                  : const Color(0xFF0288D1).withOpacity(0.3),
+                            ),
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 16),
-                      // Contact Number Field
                       FadeInUp(
                         duration: const Duration(milliseconds: 400),
                         delay: const Duration(milliseconds: 200),
@@ -678,7 +636,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // Email Field
                       FadeInUp(
                         duration: const Duration(milliseconds: 400),
                         delay: const Duration(milliseconds: 250),
@@ -721,7 +678,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // Password Field
                       FadeInUp(
                         duration: const Duration(milliseconds: 400),
                         delay: const Duration(milliseconds: 300),
@@ -776,7 +732,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // Confirm Password Field
                       FadeInUp(
                         duration: const Duration(milliseconds: 400),
                         delay: const Duration(milliseconds: 350),
@@ -829,7 +784,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      // Sign Up Button
                       FadeInUp(
                         duration: const Duration(milliseconds: 400),
                         delay: const Duration(milliseconds: 400),
@@ -858,7 +812,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // Sign In Link
                       FadeInUp(
                         duration: const Duration(milliseconds: 400),
                         delay: const Duration(milliseconds: 450),
@@ -874,8 +827,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                             ),
                             GestureDetector(
                               onTap: () {
-                                print(
-                                    'Sign In link tapped, navigating to ResidentLoginPage');
                                 Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(
@@ -918,7 +869,6 @@ class CustomLoadingDialog extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Blur Background
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: BackdropFilter(
@@ -940,7 +890,6 @@ class CustomLoadingDialog extends StatelessWidget {
               ),
             ),
           ),
-          // Loading Animation
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -977,7 +926,6 @@ class BackButtonStyled extends StatelessWidget {
       icon: const Icon(Icons.arrow_back_ios_new_rounded,
           size: 22, color: Colors.black87),
       onPressed: () {
-        print('Back button pressed, navigating to ResidentLoginPage');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
