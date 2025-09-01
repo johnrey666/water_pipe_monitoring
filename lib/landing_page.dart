@@ -35,10 +35,11 @@ class LandingPage extends StatelessWidget {
                     duration: const Duration(milliseconds: 400),
                     child: Column(
                       children: [
-                        const Icon(
-                          Icons.water_drop_outlined,
-                          size: 80,
-                          color: Color(0xFF0288D1),
+                        // Replaced the Icon widget with an Image.asset
+                        Image.asset(
+                          'assets/images/icon.png',
+                          height: 120,
+                          width: 120,
                         ),
                         const SizedBox(height: 8),
                         Text(
