@@ -79,6 +79,7 @@ class AdminLayout extends StatelessWidget {
                 _sidebarItem(context, 'View Reports', Icons.report, '/reports'),
                 _sidebarItem(context, 'Users', Icons.people, '/users'),
                 _sidebarItem(context, 'Bills', Icons.receipt, '/bills'),
+                _sidebarItem(context, 'Logs', Icons.history, '/logs'),
                 Spacer(),
                 _sidebarItem(context, 'Log Out', Icons.logout, '/admin-login',
                     isLogout: true),
@@ -104,14 +105,29 @@ class AdminLayout extends StatelessWidget {
                     ],
                   ),
                   padding: EdgeInsets.symmetric(horizontal: 24),
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    title,
-                    style: GoogleFonts.poppins(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF2C3E50),
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        title,
+                        style: GoogleFonts.poppins(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF2C3E50),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () {
+                          Navigator.pushNamed(context, '/logs');
+                        },
+                        icon: Icon(
+                          Icons.history,
+                          color: Color(0xFF2C3E50),
+                          size: 28,
+                        ),
+                        tooltip: 'View Logs',
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(

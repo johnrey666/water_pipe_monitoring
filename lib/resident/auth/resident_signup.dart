@@ -60,11 +60,20 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
     );
 
     try {
-      UserCredential userCredential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      // Timeout for Firebase operations
+      const timeoutDuration = Duration(seconds: 20);
+
+      print('Starting Firebase Auth user creation...');
+      UserCredential userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
-      );
+      )
+          .timeout(timeoutDuration, onTimeout: () {
+        throw TimeoutException('Firebase Auth timed out');
+      });
+
+      print('User created with UID: ${userCredential.user!.uid}');
 
       Map<String, dynamic> userData = {
         'fullName': _nameController.text.trim(),
@@ -81,13 +90,51 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
         userData['placeName'] = _addressController.text.trim();
       }
 
+      // Save user data to Firestore
+      print('Saving user data to Firestore...');
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userCredential.user!.uid)
-          .set(userData);
+          .set(userData)
+          .timeout(timeoutDuration, onTimeout: () {
+        throw TimeoutException('Firestore user data write timed out');
+      });
 
-      if (!mounted) return;
-      Navigator.pop(context);
+      print('User data saved.');
+
+      // Create log entry in a non-blocking way
+      try {
+        print('Creating log entry in users/${userCredential.user!.uid}/log...');
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(userCredential.user!.uid)
+            .collection('log')
+            .add({
+          'log_type': 'accounts',
+          'userId': userCredential.user!.uid,
+          'email': _emailController.text.trim(),
+          'fullName': _nameController.text.trim(),
+          'address': _addressController.text.trim(),
+          'contactNumber': _contactController.text.trim(),
+          'description':
+              'User ${_nameController.text.trim()} created an account',
+          'createdAt': FieldValue.serverTimestamp(),
+        }).timeout(timeoutDuration, onTimeout: () {
+          throw TimeoutException('Firestore log write timed out');
+        });
+        print(
+            'Log created for user: ${_nameController.text.trim()}, email: ${_emailController.text.trim()}');
+      } catch (logError) {
+        print('Error creating log: $logError');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Account created, but failed to log activity: $logError'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('Registration successful! Please sign in.')),
@@ -97,15 +144,41 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
         MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
       );
     } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context);
       setState(() {
         _errorMessage = _getFriendlyErrorMessage(e.code);
       });
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
+      print('FirebaseAuthException: ${e.code} - ${e.message}');
+    } on TimeoutException catch (e) {
+      setState(() {
+        _errorMessage = 'Operation timed out. Please check your connection.';
+      });
+      print('TimeoutException: $e');
+      // Check if user data was saved despite timeout
+      if (await FirebaseFirestore.instance
+          .collection('users')
+          .doc(FirebaseAuth.instance.currentUser?.uid)
+          .get()
+          .then((doc) => doc.exists)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Registration successful! Please sign in.')),
+        );
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
+        );
       }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'An error occurred: $e';
+      });
+      print('Unexpected error: $e');
+    } finally {
+      // Always dismiss the loading dialog
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      setState(() => _isLoading = false);
     }
   }
 

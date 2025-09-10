@@ -14,6 +14,7 @@ class _AdminLoginPageState extends State<AdminLoginPage>
     with SingleTickerProviderStateMixin {
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
   bool isLoading = false;
   String? errorText;
   bool _obscurePassword = true;
@@ -25,11 +26,11 @@ class _AdminLoginPageState extends State<AdminLoginPage>
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 600),
     );
     _fadeAnimation = CurvedAnimation(
       parent: _animationController,
-      curve: Curves.easeInOut,
+      curve: Curves.easeIn,
     );
     _animationController.forward();
   }
@@ -43,6 +44,8 @@ class _AdminLoginPageState extends State<AdminLoginPage>
   }
 
   void handleLogin() async {
+    if (!_formKey.currentState!.validate()) return;
+
     setState(() {
       isLoading = true;
       errorText = null;
@@ -64,13 +67,13 @@ class _AdminLoginPageState extends State<AdminLoginPage>
         Navigator.pushReplacementNamed(context, '/dashboard');
       } else {
         setState(() {
-          errorText = 'Access denied. You are not an admin.';
+          errorText = 'Access denied: Admin privileges required.';
         });
         await FirebaseAuth.instance.signOut();
       }
     } on FirebaseAuthException catch (e) {
       setState(() {
-        errorText = e.message ?? 'Authentication failed';
+        errorText = _getFriendlyErrorMessage(e.code);
       });
     } catch (e) {
       setState(() {
@@ -83,84 +86,110 @@ class _AdminLoginPageState extends State<AdminLoginPage>
     }
   }
 
+  String _getFriendlyErrorMessage(String code) {
+    switch (code) {
+      case 'user-not-found':
+        return 'No account found with this email.';
+      case 'wrong-password':
+        return 'Incorrect password.';
+      case 'invalid-email':
+        return 'Invalid email address.';
+      case 'user-disabled':
+        return 'This account is disabled.';
+      default:
+        return 'Login failed. Please try again.';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[50], // Clean, light background
       body: Center(
         child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: MediaQuery.of(context).size.width * 0.06, // Responsive
+          ),
           child: FadeTransition(
             opacity: _fadeAnimation,
             child: Container(
               constraints: const BoxConstraints(maxWidth: 400),
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              padding: const EdgeInsets.all(32),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: Colors.grey[200]!, width: 1), // Subtle border
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 15,
+                    offset: const Offset(0, 5),
                   ),
                 ],
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Admin Portal',
-                    style: GoogleFonts.poppins(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF2D2D2D),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Icon instead of logo
+                    const Icon(
+                      Icons.admin_panel_settings,
+                      size: 48,
+                      color: Color(0xFF1976D2),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Sign in to manage your dashboard',
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  TextField(
-                    controller: emailController,
-                    decoration: InputDecoration(
-                      labelText: 'Email',
-                      hintText: 'Enter your email',
-                      prefixIcon: const Icon(Icons.email_outlined),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
+                    const SizedBox(height: 12),
+                    Text(
+                      'Admin Login',
+                      style: GoogleFonts.poppins(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
                       ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF2C3E50),
-                          width: 2,
-                        ),
-                      ),
+                      textAlign: TextAlign.center,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      hintText: 'Enter your password',
-                      prefixIcon: const Icon(Icons.lock_outline),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Sign in to access the dashboard',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w400,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 24),
+                    _buildTextField(
+                      controller: emailController,
+                      label: 'Email',
+                      hint: 'Enter your email',
+                      icon: Icons.email_outlined,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Email is required';
+                        }
+                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                            .hasMatch(value)) {
+                          return 'Enter a valid email';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                      controller: passwordController,
+                      label: 'Password',
+                      hint: 'Enter your password',
+                      icon: Icons.lock_outline,
+                      obscureText: _obscurePassword,
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword
                               ? Icons.visibility_off_outlined
                               : Icons.visibility_outlined,
+                          color: Colors.grey[600],
                         ),
                         onPressed: () {
                           setState(() {
@@ -168,92 +197,152 @@ class _AdminLoginPageState extends State<AdminLoginPage>
                           });
                         },
                       ),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF2C3E50),
-                          width: 2,
-                        ),
-                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Password is required';
+                        }
+                        if (value.length < 6) {
+                          return 'Password must be 6+ characters';
+                        }
+                        return null;
+                      },
                     ),
-                  ),
-                  if (errorText != null) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red[50],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.error_outline, color: Colors.red),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              errorText!,
-                              style: GoogleFonts.poppins(
-                                color: Colors.red[700],
-                                fontSize: 14,
-                              ),
-                            ),
+                    if (errorText != null) ...[
+                      const SizedBox(height: 16),
+                      FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.red[50],
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                        ],
+                          child: Text(
+                            errorText!,
+                            style: GoogleFonts.poppins(
+                              color: Colors.red[700],
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
+                    const SizedBox(height: 24),
+                    _buildLoginButton(),
                   ],
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: isLoading ? null : handleLogin,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.transparent,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.zero,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 3,
-                      ),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          // ignore: prefer_const_constructors
-                          color: Color(0xFF3498DB),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        alignment: Alignment.center,
-                        child: isLoading
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 3,
-                                ),
-                              )
-                            : Text(
-                                'Sign In',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
+                ),
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    bool obscureText = false,
+    Widget? suffixIcon,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      obscureText: obscureText,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Icon(icon, color: Colors.grey[600]),
+        suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding:
+            const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.grey[300]!, width: 1),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(
+            color: Color(0xFF1976D2),
+            width: 1.5,
+          ),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(
+            color: Colors.red,
+            width: 1,
+          ),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(
+            color: Colors.red,
+            width: 1.5,
+          ),
+        ),
+        labelStyle: GoogleFonts.poppins(
+          color: Colors.grey[700],
+          fontSize: 14,
+        ),
+        hintStyle: GoogleFonts.poppins(
+          color: Colors.grey[500],
+          fontSize: 14,
+        ),
+      ),
+      style: GoogleFonts.poppins(fontSize: 14),
+    );
+  }
+
+  Widget _buildLoginButton() {
+    return GestureDetector(
+      onTapDown:
+          isLoading ? null : (_) => _animationController.forward(from: 0),
+      child: ScaleTransition(
+        scale: Tween<double>(begin: 1.0, end: 0.95).animate(
+          CurvedAnimation(
+            parent: _animationController,
+            curve: Curves.easeOut,
+          ),
+        ),
+        child: ElevatedButton(
+          onPressed: isLoading ? null : handleLogin,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF1976D2),
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            elevation: 3,
+          ),
+          child: isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
+              : Text(
+                  'Sign In',
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
         ),
       ),
     );
