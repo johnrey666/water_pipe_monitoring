@@ -9,72 +9,6 @@ import 'auth/resident_login.dart';
 import 'report_problem_page.dart';
 import 'view_billing_page.dart';
 
-void main() {
-  runApp(const ResidentialPortalApp());
-}
-
-class ResidentialPortalApp extends StatelessWidget {
-  const ResidentialPortalApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Residential Portal',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF87CEEB),
-          primary: const Color(0xFF0288D1),
-          secondary: const Color(0xFF4CAF50),
-        ),
-        scaffoldBackgroundColor: Colors.grey.shade50,
-        cardTheme: CardTheme(
-          elevation: 4,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          color: Colors.white,
-          margin: const EdgeInsets.all(8),
-        ),
-        appBarTheme: AppBarTheme(
-          centerTitle: true,
-          elevation: 2,
-          backgroundColor: Colors.white,
-          iconTheme: const IconThemeData(color: Colors.black87),
-          titleTextStyle: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-          ),
-        ),
-        textTheme: GoogleFonts.poppinsTextTheme(
-          const TextTheme(
-            titleLarge: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-            titleMedium: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.black87,
-            ),
-            bodyLarge: TextStyle(
-              fontSize: 14,
-              color: Colors.black87,
-            ),
-            bodyMedium: TextStyle(
-              fontSize: 12,
-              color: Colors.black54,
-            ),
-          ),
-        ),
-      ),
-      home: const ResidentHomePage(),
-    );
-  }
-}
-
 enum ResidentPage { home, report, billing }
 
 class ResidentHomePage extends StatefulWidget {
@@ -98,31 +32,39 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   }
 
   Future<void> _fetchResidentName() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
     try {
+      User? user = (await FirebaseAuth.instance.authStateChanges().first);
+      print('DEBUG: Auth user UID from stream: ${user?.uid ?? "null"}');
+      if (user == null) {
+        print('DEBUG: No user logged in for fetchResidentName');
+        return;
+      }
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
+      print(
+          'DEBUG: Resident name doc exists: ${doc.exists}, data: ${doc.data()}');
       final data = doc.data();
-      if (data != null && data['fullName'] != null) {
+      if (data != null && data['fullName'] != null && mounted) {
         setState(() {
           _residentName = data['fullName'];
         });
       }
     } catch (e) {
-      print('Error fetching resident name: $e');
+      print('DEBUG: Error fetching resident name: $e');
     }
   }
 
   Future<double> _fetchTotalWaterConsumption() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print('No user logged in for total water consumption');
-      return 0.0;
-    }
     try {
+      User? user = (await FirebaseAuth.instance.authStateChanges().first);
+      print(
+          'DEBUG: Auth user UID for total consumption: ${user?.uid ?? "null"}');
+      if (user == null) {
+        print('DEBUG: No user logged in for total water consumption');
+        return 0.0;
+      }
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -130,7 +72,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           .get();
 
       if (snapshot.docs.isEmpty) {
-        print('No consumption history found for resident ${user.uid}');
+        print('DEBUG: No consumption history found for resident ${user.uid}');
         return 0.0;
       }
 
@@ -138,21 +80,24 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         0.0,
         (sum, doc) => sum + (doc['cubicMeterUsed']?.toDouble() ?? 0.0),
       );
-      print('Total water consumption for ${user.uid}: $totalConsumption m³');
+      print(
+          'DEBUG: Total water consumption for ${user.uid}: $totalConsumption m³');
       return totalConsumption;
     } catch (e) {
-      print('Error fetching total water consumption: $e');
+      print('DEBUG: Error fetching total water consumption: $e');
       return 0.0;
     }
   }
 
   Future<double> _fetchThisMonthConsumption() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print('No user logged in for this month consumption');
-      return 0.0;
-    }
     try {
+      User? user = (await FirebaseAuth.instance.authStateChanges().first);
+      print(
+          'DEBUG: Auth user UID for this month consumption: ${user?.uid ?? "null"}');
+      if (user == null) {
+        print('DEBUG: No user logged in for this month consumption');
+        return 0.0;
+      }
       final now = DateTime.now();
       final currentYear = now.year;
       final currentMonth = now.month;
@@ -170,21 +115,22 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         (sum, doc) => sum + (doc['cubicMeterUsed']?.toDouble() ?? 0.0),
       );
       print(
-          'This month ($currentYear-$currentMonth) consumption for ${user.uid}: $totalConsumption m³');
+          'DEBUG: This month ($currentYear-$currentMonth) consumption for ${user.uid}: $totalConsumption m³');
       return totalConsumption;
     } catch (e) {
-      print('Error fetching this month\'s consumption: $e');
+      print('DEBUG: Error fetching this month\'s consumption: $e');
       return 0.0;
     }
   }
 
   Future<List<Map<String, dynamic>>> _fetchLastSixMonthsConsumption() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print('No user logged in for last six months consumption');
-      return [];
-    }
     try {
+      User? user = (await FirebaseAuth.instance.authStateChanges().first);
+      print('DEBUG: Auth user UID for last six months: ${user?.uid ?? "null"}');
+      if (user == null) {
+        print('DEBUG: No user logged in for last six months consumption');
+        return [];
+      }
       final now = DateTime.now();
       final startDate = DateTime(now.year, now.month - 5, 1);
       final endDate = DateTime(now.year, now.month + 1, 1);
@@ -221,17 +167,17 @@ class _ResidentHomePageState extends State<ResidentHomePage>
               final consumption = data['cubicMeterUsed']?.toDouble() ?? 0.0;
               month['consumption'] += consumption;
               print(
-                  'Consumption for ${month['monthName']}: periodStart=$periodStart, cubicMeterUsed=$consumption');
+                  'DEBUG: Consumption for ${month['monthName']}: periodStart=$periodStart, cubicMeterUsed=$consumption');
             }
           }
         }
       }
 
       months.sort((a, b) => b['month'].compareTo(a['month']));
-      print('Last six months consumption for ${user.uid}: $months');
+      print('DEBUG: Last six months consumption for ${user.uid}: $months');
       return months;
     } catch (e) {
-      print('Error fetching last six months consumption: $e');
+      print('DEBUG: Error fetching last six months consumption: $e');
       return [];
     }
   }
@@ -273,11 +219,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
               await FirebaseAuth.instance.signOut();
               if (!mounted) return;
               Navigator.of(context).pop();
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
-                (route) => false,
-              );
+              // Rely on StreamBuilder in main.dart to redirect to login
             },
             child: Text(
               'Logout',
@@ -295,7 +237,9 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   Future<void> _refreshDashboard() async {
     await Future.delayed(const Duration(seconds: 1));
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Widget _getPageContent() {
@@ -317,15 +261,15 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   }
 
   Future<Map<String, List<Map<String, dynamic>>>> _fetchNotifications() async {
-    print('Fetching notifications...');
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print('No user logged in');
-      return {'unread': [], 'read': []};
-    }
-    print('Current user UID: ${user.uid}');
-
+    print('DEBUG: Fetching notifications...');
     try {
+      User? user = (await FirebaseAuth.instance.authStateChanges().first);
+      print('DEBUG: Auth user UID for notifications: ${user?.uid ?? "null"}');
+      if (user == null) {
+        print('DEBUG: No user logged in for notifications');
+        return {'unread': [], 'read': []};
+      }
+
       final unreadSnapshot = await FirebaseFirestore.instance
           .collection('notifications')
           .where('residentId', isEqualTo: user.uid)
@@ -342,12 +286,12 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           .limit(10)
           .get();
 
-      print('Found ${unreadSnapshot.docs.length} unread notifications');
-      print('Found ${readSnapshot.docs.length} read notifications');
+      print('DEBUG: Found ${unreadSnapshot.docs.length} unread notifications');
+      print('DEBUG: Found ${readSnapshot.docs.length} read notifications');
 
       final unreadNotifications = unreadSnapshot.docs.map((doc) {
         final data = doc.data();
-        print('Unread notification data: $data');
+        print('DEBUG: Unread notification data: $data');
         return {
           'id': doc.id,
           'type': data['type'] ?? 'unknown',
@@ -362,7 +306,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
       final readNotifications = readSnapshot.docs.map((doc) {
         final data = doc.data();
-        print('Read notification data: $data');
+        print('DEBUG: Read notification data: $data');
         return {
           'id': doc.id,
           'type': data['type'] ?? 'unknown',
@@ -376,33 +320,39 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       }).toList();
 
       print(
-          'Processed ${unreadNotifications.length} unread and ${readNotifications.length} read notifications');
+          'DEBUG: Processed ${unreadNotifications.length} unread and ${readNotifications.length} read notifications');
       return {'unread': unreadNotifications, 'read': readNotifications};
     } catch (e) {
-      print('Error fetching notifications: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error loading notifications: $e')),
-      );
+      print('DEBUG: Error fetching notifications: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading notifications: $e')),
+        );
+      }
       return {'unread': [], 'read': []};
     }
   }
 
   Future<void> _markNotificationAsRead(String notificationId) async {
     try {
-      print('Marking notification $notificationId as read');
+      print('DEBUG: Marking notification $notificationId as read');
       await FirebaseFirestore.instance
           .collection('notifications')
           .doc(notificationId)
           .update({'read': true});
-      print('Notification $notificationId marked as read');
-      setState(() {
-        _isDropdownOpen = false;
-      });
+      print('DEBUG: Notification $notificationId marked as read');
+      if (mounted) {
+        setState(() {
+          _isDropdownOpen = false;
+        });
+      }
     } catch (e) {
-      print('Error marking notification as read: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error marking notification as read: $e')),
-      );
+      print('DEBUG: Error marking notification as read: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error marking notification as read: $e')),
+        );
+      }
     }
   }
 
@@ -414,6 +364,49 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   @override
   Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF87CEEB)),
+              ),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Text(
+                'Auth error: ${snapshot.error}',
+                style: GoogleFonts.poppins(color: Colors.red),
+              ),
+            ),
+          );
+        }
+        if (snapshot.data == null) {
+          print('DEBUG: No user signed in, redirecting to ResidentLoginPage');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
+              (route) => false,
+            );
+          });
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        print(
+            'DEBUG: Building ResidentHomePage for user: ${snapshot.data!.uid}');
+        return _buildHomeContent(context);
+      },
+    );
+  }
+
+  Widget _buildHomeContent(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     const dropdownWidth = 300.0;
     final bellBox =
@@ -467,9 +460,9 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                 if (snapshot.hasData) {
                   notificationCount = snapshot.data!.docs.length;
                   print(
-                      'StreamBuilder: Found $notificationCount unread notifications');
+                      'DEBUG: StreamBuilder: Found $notificationCount unread notifications');
                 } else if (snapshot.hasError) {
-                  print('StreamBuilder error: ${snapshot.error}');
+                  print('DEBUG: StreamBuilder error: ${snapshot.error}');
                 }
                 return Stack(
                   children: [
