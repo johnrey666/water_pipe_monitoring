@@ -79,6 +79,8 @@ class AdminLayout extends StatelessWidget {
                 _sidebarItem(context, 'View Reports', Icons.report, '/reports'),
                 _sidebarItem(context, 'Users', Icons.people, '/users'),
                 _sidebarItem(context, 'Bills', Icons.receipt, '/bills'),
+                _sidebarItem(context, 'Logs', Icons.history,
+                    '/logs'), // Added Logs navigation
                 Spacer(),
                 _sidebarItem(context, 'Log Out', Icons.logout, '/admin-login',
                     isLogout: true),

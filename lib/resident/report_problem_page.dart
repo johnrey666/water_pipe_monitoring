@@ -33,6 +33,8 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   final _issueController = TextEditingController();
   final _additionalInfoController = TextEditingController();
   final _dateTimeController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _imageNameController = TextEditingController();
   MapController? _mapController;
   DateTime? _selectedDateTime;
   bool _isSubmitting = false;
@@ -61,6 +63,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
     if (image != null) {
       setState(() {
         _imageFile = image;
+        _imageNameController.text = image.name;
         _errorMessage = null;
       });
     }
@@ -92,6 +95,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
           setState(() {
             _selectedLocation = latlong.LatLng(lat, lon);
             _selectedPlaceName = placeName;
+            _locationController.text = placeName;
           });
           if (_mapController != null) {
             _mapController!.move(_selectedLocation!, 16);
@@ -260,9 +264,19 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
       if (userInfo == null) {
         throw Exception('Failed to fetch user info');
       }
+      if (_issueController.text.trim().isEmpty) {
+        throw Exception('Issue description is required');
+      }
+      if (_selectedDateTime == null) {
+        throw Exception('Date and time is required');
+      }
+      if (_isPublicReport && _selectedLocation == null) {
+        throw Exception('Please select a location for public report');
+      }
       if (!_isPublicReport && userInfo['location'] == null) {
         throw Exception('User location not found');
       }
+
       final reportData = {
         'userId': userInfo['userId'],
         'fullName': userInfo['fullName'],
@@ -282,10 +296,10 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         'createdAt': Timestamp.now(),
         'status': 'Unfixed Reports',
         'isPublic': _isPublicReport,
-        'additionalLocationInfo': _additionalInfoController.text.isNotEmpty
-            ? _additionalInfoController.text
-            : null,
       };
+      if (_additionalInfoController.text.isNotEmpty) {
+        reportData['additionalLocationInfo'] = _additionalInfoController.text;
+      }
       final base64Image = await _convertImageToBase64(_imageFile);
       if (base64Image != null) {
         reportData['image'] = base64Image;
@@ -301,8 +315,10 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         _additionalInfoController.clear();
         _dateTimeController.clear();
         _imageFile = null;
+        _imageNameController.clear();
         _selectedLocation = null;
         _selectedPlaceName = null;
+        _locationController.clear();
         _selectedDateTime = null;
         _isPublicReport = false;
         _recentPage = 0;
@@ -537,6 +553,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                               setState(() {
                                 _selectedLocation = tempLocation;
                                 _selectedPlaceName = tempPlaceName;
+                                _locationController.text = tempPlaceName ?? '';
                               });
                               Navigator.pop(context);
                             }
@@ -923,6 +940,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                             if (!_isPublicReport) {
                               _selectedLocation = null;
                               _selectedPlaceName = null;
+                              _locationController.clear();
                             }
                           });
                         },
@@ -934,8 +952,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                     ),
                     if (_isPublicReport)
                       _modernField(
-                        controller: TextEditingController(
-                            text: _selectedPlaceName ?? ''),
+                        controller: _locationController,
                         label: 'Location *',
                         icon: Icons.location_on_outlined,
                         readOnly: true,
@@ -982,8 +999,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                       children: [
                         Expanded(
                           child: _modernField(
-                            controller: TextEditingController(
-                                text: _imageFile?.name ?? ''),
+                            controller: _imageNameController,
                             label: 'Upload Image',
                             icon: Icons.image_outlined,
                             readOnly: true,
@@ -1042,8 +1058,10 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                                 top: 8,
                                 right: 8,
                                 child: GestureDetector(
-                                  onTap: () =>
-                                      setState(() => _imageFile = null),
+                                  onTap: () => setState(() {
+                                    _imageFile = null;
+                                    _imageNameController.clear();
+                                  }),
                                   child: Container(
                                     padding: const EdgeInsets.all(4),
                                     decoration: BoxDecoration(
@@ -1178,3 +1196,5 @@ class CustomLoadingDialog extends StatelessWidget {
     );
   }
 }
+
+

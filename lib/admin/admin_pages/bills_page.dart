@@ -417,7 +417,8 @@ class _ResidentCardState extends State<_ResidentCard> {
           ),
           AnimatedCrossFade(
             firstChild: const SizedBox.shrink(),
-            secondChild: _PaymentSection(residentId: widget.residentId),
+            secondChild: _PaymentSection(
+                residentId: widget.residentId, fullName: widget.fullName),
             crossFadeState: _showPayments
                 ? CrossFadeState.showSecond
                 : CrossFadeState.showFirst,
@@ -432,7 +433,8 @@ class _ResidentCardState extends State<_ResidentCard> {
 
 class _PaymentSection extends StatefulWidget {
   final String residentId;
-  const _PaymentSection({required this.residentId});
+  final String fullName;
+  const _PaymentSection({required this.residentId, required this.fullName});
 
   @override
   State<_PaymentSection> createState() => _PaymentSectionState();
@@ -678,6 +680,14 @@ class _PaymentSectionState extends State<_PaymentSection> {
                       'processedBy': 'Admin',
                     });
                     print('Payment updated to approved');
+
+                    await FirebaseFirestore.instance.collection('logs').add({
+                      'action': 'Payment Accepted',
+                      'userId': widget.residentId,
+                      'details':
+                          'Payment for $month by ${widget.fullName} accepted. Amount: ₱${paymentData['billAmount']?.toStringAsFixed(2) ?? '0.00'}',
+                      'timestamp': FieldValue.serverTimestamp(),
+                    });
 
                     if (billId != null && periodStart != null) {
                       await _addConsumptionHistory(

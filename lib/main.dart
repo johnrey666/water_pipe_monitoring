@@ -12,6 +12,7 @@ import 'admin/admin_pages/monitor_page.dart';
 import 'admin/admin_pages/users_page.dart';
 import 'admin/admin_pages/bills_page.dart';
 import 'admin/admin_pages/view_reports_page.dart';
+import 'admin/admin_pages/logs_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -72,6 +73,7 @@ class MyApp extends StatelessWidget {
         '/reports': (context) => const ViewReportsPage(),
         '/users': (context) => const UsersPage(),
         '/bills': (context) => const BillsPage(),
+        '/logs': (context) => const LogsPage(),
       },
       onUnknownRoute: (settings) {
         return MaterialPageRoute(

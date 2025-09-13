@@ -22,7 +22,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     with TickerProviderStateMixin {
   ResidentPage _selectedPage = ResidentPage.home;
   final GlobalKey _notificationButtonKey = GlobalKey();
-  bool _isDropdownOpen = false;
+  OverlayEntry? _notificationOverlay;
   String _residentName = 'Resident';
 
   @override
@@ -33,18 +33,13 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   Future<void> _fetchResidentName() async {
     try {
-      User? user = (await FirebaseAuth.instance.authStateChanges().first);
-      print('DEBUG: Auth user UID from stream: ${user?.uid ?? "null"}');
-      if (user == null) {
-        print('DEBUG: No user logged in for fetchResidentName');
-        return;
-      }
+      User? user = FirebaseAuth.instance.currentUser;
+      print('DEBUG: Auth user UID: ${user?.uid ?? "null"}');
+      if (user == null) return;
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
-      print(
-          'DEBUG: Resident name doc exists: ${doc.exists}, data: ${doc.data()}');
       final data = doc.data();
       if (data != null && data['fullName'] != null && mounted) {
         setState(() {
@@ -58,30 +53,18 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   Future<double> _fetchTotalWaterConsumption() async {
     try {
-      User? user = (await FirebaseAuth.instance.authStateChanges().first);
-      print(
-          'DEBUG: Auth user UID for total consumption: ${user?.uid ?? "null"}');
-      if (user == null) {
-        print('DEBUG: No user logged in for total water consumption');
-        return 0.0;
-      }
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return 0.0;
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('consumption_history')
           .get();
-
-      if (snapshot.docs.isEmpty) {
-        print('DEBUG: No consumption history found for resident ${user.uid}');
-        return 0.0;
-      }
-
+      if (snapshot.docs.isEmpty) return 0.0;
       final totalConsumption = snapshot.docs.fold<double>(
         0.0,
         (sum, doc) => sum + (doc['cubicMeterUsed']?.toDouble() ?? 0.0),
       );
-      print(
-          'DEBUG: Total water consumption for ${user.uid}: $totalConsumption m³');
       return totalConsumption;
     } catch (e) {
       print('DEBUG: Error fetching total water consumption: $e');
@@ -91,17 +74,11 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   Future<double> _fetchThisMonthConsumption() async {
     try {
-      User? user = (await FirebaseAuth.instance.authStateChanges().first);
-      print(
-          'DEBUG: Auth user UID for this month consumption: ${user?.uid ?? "null"}');
-      if (user == null) {
-        print('DEBUG: No user logged in for this month consumption');
-        return 0.0;
-      }
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return 0.0;
       final now = DateTime.now();
       final currentYear = now.year;
       final currentMonth = now.month;
-
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -109,13 +86,10 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           .where('year', isEqualTo: currentYear)
           .where('month', isEqualTo: currentMonth)
           .get();
-
       final totalConsumption = snapshot.docs.fold<double>(
         0.0,
         (sum, doc) => sum + (doc['cubicMeterUsed']?.toDouble() ?? 0.0),
       );
-      print(
-          'DEBUG: This month ($currentYear-$currentMonth) consumption for ${user.uid}: $totalConsumption m³');
       return totalConsumption;
     } catch (e) {
       print('DEBUG: Error fetching this month\'s consumption: $e');
@@ -125,19 +99,13 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   Future<List<Map<String, dynamic>>> _fetchLastSixMonthsConsumption() async {
     try {
-      User? user = (await FirebaseAuth.instance.authStateChanges().first);
-      print('DEBUG: Auth user UID for last six months: ${user?.uid ?? "null"}');
-      if (user == null) {
-        print('DEBUG: No user logged in for last six months consumption');
-        return [];
-      }
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return [];
       final now = DateTime.now();
       final startDate = DateTime(now.year, now.month - 5, 1);
       final endDate = DateTime(now.year, now.month + 1, 1);
       final months = <Map<String, dynamic>>[];
       final dateFormat = DateFormat('MMM');
-
-      // Initialize months
       for (int i = 0; i < 6; i++) {
         final targetDate = DateTime(now.year, now.month - i, 1);
         final monthName = dateFormat.format(targetDate);
@@ -147,7 +115,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           'consumption': 0.0,
         });
       }
-
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -156,7 +123,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
               isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
           .where('periodStart', isLessThan: Timestamp.fromDate(endDate))
           .get();
-
       for (var doc in snapshot.docs) {
         final data = doc.data();
         final periodStart = (data['periodStart'] as Timestamp?)?.toDate();
@@ -166,15 +132,11 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                 periodStart.month == month['month'].month) {
               final consumption = data['cubicMeterUsed']?.toDouble() ?? 0.0;
               month['consumption'] += consumption;
-              print(
-                  'DEBUG: Consumption for ${month['monthName']}: periodStart=$periodStart, cubicMeterUsed=$consumption');
             }
           }
         }
       }
-
       months.sort((a, b) => b['month'].compareTo(a['month']));
-      print('DEBUG: Last six months consumption for ${user.uid}: $months');
       return months;
     } catch (e) {
       print('DEBUG: Error fetching last six months consumption: $e');
@@ -219,7 +181,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
               await FirebaseAuth.instance.signOut();
               if (!mounted) return;
               Navigator.of(context).pop();
-              // Rely on StreamBuilder in main.dart to redirect to login
             },
             child: Text(
               'Logout',
@@ -237,9 +198,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   Future<void> _refreshDashboard() async {
     await Future.delayed(const Duration(seconds: 1));
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
   Widget _getPageContent() {
@@ -261,15 +220,9 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   }
 
   Future<Map<String, List<Map<String, dynamic>>>> _fetchNotifications() async {
-    print('DEBUG: Fetching notifications...');
     try {
-      User? user = (await FirebaseAuth.instance.authStateChanges().first);
-      print('DEBUG: Auth user UID for notifications: ${user?.uid ?? "null"}');
-      if (user == null) {
-        print('DEBUG: No user logged in for notifications');
-        return {'unread': [], 'read': []};
-      }
-
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return {'unread': [], 'read': []};
       final unreadSnapshot = await FirebaseFirestore.instance
           .collection('notifications')
           .where('residentId', isEqualTo: user.uid)
@@ -277,7 +230,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           .orderBy('createdAt', descending: true)
           .limit(10)
           .get();
-
       final readSnapshot = await FirebaseFirestore.instance
           .collection('notifications')
           .where('residentId', isEqualTo: user.uid)
@@ -285,13 +237,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           .orderBy('createdAt', descending: true)
           .limit(10)
           .get();
-
-      print('DEBUG: Found ${unreadSnapshot.docs.length} unread notifications');
-      print('DEBUG: Found ${readSnapshot.docs.length} read notifications');
-
       final unreadNotifications = unreadSnapshot.docs.map((doc) {
         final data = doc.data();
-        print('DEBUG: Unread notification data: $data');
         return {
           'id': doc.id,
           'type': data['type'] ?? 'unknown',
@@ -303,10 +250,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           'createdAt': (data['createdAt'] as Timestamp?)?.toDate(),
         };
       }).toList();
-
       final readNotifications = readSnapshot.docs.map((doc) {
         final data = doc.data();
-        print('DEBUG: Read notification data: $data');
         return {
           'id': doc.id,
           'type': data['type'] ?? 'unknown',
@@ -318,9 +263,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           'createdAt': (data['createdAt'] as Timestamp?)?.toDate(),
         };
       }).toList();
-
-      print(
-          'DEBUG: Processed ${unreadNotifications.length} unread and ${readNotifications.length} read notifications');
       return {'unread': unreadNotifications, 'read': readNotifications};
     } catch (e) {
       print('DEBUG: Error fetching notifications: $e');
@@ -335,17 +277,11 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   Future<void> _markNotificationAsRead(String notificationId) async {
     try {
-      print('DEBUG: Marking notification $notificationId as read');
       await FirebaseFirestore.instance
           .collection('notifications')
           .doc(notificationId)
           .update({'read': true});
-      print('DEBUG: Notification $notificationId marked as read');
-      if (mounted) {
-        setState(() {
-          _isDropdownOpen = false;
-        });
-      }
+      _removeNotificationOverlay();
     } catch (e) {
       print('DEBUG: Error marking notification as read: $e');
       if (mounted) {
@@ -356,10 +292,150 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     }
   }
 
-  void _toggleNotificationsDropdown() {
-    setState(() {
-      _isDropdownOpen = !_isDropdownOpen;
-    });
+  void _showNotificationOverlay() async {
+    if (_notificationOverlay != null) return;
+    final RenderBox? bellBox =
+        _notificationButtonKey.currentContext?.findRenderObject() as RenderBox?;
+    final Offset bellPosition =
+        bellBox?.localToGlobal(Offset.zero) ?? Offset.zero;
+    final Size bellSize = bellBox?.size ?? Size.zero;
+    final screenWidth = MediaQuery.of(context).size.width;
+    const dropdownWidth = 300.0;
+    final dropdownLeft = (bellPosition.dx - dropdownWidth + bellSize.width)
+        .clamp(16.0, (screenWidth - dropdownWidth - 16.0).toDouble());
+    final dropdownTop = (bellPosition.dy + bellSize.height + 8);
+
+    _notificationOverlay = OverlayEntry(
+      builder: (context) => GestureDetector(
+        onTap: _removeNotificationOverlay,
+        behavior: HitTestBehavior.translucent,
+        child: Stack(
+          children: [
+            Positioned(
+              top: dropdownTop,
+              left: dropdownLeft,
+              width: dropdownWidth,
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 400),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.blue.shade50, Colors.white],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.2),
+                        spreadRadius: 2,
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
+                    future: _fetchNotifications(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(
+                            child: Padding(
+                          padding: EdgeInsets.all(24.0),
+                          child: CircularProgressIndicator(),
+                        ));
+                      }
+                      if (snapshot.hasError) {
+                        return Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Text(
+                            'Error loading notifications',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        );
+                      }
+                      final notifications =
+                          snapshot.data ?? {'unread': [], 'read': []};
+                      final unreadNotifications = notifications['unread']!;
+                      final readNotifications = notifications['read']!;
+                      if (unreadNotifications.isEmpty &&
+                          readNotifications.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Center(
+                            child: Text(
+                              'No Notifications',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+                      return ListView(
+                        padding: const EdgeInsets.all(8),
+                        shrinkWrap: true,
+                        children: [
+                          if (unreadNotifications.isNotEmpty) ...[
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(
+                                'Unread Notifications',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            ...unreadNotifications.map((notification) =>
+                                _buildNotificationItem(notification, false)),
+                          ],
+                          if (readNotifications.isNotEmpty) ...[
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(
+                                'Read Notifications',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            ...readNotifications.map((notification) =>
+                                _buildNotificationItem(notification, true)),
+                          ],
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_notificationOverlay!);
+  }
+
+  void _removeNotificationOverlay() {
+    _notificationOverlay?.remove();
+    _notificationOverlay = null;
+  }
+
+  @override
+  void dispose() {
+    _removeNotificationOverlay();
+    super.dispose();
   }
 
   @override
@@ -387,7 +463,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           );
         }
         if (snapshot.data == null) {
-          print('DEBUG: No user signed in, redirecting to ResidentLoginPage');
           WidgetsBinding.instance.addPostFrameCallback((_) {
             Navigator.pushAndRemoveUntil(
               context,
@@ -399,25 +474,14 @@ class _ResidentHomePageState extends State<ResidentHomePage>
             body: Center(child: CircularProgressIndicator()),
           );
         }
-        print(
-            'DEBUG: Building ResidentHomePage for user: ${snapshot.data!.uid}');
         return _buildHomeContent(context);
       },
     );
   }
 
   Widget _buildHomeContent(BuildContext context) {
+    // ignore: unused_local_variable
     final screenWidth = MediaQuery.of(context).size.width;
-    const dropdownWidth = 300.0;
-    final bellBox =
-        _notificationButtonKey.currentContext?.findRenderObject() as RenderBox?;
-    final bellPosition = bellBox?.localToGlobal(Offset.zero);
-    final dropdownTop = (bellPosition?.dy ?? kToolbarHeight) - 28.0;
-    final dropdownLeft = bellPosition != null
-        ? (bellPosition.dx - dropdownWidth + 48.0)
-            .clamp(16.0, (screenWidth - dropdownWidth - 16.0).toDouble())
-        : (screenWidth - dropdownWidth - 16.0).toDouble();
-
     return WillPopScope(
       onWillPop: () async {
         if (_selectedPage != ResidentPage.home) {
@@ -448,65 +512,19 @@ class _ResidentHomePageState extends State<ResidentHomePage>
             ),
           ),
           actions: [
-            StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('notifications')
-                  .where('residentId',
-                      isEqualTo: FirebaseAuth.instance.currentUser?.uid)
-                  .where('read', isEqualTo: false)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                int notificationCount = 0;
-                if (snapshot.hasData) {
-                  notificationCount = snapshot.data!.docs.length;
-                  print(
-                      'DEBUG: StreamBuilder: Found $notificationCount unread notifications');
-                } else if (snapshot.hasError) {
-                  print('DEBUG: StreamBuilder error: ${snapshot.error}');
+            IconButton(
+              key: _notificationButtonKey,
+              icon: Icon(
+                Icons.notifications_outlined,
+                color: Colors.blue.shade700,
+                size: 26,
+              ),
+              onPressed: () {
+                if (_notificationOverlay == null) {
+                  _showNotificationOverlay();
+                } else {
+                  _removeNotificationOverlay();
                 }
-                return Stack(
-                  children: [
-                    IconButton(
-                      key: _notificationButtonKey,
-                      icon: Icon(
-                        Icons.notifications_outlined,
-                        color: Colors.blue.shade700,
-                        size: 26,
-                      ),
-                      onPressed: _toggleNotificationsDropdown,
-                    ),
-                    if (notificationCount > 0)
-                      Positioned(
-                        right: 8,
-                        top: 8,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.red.shade600,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
-                                blurRadius: 4,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          constraints:
-                              const BoxConstraints(minWidth: 16, minHeight: 16),
-                          child: Text(
-                            notificationCount.toString(),
-                            style: GoogleFonts.poppins(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                  ],
-                );
               },
             ),
             const SizedBox(width: 8),
@@ -635,121 +653,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                 child: _getPageContent(),
               ),
             ),
-            if (_isDropdownOpen && bellBox != null)
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeInOut,
-                top: dropdownTop,
-                left: dropdownLeft,
-                child: FadeIn(
-                  duration: const Duration(milliseconds: 200),
-                  child: Material(
-                    elevation: 4,
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: dropdownWidth,
-                      constraints: const BoxConstraints(maxHeight: 400),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Colors.blue.shade50, Colors.white],
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                        ),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.grey.withOpacity(0.2),
-                            spreadRadius: 2,
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: FutureBuilder<
-                          Map<String, List<Map<String, dynamic>>>>(
-                        future: _fetchNotifications(),
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return const Center(
-                                child: CircularProgressIndicator());
-                          }
-                          if (snapshot.hasError) {
-                            return Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Text(
-                                'Error loading notifications',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: Colors.grey,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            );
-                          }
-                          final notifications =
-                              snapshot.data ?? {'unread': [], 'read': []};
-                          final unreadNotifications = notifications['unread']!;
-                          final readNotifications = notifications['read']!;
-                          if (unreadNotifications.isEmpty &&
-                              readNotifications.isEmpty) {
-                            return Padding(
-                              padding: const EdgeInsets.all(16.0),
-                              child: Center(
-                                child: Text(
-                                  'No Notifications',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    color: Colors.grey,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }
-                          return ListView(
-                            padding: const EdgeInsets.all(8),
-                            shrinkWrap: true,
-                            children: [
-                              if (unreadNotifications.isNotEmpty) ...[
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(
-                                    'Unread Notifications',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                                ...unreadNotifications.map((notification) =>
-                                    _buildNotificationItem(
-                                        notification, false)),
-                              ],
-                              if (readNotifications.isNotEmpty) ...[
-                                Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Text(
-                                    'Read Notifications',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                                ...readNotifications.map((notification) =>
-                                    _buildNotificationItem(notification, true)),
-                              ],
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -851,6 +754,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         onTap: () {
           if (!isRead && notification['id'] != null) {
             _markNotificationAsRead(notification['id']);
+          } else {
+            _removeNotificationOverlay();
           }
         },
       ),
@@ -1148,7 +1053,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       builder: (context, snapshot) {
         List<BarChartGroupData> barGroups = [];
         double maxY = 250.0;
-
         if (snapshot.hasData) {
           final months = snapshot.data!;
           maxY = months.fold(
@@ -1167,7 +1071,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           barGroups =
               List.generate(6, (index) => _buildBarGroup(index, 0.0, 'Err'));
         }
-
         return Container(
           decoration: BoxDecoration(
             color: Colors.white,

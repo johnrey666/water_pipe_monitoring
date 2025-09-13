@@ -1,5 +1,3 @@
-// ignore_for_file: sort_child_properties_last, use_build_context_synchronously
-
 import 'dart:async';
 import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -39,7 +37,9 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
   final Color accentColor = const Color(0xFF0288D1);
 
   Future<void> _signUp() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
     if (_passwordController.text != _confirmPasswordController.text) {
       setState(() {
@@ -53,6 +53,8 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
       _errorMessage = null;
     });
 
+    final navigator = Navigator.of(context);
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -60,12 +62,21 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
     );
 
     try {
-      UserCredential userCredential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      print('Starting signup for ${_emailController.text.trim()}');
+
+      // Create user with Firebase Auth
+      UserCredential userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
-      );
+      )
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        throw TimeoutException('Authentication timed out. Please try again.');
+      });
 
+      print('User created with UID: ${userCredential.user!.uid}');
+
+      // Prepare user data
       Map<String, dynamic> userData = {
         'fullName': _nameController.text.trim(),
         'address': _addressController.text.trim(),
@@ -81,30 +92,75 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
         userData['placeName'] = _addressController.text.trim();
       }
 
+      // Save user data to Firestore
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userCredential.user!.uid)
-          .set(userData);
-
-      if (!mounted) return;
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Registration successful! Please sign in.')),
-      );
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
-      );
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context);
-      setState(() {
-        _errorMessage = _getFriendlyErrorMessage(e.code);
+          .set(userData)
+          .timeout(const Duration(seconds: 10), onTimeout: () {
+        print('Warning: User data write timed out, but may have succeeded.');
+        // Don't throw here; check if data exists
       });
+
+      print('User data saved for UID: ${userCredential.user!.uid}');
+
+      // Add log entry for signup
+      try {
+        await FirebaseFirestore.instance.collection('logs').add({
+          'action': 'New User Created',
+          'userId': userCredential.user!.uid,
+          'details': 'New User ${_nameController.text.trim()} Created',
+          'timestamp': FieldValue.serverTimestamp(),
+        }).timeout(const Duration(seconds: 5), onTimeout: () {
+          print('Warning: Log entry write timed out.');
+          throw TimeoutException('Log entry write timed out.');
+        });
+        print('Log entry added for user: ${_nameController.text.trim()}');
+      } catch (e) {
+        print('Error writing log entry: $e');
+        // Continue with navigation even if log write fails
+      }
+
+      if (mounted) {
+        navigator.pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Registration successful! Please sign in.'),
+          ),
+        );
+        navigator.pushReplacement(
+          MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        navigator.pop();
+        setState(() {
+          _errorMessage = _getFriendlyErrorMessage(e.code);
+        });
+      }
+      print('FirebaseAuthException: ${e.code} - ${e.message}');
+    } on TimeoutException catch (e) {
+      if (mounted) {
+        navigator.pop();
+        setState(() {
+          _errorMessage = e.message ?? 'Operation timed out. Please try again.';
+        });
+      }
+      print('TimeoutException: ${e.message}');
+    } catch (e) {
+      if (mounted) {
+        navigator.pop();
+        setState(() {
+          _errorMessage = 'An unexpected error occurred: $e';
+        });
+      }
+      print('Unexpected error: $e');
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }

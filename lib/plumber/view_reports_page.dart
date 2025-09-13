@@ -400,6 +400,8 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
         final residentId = reportData['userId']?.toString();
         final issueDescription =
             reportData['issueDescription']?.toString() ?? 'Water issue';
+
+        // Send notification to resident (already in your code)
         if (residentId != null) {
           await FirebaseFirestore.instance.collection('notifications').add({
             'residentId': residentId,
@@ -411,6 +413,27 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
             'read': false,
           });
         }
+
+        // Fetch plumber's full name from Firestore
+        final plumber = FirebaseAuth.instance.currentUser;
+        String plumberName = 'Unknown Plumber';
+        if (plumber != null) {
+          final plumberDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(plumber.uid)
+              .get();
+          if (plumberDoc.exists && plumberDoc.data()?['fullName'] != null) {
+            plumberName = plumberDoc.data()!['fullName'];
+          }
+        }
+
+        await FirebaseFirestore.instance.collection('logs').add({
+          'action': 'Report Fixed',
+          'userId': plumber?.uid,
+          'details':
+              'Report "${issueDescription.length > 30 ? issueDescription.substring(0, 30) + '...' : issueDescription}" marked as Fixed by $plumberName.',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
       }
 
       if (mounted) {
