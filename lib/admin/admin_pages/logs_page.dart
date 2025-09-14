@@ -13,7 +13,7 @@ class LogsPage extends StatefulWidget {
 
 class _LogsPageState extends State<LogsPage> {
   int _currentPage = 0;
-  final int _pageSize = 10;
+  final int _pageSize = 5;
   String _selectedFilter = 'All';
   Map<String, List<DocumentSnapshot?>> _lastDocuments = {
     'All': [null],
@@ -34,6 +34,8 @@ class _LogsPageState extends State<LogsPage> {
     switch (normalizedAction) {
       case 'New User Created':
         return const Color(0xFF2F8E2F); // Green for Accounts
+      case 'User Deleted':
+        return const Color(0xFFD32F2F); // Red for deleted accounts
       case 'Payment Accepted':
         return const Color(0xFF4FC3F7); // Blue for Bills
       case 'Report Fixed':
@@ -48,6 +50,8 @@ class _LogsPageState extends State<LogsPage> {
     switch (normalizedAction) {
       case 'New User Created':
         return Icons.person_add;
+      case 'User Deleted':
+        return Icons.person_remove; // Icon for deleted user
       case 'Payment Accepted':
         return Icons.payment;
       case 'Report Fixed':
@@ -89,7 +93,7 @@ class _LogsPageState extends State<LogsPage> {
   List<String> _getFilterActions(String filter) {
     switch (filter) {
       case 'Accounts':
-        return ['New User Created'];
+        return ['New User Created', 'User Deleted'];
       case 'Bills':
         return ['Payment Accepted'];
       case 'Reports':

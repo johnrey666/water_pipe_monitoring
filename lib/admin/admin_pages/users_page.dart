@@ -79,8 +79,24 @@ class _UsersPageState extends State<UsersPage> {
 
   Future<void> _deleteUser(String userId, String email) async {
     try {
+      // Fetch user info before deletion for logging
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+      final fullName = userDoc.data()?['fullName'] ?? 'Unknown';
+      final role = userDoc.data()?['role'] ?? 'Unknown';
+
       await FirebaseFirestore.instance.collection('users').doc(userId).delete();
       _showSuccessOverlay('User successfully deleted!');
+
+      // Log the deletion
+      await FirebaseFirestore.instance.collection('logs').add({
+        'action': 'User Deleted',
+        'userId': userId,
+        'details': 'User "$fullName" ($role) with email $email was deleted.',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
 
       User? currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
