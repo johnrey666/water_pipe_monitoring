@@ -1,6 +1,6 @@
 // ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const, unused_element, use_build_context_synchronously, unnecessary_string_interpolations, unnecessary_to_list_in_spreads, unused_local_variable
 
-import 'dart:async'; // Added for TimeoutException
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -45,8 +45,17 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   final Color accentColor = const Color(0xFF0288D1);
   final Color iconGrey = Colors.grey;
 
-  // Pagination for recent reports
   int _recentPage = 0;
+
+  @override
+  void dispose() {
+    _issueController.dispose();
+    _additionalInfoController.dispose();
+    _dateTimeController.dispose();
+    _locationController.dispose();
+    _imageNameController.dispose();
+    super.dispose();
+  }
 
   Future<void> _pickImage() async {
     final androidInfo = await DeviceInfoPlugin().androidInfo;
@@ -305,6 +314,16 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         reportData['image'] = base64Image;
       }
       await FirebaseFirestore.instance.collection('reports').add(reportData);
+
+      // Log the report submission
+      await FirebaseFirestore.instance.collection('logs').add({
+        'action': 'Report Submitted',
+        'userId': userInfo['userId'],
+        'details':
+            'Report submitted by ${userInfo['fullName']}: ${_issueController.text}',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
       if (!mounted) return;
       Navigator.pop(context); // Close loading dialog
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1196,5 +1215,3 @@ class CustomLoadingDialog extends StatelessWidget {
     );
   }
 }
-
-

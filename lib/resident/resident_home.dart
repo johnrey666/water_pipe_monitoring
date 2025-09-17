@@ -24,18 +24,29 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   final GlobalKey _notificationButtonKey = GlobalKey();
   OverlayEntry? _notificationOverlay;
   String _residentName = 'Resident';
+  int _unreadNotifCount = 0;
 
   @override
   void initState() {
     super.initState();
     _fetchResidentName();
+    _fetchUnreadNotifCount();
   }
 
   Future<void> _fetchResidentName() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
-      print('DEBUG: Auth user UID: ${user?.uid ?? "null"}');
-      if (user == null) return;
+      if (user == null) {
+        // Redirect to login if not logged in
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
+            (route) => false,
+          );
+        });
+        return;
+      }
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -45,9 +56,47 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         setState(() {
           _residentName = data['fullName'];
         });
+      } else if (mounted) {
+        setState(() {
+          _residentName = 'Resident';
+        });
       }
     } catch (e) {
       print('DEBUG: Error fetching resident name: $e');
+      if (mounted) {
+        setState(() {
+          _residentName = 'Resident';
+        });
+      }
+    }
+  }
+
+  Future<void> _fetchUnreadNotifCount() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        setState(() {
+          _unreadNotifCount = 0;
+        });
+        return;
+      }
+      final snapshot = await FirebaseFirestore.instance
+          .collection('notifications')
+          .where('residentId', isEqualTo: user.uid)
+          .where('read', isEqualTo: false)
+          .get();
+      if (mounted) {
+        setState(() {
+          _unreadNotifCount = snapshot.docs.length;
+        });
+      }
+    } catch (e) {
+      print('DEBUG: Error fetching notification count: $e');
+      if (mounted) {
+        setState(() {
+          _unreadNotifCount = 0;
+        });
+      }
     }
   }
 
@@ -198,7 +247,11 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   Future<void> _refreshDashboard() async {
     await Future.delayed(const Duration(seconds: 1));
-    if (mounted) setState(() {});
+    if (mounted) {
+      _fetchResidentName();
+      _fetchUnreadNotifCount();
+      setState(() {});
+    }
   }
 
   Widget _getPageContent() {
@@ -281,6 +334,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           .collection('notifications')
           .doc(notificationId)
           .update({'read': true});
+      _fetchUnreadNotifCount();
       _removeNotificationOverlay();
     } catch (e) {
       print('DEBUG: Error marking notification as read: $e');
@@ -512,20 +566,44 @@ class _ResidentHomePageState extends State<ResidentHomePage>
             ),
           ),
           actions: [
-            IconButton(
-              key: _notificationButtonKey,
-              icon: Icon(
-                Icons.notifications_outlined,
-                color: Colors.blue.shade700,
-                size: 26,
-              ),
-              onPressed: () {
-                if (_notificationOverlay == null) {
-                  _showNotificationOverlay();
-                } else {
-                  _removeNotificationOverlay();
-                }
-              },
+            Stack(
+              children: [
+                IconButton(
+                  key: _notificationButtonKey,
+                  icon: Icon(
+                    Icons.notifications_outlined,
+                    color: Colors.blue.shade700,
+                    size: 26,
+                  ),
+                  onPressed: () {
+                    if (_notificationOverlay == null) {
+                      _showNotificationOverlay();
+                    } else {
+                      _removeNotificationOverlay();
+                    }
+                  },
+                ),
+                if (_unreadNotifCount > 0)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '$_unreadNotifCount',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(width: 8),
           ],

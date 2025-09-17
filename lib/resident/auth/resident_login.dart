@@ -25,6 +25,13 @@ class _ResidentLoginPageState extends State<ResidentLoginPage> {
   String? _errorMessage;
   final Color primaryColor = const Color(0xFF87CEEB);
 
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -51,6 +58,7 @@ class _ResidentLoginPageState extends State<ResidentLoginPage> {
         context,
         MaterialPageRoute(builder: (_) => const ResidentHomePage()),
       );
+      // Do NOT clear fields here, so user can retry if login fails
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       Navigator.pop(context); // Close loading dialog
@@ -204,7 +212,6 @@ class _ResidentLoginPageState extends State<ResidentLoginPage> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        print('Back button pressed, navigating to LandingPage');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const LandingPage()),
@@ -553,7 +560,6 @@ class BackButtonStyled extends StatelessWidget {
       icon: const Icon(Icons.arrow_back_ios_new_rounded,
           size: 22, color: Colors.black87),
       onPressed: () {
-        print('Back button pressed, navigating to LandingPage');
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const LandingPage()),
