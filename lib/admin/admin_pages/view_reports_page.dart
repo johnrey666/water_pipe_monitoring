@@ -17,6 +17,8 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
   int _currentPage = 0;
   final int _pageSize = 5;
   String _selectedStatus = 'All';
+  String? _selectedPlumberUid;
+  List<Map<String, dynamic>> _plumbers = [];
   Map<String, List<DocumentSnapshot?>> _lastDocuments = {
     'All': [null],
     'Monitoring': [null],
@@ -44,12 +46,34 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
     }
   }
 
+  Future<void> _fetchPlumbers() async {
+    try {
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .where('role', isEqualTo: 'Plumber')
+          .get();
+      setState(() {
+        _plumbers = querySnapshot.docs
+            .map((doc) => {
+                  'uid': doc.id,
+                  'fullName': doc.data()['fullName'] ?? 'Unknown Plumber'
+                })
+            .toList();
+      });
+    } catch (e) {
+      print('Error fetching plumbers: $e');
+    }
+  }
+
   Future<void> _fetchTotalPages(String status) async {
     setState(() => _isLoading = true);
     try {
       Query query = FirebaseFirestore.instance.collection('reports');
       if (status != 'All') {
         query = query.where('status', isEqualTo: status);
+      }
+      if (_selectedPlumberUid != null) {
+        query = query.where('assignedPlumber', isEqualTo: _selectedPlumberUid);
       }
       final snapshot = await query.get();
       final totalDocs = snapshot.docs.length;
@@ -74,6 +98,10 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
 
     if (_selectedStatus != 'All') {
       query = query.where('status', isEqualTo: _selectedStatus);
+    }
+
+    if (_selectedPlumberUid != null) {
+      query = query.where('assignedPlumber', isEqualTo: _selectedPlumberUid);
     }
 
     if (_currentPage > 0 &&
@@ -191,6 +219,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
   @override
   void initState() {
     super.initState();
+    _fetchPlumbers();
     _fetchTotalPages('All');
   }
 
@@ -215,6 +244,68 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                     _buildFilterButton('Unfixed Reports'),
                     _buildFilterButton('Fixed'),
                   ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  width: 300,
+                  child: DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Filter by Plumber',
+                      labelStyle: GoogleFonts.poppins(
+                        fontSize: 14,
+                        color: Colors.grey[700],
+                      ),
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide:
+                            const BorderSide(color: Colors.grey, width: 1),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(
+                            color: Color(0xFF4FC3F7), width: 1.5),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide:
+                            const BorderSide(color: Colors.grey, width: 1),
+                      ),
+                    ),
+                    value: _selectedPlumberUid,
+                    dropdownColor: Colors.white,
+                    items: [
+                      DropdownMenuItem<String>(
+                        value: null,
+                        child: Text(
+                          'All Plumbers',
+                          style: GoogleFonts.poppins(fontSize: 14),
+                        ),
+                      ),
+                      ..._plumbers.map((plumber) {
+                        return DropdownMenuItem<String>(
+                          value: plumber['uid'],
+                          child: Text(
+                            plumber['fullName'],
+                            style: GoogleFonts.poppins(fontSize: 14),
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                    onChanged: _isLoading
+                        ? null
+                        : (value) {
+                            setState(() {
+                              _selectedPlumberUid = value;
+                              _currentPage = 0;
+                              _lastDocuments[_selectedStatus] = [null];
+                              _fetchTotalPages(_selectedStatus);
+                            });
+                          },
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Expanded(

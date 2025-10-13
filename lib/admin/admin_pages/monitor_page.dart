@@ -23,6 +23,7 @@ class _MonitorPageState extends State<MonitorPage> {
   final MapController _mapController = MapController();
   List<Map<String, dynamic>> _userReports = [];
   int _currentReportIndex = 0;
+  bool _hasShownInitialModal = false;
 
   // Light blue color palette
   static const Color primaryBlue = Color(0xFF90CAF9);
@@ -35,8 +36,10 @@ class _MonitorPageState extends State<MonitorPage> {
     switch (status) {
       case 'Monitoring':
         return primaryBlue;
-      case 'Unfixed':
+      case 'Unfixed Reports':
         return Colors.redAccent;
+      case 'Fixed':
+        return const Color(0xFFC18B00);
       default:
         return Colors.grey;
     }
@@ -116,10 +119,11 @@ class _MonitorPageState extends State<MonitorPage> {
     });
   }
 
-  // Fetch and show report modal
+  // Fetch and show report modal - fixed to handle direct report ID
   Future<void> _fetchAndShowReportModal(String id, bool isPublic) async {
     try {
       if (isPublic) {
+        // For public reports, fetch the specific report by ID
         final doc = await FirebaseFirestore.instance
             .collection('reports')
             .doc(id)
@@ -139,6 +143,7 @@ class _MonitorPageState extends State<MonitorPage> {
           _showErrorOverlay('Report not found.');
         }
       } else {
+        // For private reports, fetch all reports for this user
         final querySnapshot = await FirebaseFirestore.instance
             .collection('reports')
             .where('userId', isEqualTo: id)
@@ -677,18 +682,44 @@ class _MonitorPageState extends State<MonitorPage> {
       Navigator.pushReplacementNamed(context, '/login');
       return;
     }
-    if (widget.reportId != null && widget.reportId!.isNotEmpty) {
-      FirebaseFirestore.instance
-          .collection('reports')
-          .doc(widget.reportId)
-          .get()
-          .then((doc) {
-        if (doc.exists) {
-          final data = doc.data() as Map<String, dynamic>;
-          _fetchAndShowReportModal(widget.reportId!, data['isPublic'] ?? false);
-        } else {
-          _showErrorOverlay('Report not found.');
-        }
+    
+    // Only show modal once when navigating with a reportId
+    if (widget.reportId != null && 
+        widget.reportId!.isNotEmpty && 
+        !_hasShownInitialModal) {
+      _hasShownInitialModal = true;
+      
+      // Use Future.delayed to ensure the widget tree is built
+      Future.delayed(Duration.zero, () {
+        FirebaseFirestore.instance
+            .collection('reports')
+            .doc(widget.reportId)
+            .get()
+            .then((doc) {
+          if (doc.exists) {
+            final data = doc.data() as Map<String, dynamic>;
+            // ignore: unused_local_variable
+            final isPublic = data['isPublic'] ?? false;
+            
+            // For direct report view, always show just this report
+            setState(() {
+              _userReports = [
+                {
+                  'id': doc.id,
+                  ...data,
+                }
+              ];
+              _currentReportIndex = 0;
+            });
+            
+            _showReportModal(context, _userReports[0], doc.id);
+          } else {
+            _showErrorOverlay('Report not found.');
+          }
+        }).catchError((error) {
+          print('Error loading report: $error');
+          _showErrorOverlay('Error loading report: $error');
+        });
       });
     }
   }
