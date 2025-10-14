@@ -36,6 +36,17 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
   final Color primaryColor = const Color(0xFF87CEEB);
   final Color accentColor = const Color(0xFF0288D1);
 
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _addressController.dispose();
+    _contactController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+    super.dispose();
+  }
+
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -53,8 +64,6 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
       _errorMessage = null;
     });
 
-    final navigator = Navigator.of(context);
-
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -69,10 +78,13 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
           .createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
-      )
-          .timeout(const Duration(seconds: 10), onTimeout: () {
-        throw TimeoutException('Authentication timed out. Please try again.');
-      });
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw TimeoutException(
+              'Authentication timed out. Please check your connection and try again.');
+        },
+      );
 
       print('User created with UID: ${userCredential.user!.uid}');
 
@@ -87,74 +99,65 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
       };
 
       if (_selectedLocation != null) {
-        userData['location'] =
-            GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude);
+        userData['location'] = GeoPoint(
+            _selectedLocation!.latitude, _selectedLocation!.longitude);
         userData['placeName'] = _addressController.text.trim();
       }
 
-      // Save user data to Firestore
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userCredential.user!.uid)
-          .set(userData)
-          .timeout(const Duration(seconds: 10), onTimeout: () {
-        print('Warning: User data write timed out, but may have succeeded.');
-        // Don't throw here; check if data exists
-      });
+      // Save user data to Firestore with retry logic
+      await _saveUserDataWithRetry(userCredential.user!.uid, userData);
 
       print('User data saved for UID: ${userCredential.user!.uid}');
 
-      // Add log entry for signup
-      try {
-        await FirebaseFirestore.instance.collection('logs').add({
-          'action': 'New User Created',
-          'userId': userCredential.user!.uid,
-          'details': 'New User ${_nameController.text.trim()} Created',
-          'timestamp': FieldValue.serverTimestamp(),
-        }).timeout(const Duration(seconds: 5), onTimeout: () {
-          print('Warning: Log entry write timed out.');
-          throw TimeoutException('Log entry write timed out.');
-        });
-        print('Log entry added for user: ${_nameController.text.trim()}');
-      } catch (e) {
-        print('Error writing log entry: $e');
-        // Continue with navigation even if log write fails
-      }
+      // Add log entry (non-blocking)
+      _addLogEntry(userCredential.user!.uid, _nameController.text.trim());
 
-      if (mounted) {
-        navigator.pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Registration successful! Please sign in.'),
-          ),
-        );
-        navigator.pushReplacement(
-          MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
-        );
-      }
+      // Sign out the user immediately after registration
+      await FirebaseAuth.instance.signOut();
+
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Registration successful! Please sign in.'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
+
+      // Navigate to login page after a brief delay
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const ResidentLoginPage()),
+        (route) => false,
+      );
     } on FirebaseAuthException catch (e) {
-      if (mounted) {
-        navigator.pop();
-        setState(() {
-          _errorMessage = _getFriendlyErrorMessage(e.code);
-        });
-      }
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      setState(() {
+        _errorMessage = _getFriendlyErrorMessage(e.code);
+      });
       print('FirebaseAuthException: ${e.code} - ${e.message}');
     } on TimeoutException catch (e) {
-      if (mounted) {
-        navigator.pop();
-        setState(() {
-          _errorMessage = e.message ?? 'Operation timed out. Please try again.';
-        });
-      }
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      setState(() {
+        _errorMessage = e.message;
+      });
       print('TimeoutException: ${e.message}');
     } catch (e) {
-      if (mounted) {
-        navigator.pop();
-        setState(() {
-          _errorMessage = 'An unexpected error occurred: $e';
-        });
-      }
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      setState(() {
+        _errorMessage = 'An unexpected error occurred. Please try again.';
+      });
       print('Unexpected error: $e');
     } finally {
       if (mounted) {
@@ -163,6 +166,60 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
         });
       }
     }
+  }
+
+  Future<void> _saveUserDataWithRetry(String uid, Map<String, dynamic> userData,
+      {int retries = 3}) async {
+    for (int i = 0; i < retries; i++) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .set(userData)
+            .timeout(
+              const Duration(seconds: 10),
+              onTimeout: () {
+                throw TimeoutException('User data save timed out');
+              },
+            );
+
+        // Verify the write was successful
+        final doc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get()
+            .timeout(const Duration(seconds: 5));
+
+        if (doc.exists) {
+          print('User data verified in Firestore');
+          return; // Success!
+        } else {
+          throw Exception('User data verification failed');
+        }
+      } catch (e) {
+        print('Attempt ${i + 1} failed: $e');
+        if (i == retries - 1) {
+          throw Exception('Failed to save user data after $retries attempts');
+        }
+        // Wait before retrying
+        await Future.delayed(const Duration(seconds: 1));
+      }
+    }
+  }
+
+  void _addLogEntry(String uid, String fullName) {
+    // Non-blocking log entry
+    FirebaseFirestore.instance.collection('logs').add({
+      'action': 'New User Created',
+      'userId': uid,
+      'details': 'New User $fullName Created',
+      'timestamp': FieldValue.serverTimestamp(),
+    }).then((_) {
+      print('Log entry added successfully');
+    }).catchError((e) {
+      print('Error writing log entry: $e');
+      // Don't throw - this is non-critical
+    });
   }
 
   String _getFriendlyErrorMessage(String errorCode) {
@@ -494,7 +551,7 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
               left: 16,
               child: FadeInLeft(
                 duration: const Duration(milliseconds: 300),
-                child: BackButtonStyled(),
+                child: const BackButtonStyled(),
               ),
             ),
             Center(
@@ -561,6 +618,8 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                         child: TextFormField(
                           controller: _nameController,
                           cursorColor: const Color(0xFF0288D1),
+                          autocorrect: false,
+                          enableSuggestions: false,
                           decoration: InputDecoration(
                             hintText: 'Full Name',
                             hintStyle: GoogleFonts.poppins(color: Colors.grey),
@@ -598,6 +657,8 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                         child: TextFormField(
                           controller: _addressController,
                           cursorColor: const Color(0xFF0288D1),
+                          autocorrect: false,
+                          enableSuggestions: false,
                           decoration: InputDecoration(
                             hintText: 'Enter your exact address',
                             hintStyle: GoogleFonts.poppins(color: Colors.grey),
@@ -658,6 +719,8 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                           controller: _contactController,
                           cursorColor: const Color(0xFF0288D1),
                           keyboardType: TextInputType.phone,
+                          autocorrect: false,
+                          enableSuggestions: false,
                           decoration: InputDecoration(
                             hintText: 'Contact Number',
                             hintStyle: GoogleFonts.poppins(color: Colors.grey),
@@ -699,6 +762,8 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                           controller: _emailController,
                           cursorColor: const Color(0xFF0288D1),
                           keyboardType: TextInputType.emailAddress,
+                          autocorrect: false,
+                          enableSuggestions: false,
                           decoration: InputDecoration(
                             hintText: 'Email Address',
                             hintStyle: GoogleFonts.poppins(color: Colors.grey),
@@ -741,6 +806,8 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                           controller: _passwordController,
                           cursorColor: const Color(0xFF0288D1),
                           obscureText: !_passwordVisible,
+                          autocorrect: false,
+                          enableSuggestions: false,
                           decoration: InputDecoration(
                             hintText: 'Password',
                             hintStyle: GoogleFonts.poppins(color: Colors.grey),
@@ -795,6 +862,8 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
                           controller: _confirmPasswordController,
                           cursorColor: const Color(0xFF0288D1),
                           obscureText: !_confirmPasswordVisible,
+                          autocorrect: false,
+                          enableSuggestions: false,
                           decoration: InputDecoration(
                             hintText: 'Confirm Password',
                             hintStyle: GoogleFonts.poppins(color: Colors.grey),
@@ -989,4 +1058,12 @@ class BackButtonStyled extends StatelessWidget {
       },
     );
   }
+}
+
+class TimeoutException implements Exception {
+  final String message;
+  TimeoutException(this.message);
+
+  @override
+  String toString() => message;
 }

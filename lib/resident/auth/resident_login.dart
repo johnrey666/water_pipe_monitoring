@@ -1,6 +1,8 @@
 // ignore_for_file: sort_child_properties_last, use_build_context_synchronously
 
+import 'dart:async';
 import 'dart:ui';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -48,23 +50,81 @@ class _ResidentLoginPageState extends State<ResidentLoginPage> {
     );
 
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      // Sign in with timeout
+      final userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
+      )
+          .timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw TimeoutException(
+              'Login timed out. Please check your connection.');
+        },
       );
+
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const ResidentHomePage()),
+
+      // Verify user data exists in Firestore
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .get()
+          .timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('Failed to load user data. Please try again.');
+        },
       );
-      // Do NOT clear fields here, so user can retry if login fails
+
+      if (!userDoc.exists) {
+        throw Exception('User data not found. Please contact support.');
+      }
+
+      final userData = userDoc.data();
+      final role = userData?['role'] as String?;
+
+      if (role != 'Resident') {
+        await FirebaseAuth.instance.signOut();
+        throw Exception('This account is not a resident account.');
+      }
+
+      if (!mounted) return;
+
+      // Close loading dialog
+      Navigator.of(context).pop();
+
+      // Clear text fields
+      _emailController.clear();
+      _passwordController.clear();
+
+      // Navigate to resident home
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const ResidentHomePage()),
+        (route) => false,
+      );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.of(context).pop(); // Close loading dialog
       setState(() {
         _errorMessage = _getFriendlyErrorMessage(e.code);
       });
+      print('FirebaseAuthException: ${e.code} - ${e.message}');
+    } on TimeoutException catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Close loading dialog
+      setState(() {
+        _errorMessage = e.message;
+      });
+      print('TimeoutException: ${e.message}');
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Close loading dialog
+      setState(() {
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
+      print('Login error: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -94,18 +154,40 @@ class _ResidentLoginPageState extends State<ResidentLoginPage> {
     );
 
     try {
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email.trim());
+      await FirebaseAuth.instance
+          .sendPasswordResetEmail(email: email.trim())
+          .timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('Request timed out. Please try again.');
+        },
+      );
       if (!mounted) return;
       Navigator.pop(context); // Close loading dialog
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Password reset email sent! Check your inbox.')),
+          content: Text('Password reset email sent! Check your inbox.'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
       );
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
       Navigator.pop(context); // Close loading dialog
       setState(() {
         _errorMessage = _getFriendlyErrorMessage(e.code);
+      });
+    } on TimeoutException catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      setState(() {
+        _errorMessage = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      setState(() {
+        _errorMessage = 'Failed to send reset email. Please try again.';
       });
     } finally {
       if (mounted) {
@@ -122,10 +204,14 @@ class _ResidentLoginPageState extends State<ResidentLoginPage> {
         return 'No user found with this email.';
       case 'wrong-password':
         return 'Incorrect password. Please try again.';
+      case 'invalid-credential':
+        return 'Invalid email or password. Please try again.';
       case 'user-disabled':
         return 'This account has been disabled.';
       case 'too-many-requests':
         return 'Too many attempts. Please try again later.';
+      case 'network-request-failed':
+        return 'Network error. Please check your connection.';
       default:
         return 'An error occurred. Please try again.';
     }
@@ -159,6 +245,9 @@ class _ResidentLoginPageState extends State<ResidentLoginPage> {
             TextFormField(
               controller: resetEmailController,
               cursorColor: const Color(0xFF0288D1),
+              keyboardType: TextInputType.emailAddress,
+              autocorrect: false,
+              enableSuggestions: false,
               decoration: InputDecoration(
                 hintText: 'Email Address',
                 hintStyle: GoogleFonts.poppins(color: Colors.grey),
@@ -237,7 +326,7 @@ class _ResidentLoginPageState extends State<ResidentLoginPage> {
               left: 16,
               child: FadeInLeft(
                 duration: const Duration(milliseconds: 300),
-                child: BackButtonStyled(),
+                child: const BackButtonStyled(),
               ),
             ),
             // Main Content
@@ -309,6 +398,8 @@ class _ResidentLoginPageState extends State<ResidentLoginPage> {
                           controller: _emailController,
                           cursorColor: const Color(0xFF0288D1),
                           keyboardType: TextInputType.emailAddress,
+                          autocorrect: false,
+                          enableSuggestions: false,
                           decoration: InputDecoration(
                             hintText: 'Email Address',
                             hintStyle: GoogleFonts.poppins(color: Colors.grey),
@@ -352,6 +443,8 @@ class _ResidentLoginPageState extends State<ResidentLoginPage> {
                           controller: _passwordController,
                           cursorColor: const Color(0xFF0288D1),
                           obscureText: _obscurePassword,
+                          autocorrect: false,
+                          enableSuggestions: false,
                           decoration: InputDecoration(
                             hintText: 'Password',
                             hintStyle: GoogleFonts.poppins(color: Colors.grey),
@@ -567,4 +660,12 @@ class BackButtonStyled extends StatelessWidget {
       },
     );
   }
+}
+
+class TimeoutException implements Exception {
+  final String message;
+  TimeoutException(this.message);
+
+  @override
+  String toString() => message;
 }
