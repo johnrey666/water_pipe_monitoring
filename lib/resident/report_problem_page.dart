@@ -1,4 +1,4 @@
-// ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const, unused_element, use_build_context_synchronously, unnecessary_string_interpolations, unnecessary_to_list_in_spreads, unused_local_variable
+// ignore_for_file: prefer_const_constructors, prefer_const_literals_to_create_immutables, unnecessary_const, unused_element, use_build_context_synchronously, unnecessary_string_interpolations, unnecessary_to_list_in_spreads, unused_local_variable, body_might_complete_normally_catch_error, unused_field
 
 import 'dart:async';
 import 'dart:ui';
@@ -35,11 +35,14 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   final _dateTimeController = TextEditingController();
   final _locationController = TextEditingController();
   final _imageNameController = TextEditingController();
+  final FocusNode _issueFocusNode = FocusNode();
+  final FocusNode _additionalInfoFocusNode = FocusNode();
   MapController? _mapController;
   DateTime? _selectedDateTime;
   bool _isSubmitting = false;
   bool _isSearchingLocation = false;
   bool _isPublicReport = false;
+  bool _isInitialized = false;
   String? _errorMessage;
   final Color primaryColor = const Color(0xFF87CEEB);
   final Color accentColor = const Color(0xFF0288D1);
@@ -48,32 +51,61 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   int _recentPage = 0;
 
   @override
+  void initState() {
+    super.initState();
+    // Pre-initialize controllers to prevent lag
+    _issueController.text = '';
+    _additionalInfoController.text = '';
+    _dateTimeController.text = '';
+    _locationController.text = '';
+    _imageNameController.text = '';
+
+    // Mark as initialized after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+        });
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _issueController.dispose();
     _additionalInfoController.dispose();
     _dateTimeController.dispose();
     _locationController.dispose();
     _imageNameController.dispose();
+    _issueFocusNode.dispose();
+    _additionalInfoFocusNode.dispose();
+    _mapController?.dispose();
     super.dispose();
   }
 
   Future<void> _pickImage() async {
-    final androidInfo = await DeviceInfoPlugin().androidInfo;
-    final sdkInt = androidInfo.version.sdkInt;
-    final permission = sdkInt >= 33 ? Permission.photos : Permission.storage;
-    final status = await permission.request();
-    if (!status.isGranted) {
+    try {
+      final androidInfo = await DeviceInfoPlugin().androidInfo;
+      final sdkInt = androidInfo.version.sdkInt;
+      final permission = sdkInt >= 33 ? Permission.photos : Permission.storage;
+      final status = await permission.request();
+      if (!status.isGranted) {
+        setState(() {
+          _errorMessage = 'Permission denied to access gallery';
+        });
+        return;
+      }
+      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+      if (image != null) {
+        setState(() {
+          _imageFile = image;
+          _imageNameController.text = image.name;
+          _errorMessage = null;
+        });
+      }
+    } catch (e) {
       setState(() {
-        _errorMessage = 'Permission denied to access gallery';
-      });
-      return;
-    }
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-    if (image != null) {
-      setState(() {
-        _imageFile = image;
-        _imageNameController.text = image.name;
-        _errorMessage = null;
+        _errorMessage = 'Error picking image: $e';
       });
     }
   }
@@ -219,7 +251,13 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
-          .get();
+          .get()
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              throw TimeoutException('Failed to load user data');
+            },
+          );
       if (!userDoc.exists) {
         throw Exception('User data not found');
       }
@@ -256,7 +294,11 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   }
 
   Future<void> _submitReport() async {
+    // Unfocus any text fields before submitting
+    FocusScope.of(context).unfocus();
+
     if (!_formKey.currentState!.validate() || _isSubmitting) return;
+
     setState(() {
       _isSubmitting = true;
       _errorMessage = null;
@@ -271,26 +313,31 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
     try {
       final userInfo = await _getUserInfo();
       if (userInfo == null) {
-        throw Exception('Failed to fetch user info');
+        throw Exception(
+            'Failed to fetch user info. Please try logging in again.');
       }
+
       if (_issueController.text.trim().isEmpty) {
         throw Exception('Issue description is required');
       }
+
       if (_selectedDateTime == null) {
         throw Exception('Date and time is required');
       }
+
       if (_isPublicReport && _selectedLocation == null) {
         throw Exception('Please select a location for public report');
       }
+
       if (!_isPublicReport && userInfo['location'] == null) {
-        throw Exception('User location not found');
+        throw Exception('User location not found. Please update your profile.');
       }
 
       final reportData = {
         'userId': userInfo['userId'],
         'fullName': userInfo['fullName'],
         'contactNumber': userInfo['contactNumber'],
-        'issueDescription': _issueController.text,
+        'issueDescription': _issueController.text.trim(),
         'location': _isPublicReport
             ? GeoPoint(
                 _selectedLocation!.latitude, _selectedLocation!.longitude)
@@ -306,29 +353,52 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         'status': 'Unfixed Reports',
         'isPublic': _isPublicReport,
       };
-      if (_additionalInfoController.text.isNotEmpty) {
-        reportData['additionalLocationInfo'] = _additionalInfoController.text;
+
+      if (_additionalInfoController.text.trim().isNotEmpty) {
+        reportData['additionalLocationInfo'] =
+            _additionalInfoController.text.trim();
       }
+
       final base64Image = await _convertImageToBase64(_imageFile);
       if (base64Image != null) {
         reportData['image'] = base64Image;
       }
-      await FirebaseFirestore.instance.collection('reports').add(reportData);
 
-      // Log the report submission
-      await FirebaseFirestore.instance.collection('logs').add({
+      // Add report with timeout
+      await FirebaseFirestore.instance
+          .collection('reports')
+          .add(reportData)
+          .timeout(
+            const Duration(seconds: 15),
+            onTimeout: () {
+              throw TimeoutException(
+                  'Report submission timed out. Please try again.');
+            },
+          );
+
+      // Log the report submission (non-blocking)
+      FirebaseFirestore.instance.collection('logs').add({
         'action': 'Report Submitted',
         'userId': userInfo['userId'],
         'details':
-            'Report submitted by ${userInfo['fullName']}: ${_issueController.text}',
+            'Report submitted by ${userInfo['fullName']}: ${_issueController.text.trim()}',
         'timestamp': FieldValue.serverTimestamp(),
+      }).catchError((e) {
+        print('Error writing log entry: $e');
       });
 
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.of(context).pop(); // Close loading dialog
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Report submitted successfully')),
+        SnackBar(
+          content: Text('Report submitted successfully'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 2),
+        ),
       );
+
+      // Reset form
       setState(() {
         _issueController.clear();
         _additionalInfoController.clear();
@@ -344,10 +414,26 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
       });
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.of(context).pop(); // Close loading dialog
+
+      String errorMsg = 'Error submitting report';
+      if (e is TimeoutException) {
+        errorMsg = e.message;
+      } else {
+        errorMsg = e.toString().replaceAll('Exception: ', '');
+      }
+
       setState(() {
-        _errorMessage = 'Error submitting report: $e';
+        _errorMessage = errorMsg;
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMsg),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
     } finally {
       if (mounted) {
         setState(() => _isSubmitting = false);
@@ -468,6 +554,8 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                   child: TextField(
                     controller: searchController,
                     cursorColor: accentColor,
+                    autocorrect: false,
+                    enableSuggestions: false,
                     decoration: InputDecoration(
                       hintText: 'e.g., San Jose, Malilipot',
                       hintStyle: GoogleFonts.poppins(color: Colors.grey),
@@ -615,6 +703,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
     String? Function(String?)? validator,
     Widget? suffixIcon,
     int maxLines = 1,
+    FocusNode? focusNode,
   }) {
     return FadeInUp(
       duration: const Duration(milliseconds: 400),
@@ -623,12 +712,19 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: TextFormField(
           controller: controller,
+          focusNode: focusNode,
           readOnly: readOnly,
           onTap: onTap,
           maxLines: maxLines,
           validator: validator,
           cursorColor: accentColor,
           style: GoogleFonts.poppins(fontSize: 15, color: Colors.black87),
+          // Disable autocorrect and suggestions to prevent lag
+          autocorrect: false,
+          enableSuggestions: false,
+          // Optimize keyboard type
+          keyboardType:
+              maxLines > 1 ? TextInputType.multiline : TextInputType.text,
           decoration: InputDecoration(
             labelText: label.replaceAll('*', '').trim(),
             labelStyle: GoogleFonts.poppins(color: iconGrey, fontSize: 13),
@@ -933,10 +1029,11 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                   children: [
                     _modernField(
                       controller: _issueController,
+                      focusNode: _issueFocusNode,
                       label: 'Issue Description *',
                       icon: Icons.report_problem_outlined,
                       maxLines: 2,
-                      validator: (v) => v!.isEmpty
+                      validator: (v) => v!.trim().isEmpty
                           ? 'Please enter the issue description'
                           : null,
                     ),
@@ -998,6 +1095,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
                     if (_isPublicReport)
                       _modernField(
                         controller: _additionalInfoController,
+                        focusNode: _additionalInfoFocusNode,
                         label: 'Additional Location Information',
                         icon: Icons.info_outline,
                         hint: 'Optional details about the location',
@@ -1214,4 +1312,12 @@ class CustomLoadingDialog extends StatelessWidget {
       ),
     );
   }
+}
+
+class TimeoutException implements Exception {
+  final String message;
+  TimeoutException(this.message);
+
+  @override
+  String toString() => message;
 }
