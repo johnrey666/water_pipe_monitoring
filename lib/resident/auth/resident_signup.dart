@@ -59,6 +59,13 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
       return;
     }
 
+    if (_selectedLocation == null) {
+      setState(() {
+        _errorMessage = 'Pin a Location Required';
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -78,7 +85,8 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
           .createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
-      ).timeout(
+      )
+          .timeout(
         const Duration(seconds: 15),
         onTimeout: () {
           throw TimeoutException(
@@ -99,8 +107,8 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
       };
 
       if (_selectedLocation != null) {
-        userData['location'] = GeoPoint(
-            _selectedLocation!.latitude, _selectedLocation!.longitude);
+        userData['location'] =
+            GeoPoint(_selectedLocation!.latitude, _selectedLocation!.longitude);
         userData['placeName'] = _addressController.text.trim();
       }
 
@@ -177,11 +185,11 @@ class _ResidentSignupPageState extends State<ResidentSignupPage> {
             .doc(uid)
             .set(userData)
             .timeout(
-              const Duration(seconds: 10),
-              onTimeout: () {
-                throw TimeoutException('User data save timed out');
-              },
-            );
+          const Duration(seconds: 10),
+          onTimeout: () {
+            throw TimeoutException('User data save timed out');
+          },
+        );
 
         // Verify the write was successful
         final doc = await FirebaseFirestore.instance
