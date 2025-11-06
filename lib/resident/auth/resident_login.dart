@@ -87,7 +87,7 @@ class _ResidentLoginPageState extends State<ResidentLoginPage> {
 
       if (role != 'Resident') {
         await FirebaseAuth.instance.signOut();
-        throw Exception('This account is not a resident account.');
+        throw Exception('Wrong user access.');
       }
 
       if (!mounted) return;

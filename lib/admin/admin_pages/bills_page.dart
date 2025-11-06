@@ -49,17 +49,14 @@ class _BillsPageState extends State<BillsPage> {
         .where('role', isEqualTo: 'Resident')
         .orderBy('fullName')
         .limit(_pageSize);
-
     if (_searchQuery.isNotEmpty) {
       query = query
           .where('fullName', isGreaterThanOrEqualTo: _searchQuery)
           .where('fullName', isLessThanOrEqualTo: '$_searchQuery\uf8ff');
     }
-
     if (_currentPage > 0 && _lastDocuments[_currentPage - 1] != null) {
       query = query.startAfterDocument(_lastDocuments[_currentPage - 1]!);
     }
-
     return query.snapshots();
   }
 
@@ -247,7 +244,6 @@ class _BillsPageState extends State<BillsPage> {
                       ),
                     );
                   }
-
                   if (residents.isNotEmpty) {
                     if (_currentPage >= _lastDocuments.length) {
                       _lastDocuments.add(residents.last);
@@ -255,7 +251,6 @@ class _BillsPageState extends State<BillsPage> {
                       _lastDocuments[_currentPage] = residents.last;
                     }
                   }
-
                   return Column(
                     children: [
                       Expanded(
@@ -434,6 +429,7 @@ class _ResidentCardState extends State<_ResidentCard> {
 class _PaymentSection extends StatefulWidget {
   final String residentId;
   final String fullName;
+
   const _PaymentSection({required this.residentId, required this.fullName});
 
   @override
@@ -460,7 +456,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
       final year = periodStart.year;
       final month = periodStart.month;
       final docId = '$year-${month.toString().padLeft(2, '0')}';
-
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
@@ -473,7 +468,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
         'month': month,
         'createdAt': Timestamp.now(),
       }, SetOptions(merge: true));
-
       print(
           'Added consumption history for $userId: $docId, $cubicMeterUsed m³');
     } catch (e) {
@@ -493,25 +487,21 @@ class _PaymentSectionState extends State<_PaymentSection> {
         _isLoading = true;
         _error = null;
       });
-
       final paymentSnapshot = await FirebaseFirestore.instance
           .collection('payments')
           .where('residentId', isEqualTo: widget.residentId)
           .where('status', isEqualTo: 'pending')
           .get();
-
       final payments = paymentSnapshot.docs.map((doc) {
         final data = doc.data();
         data['paymentId'] = doc.id;
         return data;
       }).toList();
-
       final billData = <String, String>{};
       final billIds = payments
           .map((payment) => payment['billId'] as String?)
           .where((billId) => billId != null)
           .toSet();
-
       if (billIds.isNotEmpty) {
         final billFutures = billIds.map((billId) => FirebaseFirestore.instance
             .collection('users')
@@ -520,7 +510,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
             .doc(billId)
             .get());
         final billDocs = await Future.wait(billFutures);
-
         for (var i = 0; i < billIds.length; i++) {
           final billDoc = billDocs[i];
           final billId = billIds.elementAt(i);
@@ -535,14 +524,12 @@ class _PaymentSectionState extends State<_PaymentSection> {
           }
         }
       }
-
       final combinedData = payments.map((payment) {
         return {
           ...payment,
           'billingDate': billData[payment['billId']] ?? 'N/A',
         };
       }).toList();
-
       if (mounted) {
         setState(() {
           _paymentData = combinedData;
@@ -620,7 +607,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                   }
                   final paymentData = paymentDoc.data()!;
                   print('Payment data: $paymentData');
-
                   String month = 'Unknown';
                   double currentReading = 0.0;
                   double cubicMeterUsed = 0.0;
@@ -652,8 +638,9 @@ class _PaymentSectionState extends State<_PaymentSection> {
                   } else {
                     print('No billId provided');
                   }
-
                   final notificationData = {
+                    'type':
+                        'payment', // <-- THIS IS THE KEY FIX: Added 'type' for resident_home to recognize it
                     'residentId': widget.residentId,
                     'billId': billId ?? 'Unknown',
                     'status': status,
@@ -669,7 +656,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                       .collection('notifications')
                       .add(notificationData);
                   print('Notification saved successfully');
-
                   if (status == 'approved') {
                     await FirebaseFirestore.instance
                         .collection('payments')
@@ -680,7 +666,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                       'processedBy': 'Admin',
                     });
                     print('Payment updated to approved');
-
                     await FirebaseFirestore.instance.collection('logs').add({
                       'action': 'Payment Accepted',
                       'userId': widget.residentId,
@@ -688,7 +673,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                           'Payment for $month by ${widget.fullName} accepted. Amount: ₱${paymentData['billAmount']?.toStringAsFixed(2) ?? '0.00'}',
                       'timestamp': FieldValue.serverTimestamp(),
                     });
-
                     if (billId != null && periodStart != null) {
                       await _addConsumptionHistory(
                         userId: widget.residentId,
@@ -696,7 +680,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                         cubicMeterUsed: cubicMeterUsed,
                       );
                     }
-
                     if (billId != null) {
                       await FirebaseFirestore.instance
                           .collection('users')
@@ -709,7 +692,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                       });
                       print('Stored current reading: $currentReading');
                     }
-
                     final unpaidBillsSnapshot = await FirebaseFirestore.instance
                         .collection('users')
                         .doc(widget.residentId)
@@ -719,7 +701,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                       await billDoc.reference.delete();
                       print('Bill deleted: ${billDoc.id}');
                     }
-
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -854,7 +835,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                 final status = payment['status'] ?? 'pending';
                 final receiptImage = payment['receiptImage'] as String?;
                 final billingDate = payment['billingDate'] as String;
-
                 return Container(
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   padding: const EdgeInsets.all(12),
@@ -1080,41 +1060,9 @@ class _PaymentSectionState extends State<_PaymentSection> {
   }
 }
 
-Color _getStatusColor(String status) {
-  switch (status) {
-    case 'approved':
-      return Colors.green;
-    case 'rejected':
-      return Colors.red;
-    default:
-      return Colors.orange;
-  }
-}
-
-IconData _getStatusIcon(String status) {
-  switch (status) {
-    case 'approved':
-      return Icons.check_circle;
-    case 'rejected':
-      return Icons.cancel;
-    default:
-      return Icons.hourglass_full;
-  }
-}
-
-String _getStatusText(String status) {
-  switch (status) {
-    case 'approved':
-      return 'Approved';
-    case 'rejected':
-      return 'Rejected';
-    default:
-      return 'Pending';
-  }
-}
-
 class _BillReceiptForm extends StatefulWidget {
   final String fullName, address, contactNumber, residentId;
+
   const _BillReceiptForm({
     required this.fullName,
     required this.address,
@@ -1138,6 +1086,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
   String? _error;
 
   double get cubicMeterUsed => current >= previous ? current - previous : 0.0;
+
   double get currentBill => calculateCurrentBill();
 
   Future<void> _addConsumptionHistory({
@@ -1149,7 +1098,6 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
       final year = periodStart.year;
       final month = periodStart.month;
       final docId = '$year-${month.toString().padLeft(2, '0')}';
-
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userId)
@@ -1162,7 +1110,6 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
         'month': month,
         'createdAt': Timestamp.now(),
       }, SetOptions(merge: true));
-
       print(
           'Added consumption history for $userId: $docId, $cubicMeterUsed m³');
     } catch (e) {
@@ -1247,7 +1194,6 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
         _loading = true;
         _error = null;
       });
-
       // Fetch meter reading
       final meterSnapshot = await FirebaseFirestore.instance
           .collection('users')
@@ -1255,7 +1201,6 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
           .collection('meter_readings')
           .doc('latest')
           .get();
-
       print('Meter reading document exists: ${meterSnapshot.exists}');
       if (meterSnapshot.exists && mounted) {
         final data = meterSnapshot.data()!;
@@ -1269,7 +1214,6 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
           print('No previous reading found, defaulting to 0.0');
         });
       }
-
       // Fetch meter number from user document
       final userSnapshot = await FirebaseFirestore.instance
           .collection('users')
@@ -1304,7 +1248,6 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
           });
         }
       }
-
       if (mounted) {
         setState(() {
           _loading = false;
@@ -1676,7 +1619,6 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                       _loading = true;
                                       _error = null;
                                     });
-
                                     final billData = {
                                       'residentId': widget.residentId,
                                       'fullName': widget.fullName,
@@ -1696,16 +1638,13 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                       'issueDate': FieldValue.serverTimestamp(),
                                       'purok': selectedPurok,
                                     };
-
                                     print('Creating bill with data: $billData');
-
                                     // Save bill to Firestore
                                     await FirebaseFirestore.instance
                                         .collection('users')
                                         .doc(widget.residentId)
                                         .collection('bills')
                                         .add(billData);
-
                                     // Save meter number to user document
                                     await FirebaseFirestore.instance
                                         .collection('users')
@@ -1713,10 +1652,8 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                         .set({
                                       'meterNumber': meterNumber,
                                     }, SetOptions(merge: true));
-
                                     print(
                                         'Saved meter number ${meterNumber} to user document');
-
                                     // Add to consumption history
                                     if (periodStart != null) {
                                       await _addConsumptionHistory(
@@ -1725,7 +1662,18 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                         cubicMeterUsed: cubicMeterUsed,
                                       );
                                     }
-
+                                    // Update meter readings with current as latest
+                                    await FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(widget.residentId)
+                                        .collection('meter_readings')
+                                        .doc('latest')
+                                        .set({
+                                      'currentConsumedWaterMeter': current,
+                                      'updatedAt': FieldValue.serverTimestamp(),
+                                    });
+                                    print(
+                                        'Updated meter readings with current: $current');
                                     if (mounted) {
                                       Navigator.pop(context);
                                       ScaffoldMessenger.of(context)

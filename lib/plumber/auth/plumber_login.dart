@@ -3,6 +3,7 @@
 import 'dart:ui';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:animate_do/animate_do.dart';
@@ -45,7 +46,35 @@ class _PlumberLoginPageState extends State<PlumberLoginPage> {
         password: _passwordController.text.trim(),
       );
       if (!mounted) return;
+
+      // Verify user data exists in Firestore
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(FirebaseAuth.instance.currentUser!.uid)
+          .get();
+
+      if (!userDoc.exists) {
+        await FirebaseAuth.instance.signOut();
+        throw Exception('User data not found. Please contact support.');
+      }
+
+      final userData = userDoc.data();
+      final role = userData?['role'] as String?;
+
+      if (role != 'Plumber') {
+        await FirebaseAuth.instance.signOut();
+        throw Exception('Wrong user access.');
+      }
+
+      if (!mounted) return;
+
+      // Close loading dialog
       Navigator.pop(context); // Close loading dialog
+
+      // Clear text fields (optional, for UX)
+      _emailController.clear();
+      _passwordController.clear();
+
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (_) => const PlumberHomePage()),
@@ -55,6 +84,12 @@ class _PlumberLoginPageState extends State<PlumberLoginPage> {
       Navigator.pop(context); // Close loading dialog
       setState(() {
         _errorMessage = _getFriendlyErrorMessage(e.code);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading dialog
+      setState(() {
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
       });
     } finally {
       if (mounted) {

@@ -24,6 +24,9 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   String? selectedPurok;
   bool _showRates = false;
   String? _selectedBillId;
+  bool _hasNoBill = false;
+  double? _previousReading;
+  Map<String, dynamic>? _userData;
 
   @override
   void initState() {
@@ -67,6 +70,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
           _currentBill = bill;
           _selectedBillId = bill['billId'];
           selectedPurok = bill['purok'] ?? 'PUROK 1';
+          _hasNoBill = false;
           _loading = false;
         });
 
@@ -78,8 +82,26 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
             .get();
 
         if (userSnapshot.exists) {
+          _userData = userSnapshot.data()!;
+          // Fetch previous reading
+          final meterSnapshot = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(_residentId)
+              .collection('meter_readings')
+              .doc('latest')
+              .get();
+
+          if (meterSnapshot.exists) {
+            _previousReading = meterSnapshot
+                    .data()!['currentConsumedWaterMeter']
+                    ?.toDouble() ??
+                0.0;
+          } else {
+            _previousReading = 0.0;
+          }
+
           setState(() {
-            _error = 'No existing bill. Your account is up to date!';
+            _hasNoBill = true;
             _loading = false;
           });
         } else {
@@ -222,16 +244,25 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
           ? _buildLoadingState()
           : _error != null
               ? _buildErrorState()
-              : _currentBill == null
-                  ? _buildNoBillsState()
-                  : RefreshIndicator(
+              : _hasNoBill
+                  ? RefreshIndicator(
                       onRefresh: _loadLatestBill,
                       color: const Color(0xFF4A90E2),
                       child: SingleChildScrollView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        child: _buildBillingContent(),
+                        child: _buildNoBillTemplate(),
                       ),
-                    ),
+                    )
+                  : _currentBill == null
+                      ? _buildNoBillsState()
+                      : RefreshIndicator(
+                          onRefresh: _loadLatestBill,
+                          color: const Color(0xFF4A90E2),
+                          child: SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            child: _buildBillingContent(),
+                          ),
+                        ),
     );
   }
 
@@ -364,6 +395,337 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildNoBillTemplate() {
+    final previousReadingValue = _previousReading ?? 0.0;
+    final dummyBill = {
+      'fullName': _userData?['fullName'] ?? 'N/A',
+      'address': _userData?['address'] ?? 'N/A',
+      'contactNumber': _userData?['contactNumber'] ?? 'N/A',
+      'meterNumber': _userData?['meterNumber'] ?? 'N/A',
+      'purok': _userData?['purok'] ?? 'PUROK 1',
+      'previousConsumedWaterMeter': previousReadingValue,
+      'currentConsumedWaterMeter': 0.0,
+      'cubicMeterUsed': 0.0,
+      'currentMonthBill': 0.0,
+      'periodStart': null,
+      'periodDue': null,
+      'issueDate': null,
+    };
+    selectedPurok = dummyBill['purok'];
+
+    return Padding(
+      padding: const EdgeInsets.all(10.0),
+      child: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(
+              'You Currently Don\'t Have a BILL!',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          Card(
+            elevation: 6,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            color: Colors.grey[100],
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 500),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFF0F0F0), Color(0xFFE8E8E8)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Image.asset('assets/images/icon.png', height: 36),
+                          const SizedBox(width: 8),
+                          const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'San Jose Water Services',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF4A90E2),
+                                ),
+                              ),
+                              Text(
+                                'Sajowasa',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.grey,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[400],
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          selectedPurok ?? 'PUROK 1',
+                          style: const TextStyle(
+                            fontSize: 9,
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'WATER BILL STATEMENT',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF4A90E2),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _dashedDivider(),
+                  _receiptRow('Name', dummyBill['fullName']),
+                  _receiptRow('Address', dummyBill['address']),
+                  _receiptRow('Contact', dummyBill['contactNumber']),
+                  _receiptRow('Meter No.', dummyBill['meterNumber']),
+                  _receiptRow('Billing Period Start', 'N/A'),
+                  _receiptRow('Billing Period Due', 'N/A'),
+                  _receiptRow('Issue Date', 'N/A'),
+                  _dashedDivider(),
+                  _receiptRow('Previous Reading',
+                      '${previousReadingValue.toStringAsFixed(2)} m³'),
+                  _receiptRow('Current Reading', '0.00 m³'),
+                  _receiptRow('Cubic Meter Used', '0.00 m³', isBold: true),
+                  _dashedDivider(),
+                  _receiptRow('Current Bill', '₱0.00',
+                      valueColor: Colors.grey, isBold: true, fontSize: 13),
+                  _receiptRow('Due Date', 'N/A', valueColor: Colors.grey),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: () => setState(() => _showRates = !_showRates),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 8, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Rate Information',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF4A90E2),
+                            ),
+                          ),
+                          Icon(
+                            _showRates ? Icons.expand_less : Icons.expand_more,
+                            size: 16,
+                            color: const Color(0xFF4A90E2),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  AnimatedCrossFade(
+                    firstChild: const SizedBox.shrink(),
+                    secondChild: Container(
+                      margin: const EdgeInsets.only(top: 8),
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey[300]!, width: 1),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black12.withOpacity(0.05),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _rateRow('Residential',
+                              'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
+                          const SizedBox(height: 6),
+                          _rateRow('Commercial',
+                              'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
+                          const SizedBox(height: 6),
+                          _rateRow('Non Residence',
+                              'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
+                          const SizedBox(height: 6),
+                          _rateRow('Industrial',
+                              'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
+                        ],
+                      ),
+                    ),
+                    crossFadeState: _showRates
+                        ? CrossFadeState.showSecond
+                        : CrossFadeState.showFirst,
+                    duration: const Duration(milliseconds: 400),
+                    sizeCurve: Curves.easeInOut,
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Ensure timely payment to maintain uninterrupted water supply.',
+                    style: TextStyle(
+                      fontSize: 9,
+                      color: Colors.grey,
+                      fontStyle: FontStyle.italic,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Opacity(
+            opacity: 0.5,
+            child: Card(
+              elevation: 6,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              child: Container(
+                padding: const EdgeInsets.all(16.0),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black12.withOpacity(0.05),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'PAYMENT OPTIONS',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF4A90E2),
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(8),
+                        border:
+                            Border.all(color: Colors.green.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.phone_android,
+                                color: Colors.green, size: 16),
+                          ),
+                          const SizedBox(width: 8),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'GCash Payment',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  '09853886411',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.content_copy,
+                                color: Color(0xFF4A90E2), size: 16),
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('GCash number copied!'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'No bill to pay at the moment. Check back later!',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -510,14 +872,14 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   _receiptRow('Due Date', formattedPeriodDue,
                       valueColor: dueColor),
                   if (isOverdue)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 6),
                       child: Row(
                         children: [
-                          const Icon(Icons.warning_amber,
+                          Icon(Icons.warning_amber,
                               color: Colors.red, size: 14),
-                          const SizedBox(width: 4),
-                          const Text(
+                          SizedBox(width: 4),
+                          Text(
                             'Overdue: Pay immediately to avoid penalties.',
                             style: TextStyle(
                               fontSize: 10,

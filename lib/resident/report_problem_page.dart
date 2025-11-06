@@ -253,11 +253,11 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
           .doc(user.uid)
           .get()
           .timeout(
-            const Duration(seconds: 10),
-            onTimeout: () {
-              throw TimeoutException('Failed to load user data');
-            },
-          );
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('Failed to load user data');
+        },
+      );
       if (!userDoc.exists) {
         throw Exception('User data not found');
       }
@@ -369,12 +369,12 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
           .collection('reports')
           .add(reportData)
           .timeout(
-            const Duration(seconds: 15),
-            onTimeout: () {
-              throw TimeoutException(
-                  'Report submission timed out. Please try again.');
-            },
-          );
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw TimeoutException(
+              'Report submission timed out. Please try again.');
+        },
+      );
 
       // Log the report submission (non-blocking)
       FirebaseFirestore.instance.collection('logs').add({
