@@ -39,11 +39,19 @@ class _PlumberHomePageState extends State<PlumberHomePage>
   int _unreadCount = 0;
   StreamSubscription<QuerySnapshot>? _notifSubscription;
 
+  // For dropdown
+  final GlobalKey _notificationButtonKey = GlobalKey();
+  OverlayEntry? _notificationOverlay;
+
+  // Monitoring events for calendar
+  Map<DateTime, List<Map<String, dynamic>>> _monitoringEvents = {};
+
   @override
   void initState() {
     super.initState();
     _fetchPlumberName();
     _setupNotifications();
+    _setupMonitoringEvents();
   }
 
   Future<void> _fetchPlumberName() async {
@@ -90,86 +98,308 @@ class _PlumberHomePageState extends State<PlumberHomePage>
     });
   }
 
-  void _showNotifications(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.6,
-        minChildSize: 0.3,
-        maxChildSize: 0.9,
-        builder: (context, scrollController) => Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Text(
-                'Notifications',
-                style: GoogleFonts.poppins(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Expanded(
-                child: ListView.builder(
-                  controller: scrollController,
-                  itemCount: _notifications.length,
-                  itemBuilder: (context, index) {
-                    final notif = _notifications[index];
-                    final isRead = notif['read'] ?? false;
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      color: isRead ? Colors.grey.shade50 : Colors.blue.shade50,
-                      child: ListTile(
-                        leading: Icon(
-                          Icons.notifications,
-                          color: isRead ? Colors.grey : Colors.blue,
-                        ),
-                        title: Text(
-                          notif['title'] ?? '',
-                          style: GoogleFonts.poppins(
-                            fontWeight:
-                                isRead ? FontWeight.normal : FontWeight.w600,
-                          ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(notif['message'] ?? ''),
-                            Text(
-                              _formatTimestamp(notif['timestamp']),
-                              style: GoogleFonts.poppins(
-                                  fontSize: 12, color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                        onTap: () async {
-                          if (!isRead) {
-                            await FirebaseFirestore.instance
-                                .collection('notifications')
-                                .doc(notif['id'])
-                                .update({'read': true});
-                          }
-                          if (notif['reportId'] != null) {
-                            setState(() {
-                              _initialReportId = notif['reportId'];
-                              _selectedPage = PlumberPage.reports;
-                            });
-                            Navigator.pop(context);
-                          }
-                        },
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
+  void _setupMonitoringEvents() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    FirebaseFirestore.instance
+        .collection('weekly_monitorings')
+        .where('plumberId', isEqualTo: user.uid)
+        .snapshots()
+        .listen((snapshot) {
+      setState(() {
+        _monitoringEvents = {};
+        for (var doc in snapshot.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final monitoringDate = (data['monitoringDate'] as Timestamp).toDate();
+          final dateKey = DateTime(
+              monitoringDate.year, monitoringDate.month, monitoringDate.day);
+          _monitoringEvents[dateKey] = _monitoringEvents[dateKey] ?? [];
+          _monitoringEvents[dateKey]!.add({
+            'id': doc.id,
+            'title': 'Weekly Monitoring',
+            'description': data['description'] ?? 'No description',
+            'status': data['status'] ?? 'pending',
+          });
+        }
+      });
+    });
+  }
+
+  void _showNotificationOverlay() {
+    final RenderBox renderBox =
+        _notificationButtonKey.currentContext!.findRenderObject() as RenderBox;
+    final position = renderBox.localToGlobal(Offset.zero);
+    final size = renderBox.size;
+    final screenSize = MediaQuery.of(context).size;
+    _notificationOverlay = OverlayEntry(
+      builder: (context) => Positioned(
+        right: screenSize.width - position.dx - size.width,
+        top: position.dy + size.height + 8,
+        child: Material(
+          elevation: 8,
+          borderRadius: BorderRadius.circular(8),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: 300,
+              maxHeight: 500,
+            ),
+            child: NotificationDropdown(
+              notifications: _notifications,
+              unreadCount: _unreadCount,
+              onMarkAsRead: _markNotificationAsRead,
+              onNotificationTap: _handleNotificationTap,
+            ),
           ),
         ),
+      ),
+    );
+    Overlay.of(context).insert(_notificationOverlay!);
+  }
+
+  void _removeNotificationOverlay() {
+    _notificationOverlay?.remove();
+    _notificationOverlay = null;
+  }
+
+  Future<void> _markNotificationAsRead(String notificationId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(notificationId)
+          .update({'read': true});
+      setState(() {
+        _unreadCount--;
+      });
+    } catch (e) {
+      print('Error marking notification as read: $e');
+    }
+  }
+
+  void _handleNotificationTap(Map<String, dynamic> notif) async {
+    if (!(notif['read'] ?? false)) {
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .doc(notif['id'])
+          .update({'read': true});
+      setState(() {
+        _unreadCount--;
+      });
+    }
+    if (notif['monitoringId'] != null) {
+      _showWeeklyMonitoringModal(monitoringId: notif['monitoringId']);
+    } else if (notif['reportId'] != null) {
+      setState(() {
+        _initialReportId = notif['reportId'];
+        _selectedPage = PlumberPage.reports;
+      });
+    }
+    _removeNotificationOverlay();
+  }
+
+  void _showWeeklyMonitoringModal({String? monitoringId}) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final user = FirebaseAuth.instance.currentUser;
+          if (user == null) return const SizedBox.shrink();
+
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            elevation: 8,
+            backgroundColor: Colors.white,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.of(context).size.width * 0.9,
+                maxHeight: MediaQuery.of(context).size.height * 0.8,
+              ),
+              child: Column(
+                children: [
+                  // Header
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF4FC3F7),
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Weekly Monitorings',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close,
+                              color: Colors.white, size: 24),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('weekly_monitorings')
+                          .where('plumberId', isEqualTo: user.uid)
+                          .where('status', isEqualTo: 'pending')
+                          .orderBy('monitoringDate', descending: false)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.error, color: Colors.red, size: 48),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Error loading monitorings',
+                                  style: GoogleFonts.poppins(color: Colors.red),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        final monitorings = snapshot.data?.docs ?? [];
+                        if (monitorings.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.assignment_outlined,
+                                    size: 64, color: Colors.grey),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No pending weekly monitorings assigned.',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }
+                        return ListView.separated(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: monitorings.length,
+                          separatorBuilder: (context, index) =>
+                              const Divider(height: 1),
+                          itemBuilder: (context, index) {
+                            final doc = monitorings[index];
+                            final data = doc.data() as Map<String, dynamic>;
+                            final monitoringDate =
+                                (data['monitoringDate'] as Timestamp).toDate();
+                            final description =
+                                data['description'] as String? ??
+                                    'No description';
+                            return Card(
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              child: ListTile(
+                                contentPadding: const EdgeInsets.all(16),
+                                leading: Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.assignment,
+                                    color: const Color(0xFF4FC3F7),
+                                    size: 28,
+                                  ),
+                                ),
+                                title: Text(
+                                  DateFormat('MMMM dd, yyyy')
+                                      .format(monitoringDate),
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                                subtitle: Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    description,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ),
+                                trailing: ElevatedButton.icon(
+                                  onPressed: () async {
+                                    try {
+                                      await FirebaseFirestore.instance
+                                          .collection('weekly_monitorings')
+                                          .doc(doc.id)
+                                          .update({'status': 'done'});
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Marked as done!',
+                                            style: GoogleFonts.poppins(),
+                                          ),
+                                          backgroundColor: Colors.green,
+                                        ),
+                                      );
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        SnackBar(
+                                          content: Text('Error: $e'),
+                                          backgroundColor: Colors.red,
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(Icons.check, size: 16),
+                                  label: Text(
+                                    'Done',
+                                    style: GoogleFonts.poppins(fontSize: 12),
+                                  ),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 8),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -183,11 +413,34 @@ class _PlumberHomePageState extends State<PlumberHomePage>
 
   void _onSelectPage(PlumberPage page) {
     print('Navigating to page: $page');
-    Navigator.of(context).pop();
-    setState(() {
-      _selectedPage = page;
-      _initialReportId = null;
-    });
+    Navigator.of(context).pop(); // Close drawer
+
+    switch (page) {
+      case PlumberPage.schedule:
+        if (_selectedPage != PlumberPage.schedule) {
+          setState(() {
+            _selectedPage = page;
+            _initialReportId = null;
+          });
+        }
+        break;
+      case PlumberPage.reports:
+        if (_selectedPage != PlumberPage.reports) {
+          setState(() {
+            _selectedPage = page;
+            _initialReportId = null;
+          });
+        }
+        break;
+      case PlumberPage.mapping:
+        if (_selectedPage != PlumberPage.mapping) {
+          setState(() {
+            _selectedPage = page;
+            _initialReportId = null;
+          });
+        }
+        break;
+    }
   }
 
   void _logout() {
@@ -287,35 +540,43 @@ class _PlumberHomePageState extends State<PlumberHomePage>
             Stack(
               children: [
                 IconButton(
-                  icon: const Icon(Icons.notifications_outlined),
-                  onPressed: () => _showNotifications(context),
+                  key: _notificationButtonKey,
+                  icon: Icon(
+                    Icons.notifications_outlined,
+                    color: Colors.blue.shade700,
+                    size: 26,
+                  ),
+                  onPressed: () {
+                    if (_notificationOverlay == null) {
+                      _showNotificationOverlay();
+                    } else {
+                      _removeNotificationOverlay();
+                    }
+                  },
                 ),
                 if (_unreadCount > 0)
                   Positioned(
                     right: 8,
                     top: 8,
                     child: Container(
-                      padding: const EdgeInsets.all(2),
+                      padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
                         color: Colors.red,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      constraints: const BoxConstraints(
-                        minWidth: 12,
-                        minHeight: 12,
+                        shape: BoxShape.circle,
                       ),
                       child: Text(
-                        _unreadCount.toString(),
+                        '$_unreadCount',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 8,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
                         ),
-                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
               ],
             ),
+            const SizedBox(width: 8),
           ],
         ),
         drawer: Drawer(
@@ -555,6 +816,31 @@ class _PlumberHomePageState extends State<PlumberHomePage>
                       ),
                     ),
                   ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _showWeeklyMonitoringModal(),
+                icon:
+                    const Icon(Icons.assignment, color: Colors.white, size: 18),
+                label: Text(
+                  'View Weekly Monitoring',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4FC3F7),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 2,
                 ),
               ),
             ),
@@ -847,11 +1133,14 @@ class _PlumberHomePageState extends State<PlumberHomePage>
                             eventLoader: (day) {
                               final dateKey =
                                   DateTime(day.year, day.month, day.day);
-                              return _reportEvents[dateKey]
+                              final reportEvents = _reportEvents[dateKey]
                                       ?.where((event) => _selectedStatuses
                                           .contains(event['status']))
                                       .toList() ??
                                   [];
+                              final monitoringEvents =
+                                  _monitoringEvents[dateKey] ?? [];
+                              return [...reportEvents, ...monitoringEvents];
                             },
                             onDaySelected: (selectedDay, focusedDay) {
                               setState(() {
@@ -1243,15 +1532,21 @@ class _PlumberHomePageState extends State<PlumberHomePage>
               .where((e) => _selectedStatuses.contains(e['status']))
               .toList());
         }
+        if (_monitoringEvents.containsKey(dateKey)) {
+          events.addAll(_monitoringEvents[dateKey]!);
+        }
       }
     } else {
       final dateKey =
           DateTime(_selectedDay.year, _selectedDay.month, _selectedDay.day);
-      events = _reportEvents.containsKey(dateKey)
-          ? _reportEvents[dateKey]!
-              .where((e) => _selectedStatuses.contains(e['status']))
-              .toList()
-          : [];
+      if (_reportEvents.containsKey(dateKey)) {
+        events.addAll(_reportEvents[dateKey]!
+            .where((e) => _selectedStatuses.contains(e['status']))
+            .toList());
+      }
+      if (_monitoringEvents.containsKey(dateKey)) {
+        events.addAll(_monitoringEvents[dateKey]!);
+      }
     }
     if (events.isEmpty) {
       return Padding(
@@ -1300,13 +1595,15 @@ class _PlumberHomePageState extends State<PlumberHomePage>
                       ? Icons.circle
                       : status == 'Unfixed Reports'
                           ? Icons.warning
-                          : Icons.check,
+                          : status == 'Fixed'
+                              ? Icons.check
+                              : Icons.assignment_outlined,
                   color: color,
                   size: 22,
                 ),
               ),
               title: Text(
-                '${event['fullName']}: ${event['title']}',
+                '${event['fullName'] ?? ''}: ${event['title']}',
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
@@ -1319,7 +1616,7 @@ class _PlumberHomePageState extends State<PlumberHomePage>
                 maxLines: 1,
               ),
               subtitle: Text(
-                '${event['time']} • $status • Priority: $priority',
+                '${event['time'] ?? ''} • $status • Priority: $priority',
                 style: GoogleFonts.poppins(
                   fontSize: 12,
                   color: Colors.grey.shade600,
@@ -1328,10 +1625,15 @@ class _PlumberHomePageState extends State<PlumberHomePage>
                 maxLines: 1,
               ),
               onTap: () {
-                setState(() {
-                  _initialReportId = event['id'];
-                  _selectedPage = PlumberPage.reports;
-                });
+                if (event['id'] != null &&
+                    event['title'] == 'Weekly Monitoring') {
+                  _showWeeklyMonitoringModal(monitoringId: event['id']);
+                } else {
+                  setState(() {
+                    _initialReportId = event['id'];
+                    _selectedPage = PlumberPage.reports;
+                  });
+                }
               },
             ),
           );
@@ -1343,6 +1645,165 @@ class _PlumberHomePageState extends State<PlumberHomePage>
   @override
   void dispose() {
     _notifSubscription?.cancel();
+    _removeNotificationOverlay();
     super.dispose();
+  }
+}
+
+class NotificationDropdown extends StatefulWidget {
+  final List<Map<String, dynamic>> notifications;
+  final int unreadCount;
+  final Function(String) onMarkAsRead;
+  final Function(Map<String, dynamic>) onNotificationTap;
+
+  const NotificationDropdown({
+    super.key,
+    required this.notifications,
+    required this.unreadCount,
+    required this.onMarkAsRead,
+    required this.onNotificationTap,
+  });
+
+  @override
+  State<NotificationDropdown> createState() => _NotificationDropdownState();
+}
+
+class _NotificationDropdownState extends State<NotificationDropdown> {
+  int _page = 0;
+  static const int _itemsPerPage = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.notifications.isEmpty) {
+      return const SizedBox(
+        height: 50,
+        child: Center(child: Text('No notifications')),
+      );
+    }
+
+    // Sort notifications by timestamp descending
+    final sortedNotifications =
+        List<Map<String, dynamic>>.from(widget.notifications);
+    sortedNotifications.sort((a, b) =>
+        (b['timestamp'] as Timestamp).compareTo(a['timestamp'] as Timestamp));
+
+    final totalPages = (sortedNotifications.length / _itemsPerPage).ceil();
+    final currentItems = sortedNotifications
+        .skip(_page * _itemsPerPage)
+        .take(_itemsPerPage)
+        .toList();
+
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Text(
+              'Notifications',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
+          ...currentItems
+              .map((notif) => _buildNotificationItem(context, notif)),
+          if (totalPages > 1)
+            _buildPaginationRow(
+              currentPage: _page,
+              totalPages: totalPages,
+              onPrev: () =>
+                  setState(() => _page = (_page - 1).clamp(0, totalPages - 1)),
+              onNext: () =>
+                  setState(() => _page = (_page + 1).clamp(0, totalPages - 1)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNotificationItem(
+      BuildContext context, Map<String, dynamic> notif) {
+    final isRead = notif['read'] ?? false;
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      color: isRead ? Colors.white : Colors.grey[200],
+      elevation: 2,
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(12),
+        leading: Icon(
+          Icons.notifications,
+          color: isRead ? Colors.grey : Colors.blue,
+          size: 20,
+        ),
+        title: Text(
+          notif['title'] ?? '',
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+            color: isRead ? Colors.grey[600] : Colors.black87,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              (notif['message'] ?? '').length > 50
+                  ? '${(notif['message'] ?? '').substring(0, 50)}...'
+                  : notif['message'] ?? '',
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              _formatTimestamp(notif['timestamp']),
+              style: GoogleFonts.poppins(
+                fontSize: 10,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+        onTap: () => widget.onNotificationTap(notif),
+      ),
+    );
+  }
+
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp is Timestamp) {
+      return DateFormat('MMM dd, yyyy HH:mm').format(timestamp.toDate());
+    }
+    return 'N/A';
+  }
+
+  Widget _buildPaginationRow({
+    required int currentPage,
+    required int totalPages,
+    required VoidCallback onPrev,
+    required VoidCallback onNext,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          TextButton(
+            onPressed: currentPage > 0 ? onPrev : null,
+            child: const Text('Previous'),
+          ),
+          Text('${currentPage + 1} of $totalPages'),
+          TextButton(
+            onPressed: currentPage < totalPages - 1 ? onNext : null,
+            child: const Text('Next'),
+          ),
+        ],
+      ),
+    );
   }
 }

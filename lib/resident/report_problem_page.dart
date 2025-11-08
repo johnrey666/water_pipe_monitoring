@@ -24,7 +24,11 @@ class ReportProblemPage extends StatefulWidget {
   State<ReportProblemPage> createState() => _ReportProblemPageState();
 }
 
-class _ReportProblemPageState extends State<ReportProblemPage> {
+class _ReportProblemPageState extends State<ReportProblemPage>
+    with AutomaticKeepAliveClientMixin<ReportProblemPage> {
+  @override
+  bool get wantKeepAlive => true;
+
   final _formKey = GlobalKey<FormState>();
   final _picker = ImagePicker();
   XFile? _imageFile;
@@ -44,30 +48,27 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
   bool _isPublicReport = false;
   bool _isInitialized = false;
   String? _errorMessage;
+  int _recentPage = 0;
+
+  // Add PageStorageKey to preserve ListView state (scroll, focus)
+  final PageStorageKey _listKey = PageStorageKey('report_problem_list');
+
   final Color primaryColor = const Color(0xFF87CEEB);
   final Color accentColor = const Color(0xFF0288D1);
   final Color iconGrey = Colors.grey;
 
-  int _recentPage = 0;
-
   @override
   void initState() {
     super.initState();
-    // Pre-initialize controllers to prevent lag
-    _issueController.text = '';
-    _additionalInfoController.text = '';
-    _dateTimeController.text = '';
-    _locationController.text = '';
-    _imageNameController.text = '';
-
-    // Mark as initialized after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-        });
-      }
-    });
+    if (!_isInitialized) {
+      _issueController.text = '';
+      _additionalInfoController.text = '';
+      _dateTimeController.text = '';
+      _locationController.text = '';
+      _imageNameController.text = '';
+      _mapController = MapController();
+      _isInitialized = true;
+    }
   }
 
   @override
@@ -788,6 +789,12 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 100,
+            child: Center(child: CircularProgressIndicator()),
+          );
+        }
         if (snapshot.hasError) {
           return FadeInUp(
             duration: const Duration(milliseconds: 400),
@@ -815,7 +822,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
             ),
           );
         }
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+        if (snapshot.data!.docs.isEmpty) {
           return const SizedBox();
         }
         final docs = snapshot.data!.docs;
@@ -972,12 +979,16 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
 
   @override
   Widget build(BuildContext context) {
+    super
+        .build(context); // Important: Required by AutomaticKeepAliveClientMixin
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA), // Dirty white background
+      backgroundColor: const Color(0xFFF5F7FA),
       body: SafeArea(
         child: Form(
           key: _formKey,
           child: ListView(
+            key: _listKey, // Add PageStorageKey here to preserve scroll/focus
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
             children: [
               FadeInDown(
@@ -1337,9 +1348,8 @@ class CustomLoadingDialog extends StatelessWidget {
 
 class TimeoutException implements Exception {
   final String message;
-  TimeoutException(this.message);
+  const TimeoutException(this.message);
 
   @override
   String toString() => message;
 }
-  

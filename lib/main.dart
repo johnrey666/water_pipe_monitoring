@@ -14,16 +14,19 @@ import 'admin/admin_pages/bills_page.dart';
 import 'admin/admin_pages/view_reports_page.dart';
 import 'admin/admin_pages/logs_page.dart';
 import 'resident/resident_home.dart';
+import 'plumber/plumber_home.dart';
+import 'plumber/view_schedule_page.dart';
+import 'plumber/view_reports_page.dart' as plumber;
+import 'plumber/geographic_mapping_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    
-    // Enable offline persistence for better reliability
+
     FirebaseFirestore.instance.settings = const Settings(
       persistenceEnabled: true,
       cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
@@ -31,7 +34,7 @@ void main() async {
   } catch (e) {
     print('Firebase initialization error: $e');
   }
-  
+
   runApp(const MyApp());
 }
 
@@ -50,6 +53,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       home: const AuthWrapper(),
       routes: {
+        // Admin routes
         '/admin-login': (context) => const AdminLoginPage(),
         '/dashboard': (context) => const AdminHomePage(),
         '/monitor': (context) => const MonitorPage(reportId: ''),
@@ -57,7 +61,15 @@ class MyApp extends StatelessWidget {
         '/users': (context) => const UsersPage(),
         '/bills': (context) => const BillsPage(),
         '/logs': (context) => const LogsPage(),
+
+        // Resident routes
         '/resident-home': (context) => const ResidentHomePage(),
+
+        // Plumber routes
+        '/plumber-home': (context) => const PlumberHomePage(),
+        '/plumber-schedule': (context) => const ViewSchedulePage(),
+        '/plumber-reports': (context) => const plumber.ViewReportsPage(),
+        '/plumber-mapping': (context) => const GeographicMappingPage(),
       },
       onUnknownRoute: (settings) {
         return MaterialPageRoute(
@@ -83,7 +95,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
-        // Show loading while checking auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(
@@ -94,7 +105,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
           );
         }
 
-        // Handle errors
         if (snapshot.hasError) {
           return Scaffold(
             body: Center(
@@ -121,9 +131,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton(
-                    onPressed: () {
-                      setState(() {}); // Retry
-                    },
+                    onPressed: () => setState(() {}),
                     child: const Text('Retry'),
                   ),
                 ],
@@ -132,7 +140,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
           );
         }
 
-        // User is signed in
         if (snapshot.hasData && snapshot.data != null) {
           return FutureBuilder<Map<String, dynamic>?>(
             future: _getUserData(snapshot.data!.uid),
@@ -149,37 +156,34 @@ class _AuthWrapperState extends State<AuthWrapper> {
               }
 
               if (userSnapshot.hasError) {
-                // Sign out on error and redirect to landing
                 FirebaseAuth.instance.signOut();
                 return kIsWeb ? const AdminLoginPage() : const LandingPage();
               }
 
               final userData = userSnapshot.data;
-              
-              // Check if user data exists
+
               if (userData == null) {
-                // User data not found, sign out and redirect
                 FirebaseAuth.instance.signOut();
                 return kIsWeb ? const AdminLoginPage() : const LandingPage();
               }
 
-              // Route based on role
               final role = userData['role'] as String?;
-              
-              if (role == 'admin') {
-                return const AdminHomePage();
-              } else if (role == 'Resident') {
-                return const ResidentHomePage();
-              } else {
-                // Unknown role, sign out
-                FirebaseAuth.instance.signOut();
-                return kIsWeb ? const AdminLoginPage() : const LandingPage();
+
+              switch (role) {
+                case 'admin':
+                  return const AdminHomePage();
+                case 'Resident':
+                  return const ResidentHomePage();
+                case 'Plumber':
+                  return const PlumberHomePage();
+                default:
+                  FirebaseAuth.instance.signOut();
+                  return kIsWeb ? const AdminLoginPage() : const LandingPage();
               }
             },
           );
         }
 
-        // No user signed in - show appropriate landing page
         return kIsWeb ? const AdminLoginPage() : const LandingPage();
       },
     );
@@ -193,7 +197,8 @@ class _AuthWrapperState extends State<AuthWrapper> {
           .get()
           .timeout(
             const Duration(seconds: 10),
-            onTimeout: () => throw TimeoutException('User data fetch timed out'),
+            onTimeout: () =>
+                throw TimeoutException('User data fetch timed out'),
           );
 
       if (!userDoc.exists) {

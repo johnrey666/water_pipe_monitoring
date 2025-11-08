@@ -61,19 +61,15 @@ class _UsersPageState extends State<UsersPage> {
 
   Stream<QuerySnapshot> _getUsersStream() {
     Query query = FirebaseFirestore.instance.collection('users');
-
     if (_selectedRole == 'All') {
       query = query.where('role', whereIn: ['Plumber', 'Resident']);
     } else {
       query = query.where('role', isEqualTo: _selectedRole);
     }
-
     query = query.orderBy('createdAt', descending: true).limit(_pageSize);
-
     if (_currentPage > 0 && _lastDocuments[_currentPage - 1] != null) {
       query = query.startAfterDocument(_lastDocuments[_currentPage - 1]!);
     }
-
     return query.snapshots();
   }
 
@@ -86,10 +82,8 @@ class _UsersPageState extends State<UsersPage> {
           .get();
       final fullName = userDoc.data()?['fullName'] ?? 'Unknown';
       final role = userDoc.data()?['role'] ?? 'Unknown';
-
       await FirebaseFirestore.instance.collection('users').doc(userId).delete();
       _showSuccessOverlay('User successfully deleted!');
-
       // Log the deletion
       await FirebaseFirestore.instance.collection('logs').add({
         'action': 'User Deleted',
@@ -97,7 +91,6 @@ class _UsersPageState extends State<UsersPage> {
         'details': 'User "$fullName" ($role) with email $email was deleted.',
         'timestamp': FieldValue.serverTimestamp(),
       });
-
       User? currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
         List<String> signInMethods =
@@ -218,6 +211,666 @@ class _UsersPageState extends State<UsersPage> {
     });
   }
 
+  void _showAssignMonitoringModal() {
+    final _formKey = GlobalKey<FormState>();
+    final _descriptionController = TextEditingController();
+    final _dateController = TextEditingController();
+    String? selectedPlumberId;
+    DateTime? selectedDate;
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return FutureBuilder<QuerySnapshot>(
+              future: FirebaseFirestore.instance
+                  .collection('users')
+                  .where('role', isEqualTo: 'Plumber')
+                  .get(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Dialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 2,
+                    backgroundColor: Colors.transparent,
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Loading plumbers...',
+                              style: GoogleFonts.poppins(fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                if (snapshot.hasError) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _showErrorOverlay(
+                        'Error loading plumbers: ${snapshot.error}');
+                    Navigator.of(context).pop();
+                  });
+                  return const SizedBox.shrink();
+                }
+                final plumbersList = snapshot.data!.docs
+                    .map((doc) => {
+                          'id': doc.id,
+                          'name': doc['fullName'] ?? 'Unknown Plumber',
+                        })
+                    .toList();
+                if (plumbersList.isEmpty) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    _showErrorOverlay('No plumbers available to assign.');
+                    Navigator.of(context).pop();
+                  });
+                  return const SizedBox.shrink();
+                }
+                return Dialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  elevation: 2,
+                  backgroundColor: Colors.white,
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: 400,
+                      maxHeight: MediaQuery.of(context).size.height * 0.8,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Form(
+                        key: _formKey,
+                        child: SingleChildScrollView(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Assign Weekly Monitoring',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.close,
+                                        color: Colors.grey, size: 18),
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              DropdownButtonFormField<String>(
+                                value: selectedPlumberId,
+                                decoration: InputDecoration(
+                                  labelText: 'Select Plumber *',
+                                  labelStyle: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    color: Colors.grey[700],
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.grey[50],
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: BorderSide(
+                                        color: Colors.grey[300]!, width: 1),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: const BorderSide(
+                                        color: Color(0xFF4FC3F7), width: 1.5),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: BorderSide(
+                                        color: Colors.grey[300]!, width: 1),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                ),
+                                items: plumbersList
+                                    .map((p) => DropdownMenuItem<String>(
+                                          value: p['id'] as String,
+                                          child: Text(
+                                            p['name'] as String,
+                                            style: GoogleFonts.poppins(
+                                                fontSize: 12),
+                                          ),
+                                        ))
+                                    .toList(),
+                                onChanged: (value) {
+                                  setDialogState(() {
+                                    selectedPlumberId = value;
+                                  });
+                                },
+                                validator: (value) {
+                                  if (value == null) {
+                                    return 'Required';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              TextFormField(
+                                readOnly: true,
+                                decoration: InputDecoration(
+                                  labelText: 'Monitoring Date *',
+                                  labelStyle: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    color: Colors.grey[700],
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.grey[50],
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: BorderSide(
+                                        color: Colors.grey[300]!, width: 1),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: const BorderSide(
+                                        color: Color(0xFF4FC3F7), width: 1.5),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: BorderSide(
+                                        color: Colors.grey[300]!, width: 1),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                  suffixIcon: const Icon(Icons.calendar_today),
+                                ),
+                                controller: _dateController,
+                                onTap: () async {
+                                  final date = await showDatePicker(
+                                    context: context,
+                                    initialDate: selectedDate ?? DateTime.now(),
+                                    firstDate: DateTime.now(),
+                                    lastDate: DateTime.now()
+                                        .add(const Duration(days: 365)),
+                                  );
+                                  if (date != null) {
+                                    setDialogState(() {
+                                      selectedDate = date;
+                                      _dateController.text =
+                                          DateFormat('yyyy-MM-dd').format(date);
+                                    });
+                                  }
+                                },
+                                validator: (value) {
+                                  if (selectedDate == null ||
+                                      value?.isEmpty == true) {
+                                    return 'Required';
+                                  }
+                                  return null;
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                              TextFormField(
+                                controller: _descriptionController,
+                                decoration: InputDecoration(
+                                  labelText: 'Extra Description (Optional)',
+                                  labelStyle: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    color: Colors.grey[700],
+                                  ),
+                                  filled: true,
+                                  fillColor: Colors.grey[50],
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: BorderSide(
+                                        color: Colors.grey[300]!, width: 1),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: const BorderSide(
+                                        color: Color(0xFF4FC3F7), width: 1.5),
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: BorderSide(
+                                        color: Colors.grey[300]!, width: 1),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                ),
+                                style: GoogleFonts.poppins(fontSize: 12),
+                                maxLines: 3,
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: () async {
+                                    if (_formKey.currentState!.validate() &&
+                                        selectedPlumberId != null &&
+                                        selectedDate != null) {
+                                      try {
+                                        final currentUserUid = FirebaseAuth
+                                                .instance.currentUser?.uid ??
+                                            'unknown';
+                                        final desc =
+                                            _descriptionController.text.trim();
+                                        final monitoringRef =
+                                            await FirebaseFirestore.instance
+                                                .collection(
+                                                    'weekly_monitorings')
+                                                .add({
+                                          'plumberId': selectedPlumberId!,
+                                          'monitoringDate':
+                                              Timestamp.fromDate(selectedDate!),
+                                          'description':
+                                              desc.isEmpty ? null : desc,
+                                          'assignedBy': currentUserUid,
+                                          'assignedAt':
+                                              FieldValue.serverTimestamp(),
+                                          'status': 'pending',
+                                        });
+                                        // Add notification to the plumber
+                                        final monitoringId = monitoringRef.id;
+                                        final selectedPlumber =
+                                            plumbersList.firstWhere((p) =>
+                                                p['id'] == selectedPlumberId);
+                                        // ignore: unused_local_variable
+                                        final plumberName =
+                                            selectedPlumber['name'] as String;
+                                        final dateStr = DateFormat('yyyy-MM-dd')
+                                            .format(selectedDate!);
+                                        final message =
+                                            'You have been assigned a weekly monitoring on $dateStr.${desc.isNotEmpty ? ' Description: $desc' : ''}';
+                                        await FirebaseFirestore.instance
+                                            .collection('notifications')
+                                            .add({
+                                          'userId': selectedPlumberId!,
+                                          'title': 'New Monitoring Assignment',
+                                          'message': message,
+                                          'timestamp':
+                                              FieldValue.serverTimestamp(),
+                                          'read': false,
+                                          'monitoringId': monitoringId,
+                                        });
+                                        _showSuccessOverlay(
+                                            'Weekly monitoring assigned successfully!');
+                                        Navigator.of(context).pop();
+                                      } catch (e) {
+                                        _showErrorOverlay(
+                                            'Error assigning monitoring: $e');
+                                      }
+                                    }
+                                  },
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFF4FC3F7),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 10),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    elevation: 2,
+                                    shadowColor: Colors.black12,
+                                  ),
+                                  child: Text(
+                                    'Assign Monitoring',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showMonitoringArchiveModal() {
+    final currentPageNotifier = ValueNotifier<int>(0);
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) => ValueListenableBuilder<int>(
+        valueListenable: currentPageNotifier,
+        builder: (context, currentPage, _) => FutureBuilder<QuerySnapshot>(
+          future: FirebaseFirestore.instance
+              .collection('weekly_monitorings')
+              .orderBy('assignedAt', descending: true)
+              .get(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Dialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                elevation: 2,
+                backgroundColor: Colors.transparent,
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Loading archive...',
+                          style: GoogleFonts.poppins(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
+            if (snapshot.hasError) {
+              print('=== FIRESTORE INDEX ERROR ===');
+              print(snapshot.error.toString());
+              print('===========================');
+              return Dialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                elevation: 2,
+                backgroundColor: Colors.white,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 500,
+                    maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Center(
+                      child: Text(
+                        'Error loading archive: ${snapshot.error}',
+                        style: GoogleFonts.poppins(color: Colors.red),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+            final allMonitorings = snapshot.data?.docs ?? [];
+            if (allMonitorings.isEmpty) {
+              return Dialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                elevation: 2,
+                backgroundColor: Colors.white,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: 500,
+                    maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: const Center(
+                      child: Text(
+                        'No monitoring assignments found.',
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+            const pageSize = 3;
+            final totalPages = (allMonitorings.length / pageSize).ceil();
+            final startIndex = currentPage * pageSize;
+            final endIndex =
+                (startIndex + pageSize).clamp(0, allMonitorings.length);
+            final pageMonitorings =
+                allMonitorings.sublist(startIndex, endIndex);
+
+            Widget buildPaginationButtons() {
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton(
+                    onPressed: currentPage > 0
+                        ? () {
+                            currentPageNotifier.value = currentPage - 1;
+                          }
+                        : null,
+                    child: Text(
+                      'Previous',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: currentPage > 0
+                            ? const Color(0xFF4FC3F7)
+                            : Colors.grey,
+                      ),
+                    ),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(totalPages, (i) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: TextButton(
+                          onPressed: () {
+                            currentPageNotifier.value = i;
+                          },
+                          style: TextButton.styleFrom(
+                            backgroundColor: currentPage == i
+                                ? const Color(0xFF4FC3F7)
+                                : Colors.grey.shade200,
+                            foregroundColor: currentPage == i
+                                ? Colors.white
+                                : Colors.grey.shade800,
+                            minimumSize: const Size(32, 32),
+                            padding: const EdgeInsets.all(0),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                          child: Text(
+                            '${i + 1}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                  TextButton(
+                    onPressed: currentPage < totalPages - 1
+                        ? () {
+                            currentPageNotifier.value = currentPage + 1;
+                          }
+                        : null,
+                    child: Text(
+                      'Next',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: currentPage < totalPages - 1
+                            ? const Color(0xFF4FC3F7)
+                            : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 2,
+              backgroundColor: Colors.white,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: 500,
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Monitoring Archive',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close,
+                                color: Colors.grey, size: 18),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            Expanded(
+                              child: ListView.builder(
+                                itemCount: pageMonitorings.length,
+                                itemBuilder: (context, index) {
+                                  final monitoring = pageMonitorings[index]
+                                      .data() as Map<String, dynamic>;
+                                  // ignore: unused_local_variable
+                                  final monitoringId =
+                                      pageMonitorings[index].id;
+                                  final plumberId =
+                                      monitoring['plumberId'] as String;
+                                  final monitoringDate =
+                                      (monitoring['monitoringDate']
+                                              as Timestamp)
+                                          .toDate();
+                                  final description =
+                                      monitoring['description'] as String?;
+                                  final status =
+                                      monitoring['status'] as String? ??
+                                          'pending';
+                                  final isDone = status == 'done';
+                                  return FutureBuilder<DocumentSnapshot>(
+                                    future: FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(plumberId)
+                                        .get(),
+                                    builder: (context, userSnapshot) {
+                                      if (userSnapshot.connectionState ==
+                                          ConnectionState.waiting) {
+                                        return const ListTile(
+                                          leading: CircularProgressIndicator(
+                                              strokeWidth: 2),
+                                        );
+                                      }
+                                      final userData = userSnapshot.data?.data()
+                                          as Map<String, dynamic>?;
+                                      final plumberName =
+                                          userData?['fullName'] ??
+                                              'Unknown Plumber';
+                                      return Card(
+                                        margin: const EdgeInsets.symmetric(
+                                            vertical: 4),
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(12),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                plumberName,
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              Text(
+                                                'Date: ${DateFormat('yyyy-MM-dd').format(monitoringDate)}',
+                                                style: GoogleFonts.poppins(
+                                                    fontSize: 12,
+                                                    color: Colors.grey[600]),
+                                              ),
+                                              if (description != null &&
+                                                  description.isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  'Description: $description',
+                                                  style: GoogleFonts.poppins(
+                                                      fontSize: 12,
+                                                      color: Colors.grey[700]),
+                                                ),
+                                              ],
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                'Status: ${isDone ? 'Done' : 'Pending'}',
+                                                style: GoogleFonts.poppins(
+                                                  fontSize: 12,
+                                                  color: isDone
+                                                      ? Colors.green
+                                                      : Colors.orange,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              ),
+                            ),
+                            buildPaginationButtons(),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   void _showAddPlumberModal() {
     final _formKey = GlobalKey<FormState>();
     final _firstNameController = TextEditingController();
@@ -227,7 +880,6 @@ class _UsersPageState extends State<UsersPage> {
     final _contactNumberController = TextEditingController();
     final _passwordController = TextEditingController();
     final _confirmPasswordController = TextEditingController();
-
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -609,7 +1261,6 @@ class _UsersPageState extends State<UsersPage> {
     try {
       UserCredential userCredential = await FirebaseAuth.instance
           .createUserWithEmailAndPassword(email: email, password: password);
-
       await FirebaseFirestore.instance
           .collection('users')
           .doc(userCredential.user!.uid)
@@ -621,7 +1272,6 @@ class _UsersPageState extends State<UsersPage> {
         'role': 'Plumber',
         'createdAt': Timestamp.now(),
       });
-
       _showSuccessOverlay('Plumber registered successfully!');
       // Refresh total pages after adding a new user
       await _fetchTotalPages();
@@ -813,27 +1463,80 @@ class _UsersPageState extends State<UsersPage> {
                     _buildFilterButton('Resident'),
                   ],
                 ),
-                ElevatedButton.icon(
-                  onPressed: _showAddPlumberModal,
-                  icon: const Icon(Icons.add, color: Colors.white, size: 18),
-                  label: Text(
-                    'Add Plumber',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                Row(
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: _showAssignMonitoringModal,
+                      icon: const Icon(Icons.assignment,
+                          color: Colors.white, size: 18),
+                      label: Text(
+                        'Assign Weekly Monitoring',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4FC3F7),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        elevation: 2,
+                        shadowColor: Colors.black12,
+                      ),
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4FC3F7),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: _showMonitoringArchiveModal,
+                      icon: const Icon(Icons.archive,
+                          color: Colors.white, size: 18),
+                      label: Text(
+                        'Monitoring Archive',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        elevation: 2,
+                        shadowColor: Colors.black12,
+                      ),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 10),
-                    elevation: 2,
-                    shadowColor: Colors.black12,
-                  ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: _showAddPlumberModal,
+                      icon:
+                          const Icon(Icons.add, color: Colors.white, size: 18),
+                      label: Text(
+                        'Add Plumber',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4FC3F7),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        elevation: 2,
+                        shadowColor: Colors.black12,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -876,15 +1579,12 @@ class _UsersPageState extends State<UsersPage> {
                       ),
                     );
                   }
-
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
-
                   final users = snapshot.data?.docs ?? [];
                   print(
                       'Fetched users roles: ${users.map((doc) => doc['role']).toList()}');
-
                   if (users.isEmpty) {
                     return Center(
                       child: Text(
@@ -899,7 +1599,6 @@ class _UsersPageState extends State<UsersPage> {
                       ),
                     );
                   }
-
                   // Update lastDocuments list
                   if (users.isNotEmpty) {
                     if (_currentPage >= _lastDocuments.length) {
@@ -908,7 +1607,6 @@ class _UsersPageState extends State<UsersPage> {
                       _lastDocuments[_currentPage] = users.last;
                     }
                   }
-
                   return Column(
                     children: [
                       Expanded(
@@ -928,7 +1626,6 @@ class _UsersPageState extends State<UsersPage> {
                                 ? DateFormat.yMMMd()
                                     .format(createdAtRaw.toDate())
                                 : 'Unknown date';
-
                             return FadeInUp(
                               duration: const Duration(milliseconds: 300),
                               child: Card(

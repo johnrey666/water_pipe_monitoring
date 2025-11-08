@@ -306,6 +306,39 @@ class _ResidentCard extends StatefulWidget {
 
 class _ResidentCardState extends State<_ResidentCard> {
   bool _showPayments = false;
+  bool _hasBills = false;
+  bool _isCheckingBills = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkForExistingBills();
+  }
+
+  Future<void> _checkForExistingBills() async {
+    try {
+      final billSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.residentId)
+          .collection('bills')
+          .limit(1)
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _hasBills = billSnapshot.docs.isNotEmpty;
+          _isCheckingBills = false;
+        });
+      }
+    } catch (e) {
+      print('Error checking bills: $e');
+      if (mounted) {
+        setState(() {
+          _isCheckingBills = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -385,26 +418,44 @@ class _ResidentCardState extends State<_ResidentCard> {
                       ),
                       elevation: 2,
                     ),
-                    onPressed: () {
-                      showDialog(
-                        context: context,
-                        barrierColor: Colors.black54,
-                        builder: (context) => Dialog(
-                          backgroundColor: Colors.transparent,
-                          elevation: 0,
-                          insetPadding: const EdgeInsets.all(10),
-                          child: _BillReceiptForm(
-                            residentId: widget.residentId,
-                            fullName: widget.fullName,
-                            address: widget.address,
-                            contactNumber: widget.contactNumber,
+                    onPressed: _isCheckingBills
+                        ? null
+                        : () {
+                            showDialog(
+                              context: context,
+                              barrierColor: Colors.black54,
+                              builder: (context) => Dialog(
+                                backgroundColor: Colors.transparent,
+                                elevation: 0,
+                                insetPadding: const EdgeInsets.all(10),
+                                child: _BillReceiptForm(
+                                  residentId: widget.residentId,
+                                  fullName: widget.fullName,
+                                  address: widget.address,
+                                  contactNumber: widget.contactNumber,
+                                ),
+                              ),
+                            ).then((value) {
+                              widget.onBillCreated();
+                              _checkForExistingBills();
+                            });
+                          },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_hasBills && !_isCheckingBills) ...[
+                          const Icon(
+                            Icons.check_circle,
+                            size: 16,
+                            color: Colors.white,
                           ),
-                        ),
-                      ).then((value) {
-                        widget.onBillCreated();
-                      });
-                    },
-                    child: const Text('Create Bill'),
+                          const SizedBox(width: 6),
+                        ],
+                        Text(_isCheckingBills
+                            ? 'Loading...'
+                            : (_hasBills ? 'Update Bill' : 'Create Bill')),
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -639,8 +690,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
                     print('No billId provided');
                   }
                   final notificationData = {
-                    'type':
-                        'payment', // <-- THIS IS THE KEY FIX: Added 'type' for resident_home to recognize it
+                    'type': 'payment',
                     'residentId': widget.residentId,
                     'billId': billId ?? 'Unknown',
                     'status': status,

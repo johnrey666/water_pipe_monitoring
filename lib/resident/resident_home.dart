@@ -1,10 +1,18 @@
+// ignore_for_file: unused_import
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:intl/intl.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'auth/resident_login.dart';
 import 'report_problem_page.dart';
 import 'view_billing_page.dart';
@@ -27,11 +35,21 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   String? _residentId;
   int _unreadNotifCount = 0;
 
+  // Create page instances once and reuse them
+  late final ReportProblemPage _reportPage;
+  late final ViewBillingPage _billingPage;
+
+  // PageStorage bucket to preserve state
+  final PageStorageBucket _bucket = PageStorageBucket();
+
   @override
   void initState() {
     super.initState();
     _fetchResidentName();
     _fetchUnreadNotifCount();
+    // Initialize pages once
+    _reportPage = const ReportProblemPage();
+    _billingPage = const ViewBillingPage();
   }
 
   Future<void> _fetchResidentName() async {
@@ -263,9 +281,9 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   Widget _getPageContent() {
     switch (_selectedPage) {
       case ResidentPage.report:
-        return const ReportProblemPage();
+        return _reportPage;
       case ResidentPage.billing:
-        return const ViewBillingPage();
+        return _billingPage;
       case ResidentPage.home:
       default:
         return _buildDashboard();
@@ -273,9 +291,14 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   }
 
   void _onSelectPage(ResidentPage page) {
-    setState(() {
-      _selectedPage = page;
-    });
+    if (mounted) {
+      setState(() {
+        _selectedPage = page;
+      });
+      if (_notificationOverlay != null) {
+        _removeNotificationOverlay();
+      }
+    }
   }
 
   Future<Map<String, List<Map<String, dynamic>>>> _fetchNotifications() async {
@@ -287,14 +310,14 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           .where('residentId', isEqualTo: user.uid)
           .where('read', isEqualTo: false)
           .orderBy('createdAt', descending: true)
-          .limit(10)
+          .limit(30)
           .get();
       final readSnapshot = await FirebaseFirestore.instance
           .collection('notifications')
           .where('residentId', isEqualTo: user.uid)
           .where('read', isEqualTo: true)
           .orderBy('createdAt', descending: true)
-          .limit(10)
+          .limit(30)
           .get();
       final unreadNotifications = unreadSnapshot.docs.map((doc) {
         final data = doc.data();
@@ -308,6 +331,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           'billId': data['billId'],
           'processedDate': (data['processedDate'] as Timestamp?)?.toDate(),
           'createdAt': (data['createdAt'] as Timestamp?)?.toDate(),
+          'isRead': false,
         };
       }).toList();
       final readNotifications = readSnapshot.docs.map((doc) {
@@ -322,6 +346,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           'billId': data['billId'],
           'processedDate': (data['processedDate'] as Timestamp?)?.toDate(),
           'createdAt': (data['createdAt'] as Timestamp?)?.toDate(),
+          'isRead': true,
         };
       }).toList();
       return {'unread': unreadNotifications, 'read': readNotifications};
@@ -368,12 +393,10 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           .where('month', isEqualTo: monthNum)
           .limit(1)
           .get();
-
       if (snapshot.docs.isNotEmpty) {
         final data = snapshot.docs.first.data();
         final periodStart = data['periodStart'] as Timestamp?;
         final cubicMeterUsed = data['cubicMeterUsed']?.toDouble() ?? 0.0;
-
         // Fetch payment for amount
         final paymentSnapshot = await FirebaseFirestore.instance
             .collection('payments')
@@ -382,18 +405,15 @@ class _ResidentHomePageState extends State<ResidentHomePage>
             .where('status', isEqualTo: 'approved')
             .limit(1)
             .get();
-
         if (paymentSnapshot.docs.isNotEmpty) {
           final paymentData = paymentSnapshot.docs.first.data();
           final amount = paymentData['billAmount']?.toDouble() ?? 0.0;
-
           // Fetch user data for name, address, etc.
           final userSnapshot = await FirebaseFirestore.instance
               .collection('users')
               .doc(_residentId)
               .get();
           final userData = userSnapshot.data() ?? {};
-
           // Fetch current reading from meter_readings
           final meterSnapshot = await FirebaseFirestore.instance
               .collection('users')
@@ -410,7 +430,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           final processedDate =
               (paymentData['processedDate'] as Timestamp?)?.toDate() ??
                   DateTime.now();
-
           return {
             'fullName': userData['fullName'] ?? 'N/A',
             'address': userData['address'] ?? 'N/A',
@@ -437,7 +456,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   void _showPaidBillModal(Map<String, dynamic> notification) async {
     if (notification['type'] != 'payment' ||
         notification['status'] != 'approved') return;
-
     final billDetails = await _fetchPaidBillDetails(
         notification['billId'], notification['month']);
     if (billDetails == null) {
@@ -446,7 +464,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       );
       return;
     }
-
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -463,7 +480,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     final position = renderBox.localToGlobal(Offset.zero);
     final size = renderBox.size;
     final screenSize = MediaQuery.of(context).size;
-
     _notificationOverlay = OverlayEntry(
       builder: (context) => Positioned(
         right: screenSize.width - position.dx - size.width,
@@ -474,66 +490,24 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               maxWidth: 300,
-              maxHeight: 400,
+              maxHeight: 500,
             ),
-            child: FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
-              future: _fetchNotifications(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(
-                    height: 100,
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Color(0xFF87CEEB)),
-                      ),
-                    ),
-                  );
-                }
-                final notifications =
-                    snapshot.data ?? {'unread': [], 'read': []};
-                if (notifications['unread']!.isEmpty &&
-                    notifications['read']!.isEmpty) {
-                  return const SizedBox(
-                    height: 50,
-                    child: Center(child: Text('No notifications')),
-                  );
-                }
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (notifications['unread']!.isNotEmpty) ...[
-                      const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Text(
-                          'Unread',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      ...notifications['unread']!
-                          .map((notif) => _buildNotificationItem(notif, false)),
-                    ],
-                    if (notifications['read']!.isNotEmpty) ...[
-                      const Divider(),
-                      const Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: Text(
-                          'Read',
-                          style: TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                      ),
-                      ...notifications['read']!
-                          .map((notif) => _buildNotificationItem(notif, true)),
-                    ],
-                  ],
-                );
+            child: NotificationDropdown(
+              onMarkAsRead: _markNotificationAsRead,
+              onShowPaidBill: (notification) {
+                _removeNotificationOverlay();
+                _showPaidBillModal(notification);
               },
+              onReportTap: () {
+                _removeNotificationOverlay();
+                _onSelectPage(ResidentPage.report);
+              },
+              fetchNotifications: _fetchNotifications,
             ),
           ),
         ),
       ),
     );
-
     Overlay.of(context).insert(_notificationOverlay!);
   }
 
@@ -590,8 +564,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   }
 
   Widget _buildHomeContent(BuildContext context) {
-    // ignore: unused_local_variable
-    final screenWidth = MediaQuery.of(context).size.width;
     return WillPopScope(
       onWillPop: () async {
         if (_selectedPage != ResidentPage.home) {
@@ -645,7 +617,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                     top: 8,
                     child: Container(
                       padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: Colors.red,
                         shape: BoxShape.circle,
                       ),
@@ -771,17 +743,16 @@ class _ResidentHomePageState extends State<ResidentHomePage>
             ),
           ),
         ),
-        body: Stack(
-          children: [
-            IndexedStack(
-              index: _selectedPage.index,
-              children: [
-                _buildDashboard(),
-                const ReportProblemPage(),
-                const ViewBillingPage(),
-              ],
-            ),
-          ],
+        body: PageStorage(
+          bucket: _bucket,
+          child: IndexedStack(
+            index: _selectedPage.index,
+            children: [
+              _buildDashboard(),
+              _reportPage,
+              _billingPage,
+            ],
+          ),
         ),
       ),
     );
@@ -818,79 +789,10 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           ),
           selected: isSelected,
           onTap: () {
-            Navigator.pop(context);
-            _onSelectPage(page);
+            Navigator.of(context).pop(); // Close drawer
+            _onSelectPage(page); // Then switch page
           },
         ),
-      ),
-    );
-  }
-
-  Widget _buildNotificationItem(
-      Map<String, dynamic> notification, bool isRead) {
-    String text;
-    IconData icon;
-    Color iconColor;
-    if (notification['type'] == 'report_status') {
-      text = notification['message'] ?? 'Issue fixed';
-      icon = Icons.check_circle;
-      iconColor = isRead ? Colors.grey[400]! : Colors.green;
-    } else {
-      final status =
-          notification['status'] == 'approved' ? 'Successful' : 'Declined';
-      final month = notification['month'] ?? 'Unknown';
-      final amount = notification['amount']?.toStringAsFixed(2) ?? '0.00';
-      text = 'Payment of ₱$amount for $month is $status';
-      icon = notification['status'] == 'approved'
-          ? Icons.check_circle
-          : Icons.cancel;
-      iconColor = isRead
-          ? Colors.grey[400]!
-          : (notification['status'] == 'approved' ? Colors.green : Colors.red);
-    }
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
-      color: isRead ? Colors.white : Colors.grey[200],
-      elevation: 2,
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
-        leading: Icon(icon, color: iconColor, size: 20),
-        title: Text(
-          text,
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
-            color: isRead ? Colors.grey[600] : Colors.black87,
-          ),
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-        ),
-        subtitle: Text(
-          notification['createdAt'] != null
-              ? DateFormat.yMMMd().add_jm().format(notification['createdAt'])
-              : 'Unknown time',
-          style: GoogleFonts.poppins(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-        ),
-        onTap: () {
-          if (!isRead && notification['id'] != null) {
-            _markNotificationAsRead(notification['id']);
-          }
-          if (notification['type'] == 'payment' &&
-              notification['status'] == 'approved') {
-            _removeNotificationOverlay(); // Close dropdown immediately before opening modal
-            _showPaidBillModal(notification);
-          } else {
-            _removeNotificationOverlay();
-          }
-        },
       ),
     );
   }
@@ -1303,9 +1205,9 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                             },
                           ),
                         ),
-                        topTitles: AxisTitles(
+                        topTitles: const AxisTitles(
                             sideTitles: SideTitles(showTitles: false)),
-                        rightTitles: AxisTitles(
+                        rightTitles: const AxisTitles(
                             sideTitles: SideTitles(showTitles: false)),
                       ),
                       gridData: FlGridData(
@@ -1356,6 +1258,192 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   }
 }
 
+// Notification classes remain the same...
+class NotificationDropdown extends StatefulWidget {
+  final Function(String) onMarkAsRead;
+  final Function(Map<String, dynamic>) onShowPaidBill;
+  final VoidCallback? onReportTap;
+  final Future<Map<String, List<Map<String, dynamic>>>> Function()
+      fetchNotifications;
+
+  const NotificationDropdown({
+    super.key,
+    required this.onMarkAsRead,
+    required this.onShowPaidBill,
+    this.onReportTap,
+    required this.fetchNotifications,
+  });
+
+  @override
+  State<NotificationDropdown> createState() => _NotificationDropdownState();
+}
+
+class _NotificationDropdownState extends State<NotificationDropdown> {
+  int _page = 0;
+  static const int _itemsPerPage = 3;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
+      future: widget.fetchNotifications(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 100,
+            child: Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF87CEEB)),
+              ),
+            ),
+          );
+        }
+        final notificationsData = snapshot.data ?? {'unread': [], 'read': []};
+        final unread = notificationsData['unread']!;
+        final read = notificationsData['read']!;
+        final allNotifications = [...unread, ...read];
+        if (allNotifications.isEmpty) {
+          return const SizedBox(
+            height: 50,
+            child: Center(child: Text('No notifications')),
+          );
+        }
+
+        allNotifications.sort((a, b) =>
+            (b['createdAt'] as DateTime).compareTo(a['createdAt'] as DateTime));
+
+        final totalPages = (allNotifications.length / _itemsPerPage).ceil();
+        final currentItems = allNotifications
+            .skip(_page * _itemsPerPage)
+            .take(_itemsPerPage)
+            .toList();
+
+        return SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Text(
+                  'Notifications',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              ...currentItems.map((notif) =>
+                  _buildNotificationItem(context, notif, notif['isRead'])),
+              if (totalPages > 1)
+                _buildPaginationRow(
+                  currentPage: _page,
+                  totalPages: totalPages,
+                  onPrev: () => setState(
+                      () => _page = (_page - 1).clamp(0, totalPages - 1)),
+                  onNext: () => setState(
+                      () => _page = (_page + 1).clamp(0, totalPages - 1)),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildNotificationItem(
+      BuildContext context, Map<String, dynamic> notification, bool isRead) {
+    String text;
+    IconData icon;
+    Color iconColor;
+    int titleMaxLines = 1;
+    if (notification['type'] == 'report_status') {
+      text = notification['message'] ?? 'Issue fixed';
+      icon = Icons.check_circle;
+      iconColor = isRead ? Colors.grey[400]! : Colors.green;
+      titleMaxLines = 2;
+    } else {
+      final status =
+          notification['status'] == 'approved' ? 'Successful' : 'Declined';
+      final month = notification['month'] ?? 'Unknown';
+      final amount = notification['amount']?.toStringAsFixed(2) ?? '0.00';
+      text = 'Payment of ₱$amount for $month is $status';
+      icon = notification['status'] == 'approved'
+          ? Icons.check_circle
+          : Icons.cancel;
+      iconColor = isRead
+          ? Colors.grey[400]!
+          : (notification['status'] == 'approved' ? Colors.green : Colors.red);
+    }
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      color: isRead ? Colors.white : Colors.grey[200],
+      elevation: 2,
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(12),
+        leading: Icon(icon, color: iconColor, size: 20),
+        title: Text(
+          text,
+          style: GoogleFonts.poppins(
+            fontSize: 14,
+            fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
+            color: isRead ? Colors.grey[600] : Colors.black87,
+          ),
+          maxLines: titleMaxLines,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          notification['createdAt'] != null
+              ? DateFormat.yMMMd().add_jm().format(notification['createdAt'])
+              : 'Unknown time',
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+          ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
+        onTap: () {
+          if (!isRead && notification['id'] != null) {
+            widget.onMarkAsRead(notification['id']);
+          }
+          if (notification['type'] == 'payment' &&
+              notification['status'] == 'approved') {
+            widget.onShowPaidBill(notification);
+          } else if (notification['type'] == 'report_status') {
+            widget.onReportTap?.call();
+          } else {
+            Navigator.of(context).pop();
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildPaginationRow({
+    required int currentPage,
+    required int totalPages,
+    required VoidCallback onPrev,
+    required VoidCallback onNext,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          TextButton(
+            onPressed: currentPage > 0 ? onPrev : null,
+            child: const Text('Previous'),
+          ),
+          Text('${currentPage + 1} of $totalPages'),
+          TextButton(
+            onPressed: currentPage < totalPages - 1 ? onNext : null,
+            child: const Text('Next'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PaidBillDialog extends StatefulWidget {
   final Map<String, dynamic> billDetails;
 
@@ -1367,6 +1455,49 @@ class _PaidBillDialog extends StatefulWidget {
 
 class _PaidBillDialogState extends State<_PaidBillDialog> {
   bool _showRates = false;
+  final GlobalKey _boundaryKey = GlobalKey();
+
+  Future<void> _downloadReceipt() async {
+    try {
+      final RenderRepaintBoundary boundary = _boundaryKey.currentContext!
+          .findRenderObject() as RenderRepaintBoundary;
+      final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
+      final ByteData? byteData =
+          await image.toByteData(format: ui.ImageByteFormat.png);
+      final Uint8List pngBytes = byteData!.buffer.asUint8List();
+
+      final result = await ImageGallerySaver.saveImage(
+        pngBytes,
+        quality: 100,
+        name: 'paid_receipt_${DateTime.now().millisecondsSinceEpoch}',
+      );
+
+      if (mounted) {
+        if (result['isSuccess']) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Receipt saved to gallery successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.of(context).pop();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to save receipt to gallery.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error downloading receipt: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1415,7 +1546,6 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // PAID stamp
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1436,218 +1566,259 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
               ),
             ),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: RepaintBoundary(
+                key: _boundaryKey,
+                child: Container(
+                  color: Colors.white,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Header
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Image.asset('assets/images/icon.png', height: 36),
-                            const SizedBox(width: 8),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            Row(
+                              children: [
+                                Image.asset('assets/images/icon.png',
+                                    height: 36),
+                                const SizedBox(width: 8),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'San Jose Water Services',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF4A90E2),
+                                      ),
+                                    ),
+                                    Text(
+                                      purok,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Colors.green,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'WATER BILL STATEMENT',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF4A90E2),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        _dashedDivider(),
+                        _receiptRow('Name', fullName),
+                        _receiptRow('Address', address),
+                        _receiptRow('Contact', contactNumber),
+                        _receiptRow('Meter No.', meterNumber),
+                        _receiptRow(
+                            'Billing Period Start', formattedPeriodStart),
+                        _receiptRow('Issue Date', formattedProcessedDate),
+                        _dashedDivider(),
+                        _receiptRow('Previous Reading',
+                            '${previousReading.toStringAsFixed(2)} m³'),
+                        _receiptRow('Current Reading',
+                            '${currentReading.toStringAsFixed(2)} m³'),
+                        _receiptRow('Cubic Meter Used',
+                            '${cubicMeterUsed.toStringAsFixed(2)} m³'),
+                        _dashedDivider(),
+                        _receiptRow(
+                            'Amount Paid', '₱${amount.toStringAsFixed(2)}',
+                            valueColor: Colors.green,
+                            isBold: true,
+                            fontSize: 13),
+                        const SizedBox(height: 12),
+                        // Rate Information
+                        GestureDetector(
+                          onTap: () => setState(() => _showRates = !_showRates),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 8, horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text(
-                                  'San Jose Water Services',
+                                  'Rate Information',
                                   style: TextStyle(
-                                    fontSize: 14,
+                                    fontSize: 12,
                                     fontWeight: FontWeight.bold,
                                     color: Color(0xFF4A90E2),
                                   ),
                                 ),
-                                Text(
-                                  purok,
-                                  style: const TextStyle(
-                                    fontSize: 10,
-                                    color: Colors.green,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                Icon(
+                                  _showRates
+                                      ? Icons.expand_less
+                                      : Icons.expand_more,
+                                  size: 16,
+                                  color: const Color(0xFF4A90E2),
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'WATER BILL STATEMENT',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF4A90E2),
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _dashedDivider(),
-                    _receiptRow('Name', fullName),
-                    _receiptRow('Address', address),
-                    _receiptRow('Contact', contactNumber),
-                    _receiptRow('Meter No.', meterNumber),
-                    _receiptRow('Billing Period Start', formattedPeriodStart),
-                    _receiptRow('Issue Date', formattedProcessedDate),
-                    _dashedDivider(),
-                    _receiptRow('Previous Reading',
-                        '${previousReading.toStringAsFixed(2)} m³'),
-                    _receiptRow('Current Reading',
-                        '${currentReading.toStringAsFixed(2)} m³'),
-                    _receiptRow('Cubic Meter Used',
-                        '${cubicMeterUsed.toStringAsFixed(2)} m³'),
-                    _dashedDivider(),
-                    _receiptRow('Amount Paid', '₱${amount.toStringAsFixed(2)}',
-                        valueColor: Colors.green, isBold: true, fontSize: 13),
-                    const SizedBox(height: 12),
-                    // Rate Information
-                    GestureDetector(
-                      onTap: () => setState(() => _showRates = !_showRates),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 8, horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Rate Information',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF4A90E2),
-                              ),
-                            ),
-                            Icon(
-                              _showRates
-                                  ? Icons.expand_less
-                                  : Icons.expand_more,
-                              size: 16,
-                              color: const Color(0xFF4A90E2),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    AnimatedCrossFade(
-                      firstChild: const SizedBox.shrink(),
-                      secondChild: Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(8),
-                          border:
-                              Border.all(color: Colors.grey[200]!, width: 1),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black12.withOpacity(0.05),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _rateRow('Residential',
-                                'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
-                            const SizedBox(height: 6),
-                            _rateRow('Commercial',
-                                'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
-                            const SizedBox(height: 6),
-                            _rateRow('Non Residence',
-                                'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
-                            const SizedBox(height: 6),
-                            _rateRow('Industrial',
-                                'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
-                          ],
-                        ),
-                      ),
-                      crossFadeState: _showRates
-                          ? CrossFadeState.showSecond
-                          : CrossFadeState.showFirst,
-                      duration: const Duration(milliseconds: 400),
-                      sizeCurve: Curves.easeInOut,
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Thank you for your timely payment!',
-                      style: TextStyle(
-                        fontSize: 9,
-                        color: Colors.green,
-                        fontStyle: FontStyle.italic,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    // Payment Status
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                        border:
-                            Border.all(color: Colors.green.withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.check_circle,
-                            color: Colors.green,
-                            size: 18,
                           ),
-                          const SizedBox(width: 8),
-                          Expanded(
+                        ),
+                        AnimatedCrossFade(
+                          firstChild: const SizedBox.shrink(),
+                          secondChild: Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: Colors.grey[200]!, width: 1),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black12.withOpacity(0.05),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text(
-                                  'Payment Approved',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.green,
-                                  ),
-                                ),
-                                const Text(
-                                  'Your payment has been confirmed.',
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    color: Colors.grey,
-                                  ),
-                                ),
+                                _rateRow('Residential',
+                                    'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
+                                const SizedBox(height: 6),
+                                _rateRow('Commercial',
+                                    'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
+                                const SizedBox(height: 6),
+                                _rateRow('Non Residence',
+                                    'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
+                                const SizedBox(height: 6),
+                                _rateRow('Industrial',
+                                    'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
                               ],
                             ),
                           ),
-                        ],
-                      ),
+                          crossFadeState: _showRates
+                              ? CrossFadeState.showSecond
+                              : CrossFadeState.showFirst,
+                          duration: const Duration(milliseconds: 400),
+                          sizeCurve: Curves.easeInOut,
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Thank you for your timely payment!',
+                          style: TextStyle(
+                            fontSize: 9,
+                            color: Colors.green,
+                            fontStyle: FontStyle.italic,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        // Payment Status
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.green.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: Colors.green.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.check_circle,
+                                color: Colors.green,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Payment Approved',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.green,
+                                      ),
+                                    ),
+                                    const Text(
+                                      'Your payment has been confirmed.',
+                                      style: TextStyle(
+                                        fontSize: 9,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
-            // Close button
+            // Action buttons
             Padding(
               padding: const EdgeInsets.all(16.0),
-              child: Center(
-                child: ElevatedButton.icon(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.check_circle, color: Colors.white),
-                  label: const Text('Close',
-                      style: TextStyle(color: Colors.white)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _downloadReceipt,
+                      icon: const Icon(Icons.download, color: Colors.white),
+                      label: const Text(
+                        'Download Receipt',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade700,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.check_circle, color: Colors.white),
+                      label: const Text(
+                        'Close',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
