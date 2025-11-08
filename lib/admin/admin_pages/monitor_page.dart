@@ -181,7 +181,7 @@ class _MonitorPageState extends State<MonitorPage> {
     bool isButtonDisabled = data['assignedPlumber'] != null;
     List<Map<String, dynamic>> plumbers = await _fetchPlumbers();
 
-    void _assignPlumber() async {
+    Future<void> _assignPlumber(StateSetter setDialogState) async {
       if (selectedPlumberUid == null) {
         _showErrorOverlay('Please select a plumber.');
         return;
@@ -202,13 +202,29 @@ class _MonitorPageState extends State<MonitorPage> {
           'monitoringDate': Timestamp.fromDate(selectedDate!),
           'status': 'Monitoring',
         });
+
+        // Add notification for the assigned plumber
+        print(
+            'Adding notification for plumber: $selectedPlumberUid, report: $reportId');
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'userId': selectedPlumberUid,
+          'reportId': reportId,
+          'type': 'assignment',
+          'title': 'New Assignment',
+          'message':
+              'You have been assigned to monitor the report: ${data['issueDescription'] ?? 'No description'} by ${data['fullName'] ?? 'Unknown'}',
+          'timestamp': Timestamp.now(),
+          'read': false,
+        });
+        print('Notification added successfully');
+
         _showErrorOverlay('Plumber assigned successfully.');
-        setState(() {
+        setDialogState(() {
           isButtonDisabled = true;
         });
         Navigator.of(context).pop();
       } catch (e) {
-        print('Error assigning plumber: $e');
+        print('Error assigning plumber or adding notification: $e');
         _showErrorOverlay('Failed to assign plumber: $e');
       }
     }
@@ -560,8 +576,9 @@ class _MonitorPageState extends State<MonitorPage> {
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton(
-                              onPressed:
-                                  isButtonDisabled ? null : _assignPlumber,
+                              onPressed: isButtonDisabled
+                                  ? null
+                                  : () => _assignPlumber(setDialogState),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: isButtonDisabled
                                     ? Colors.grey[400]
@@ -682,13 +699,13 @@ class _MonitorPageState extends State<MonitorPage> {
       Navigator.pushReplacementNamed(context, '/login');
       return;
     }
-    
+
     // Only show modal once when navigating with a reportId
-    if (widget.reportId != null && 
-        widget.reportId!.isNotEmpty && 
+    if (widget.reportId != null &&
+        widget.reportId!.isNotEmpty &&
         !_hasShownInitialModal) {
       _hasShownInitialModal = true;
-      
+
       // Use Future.delayed to ensure the widget tree is built
       Future.delayed(Duration.zero, () {
         FirebaseFirestore.instance
@@ -700,7 +717,7 @@ class _MonitorPageState extends State<MonitorPage> {
             final data = doc.data() as Map<String, dynamic>;
             // ignore: unused_local_variable
             final isPublic = data['isPublic'] ?? false;
-            
+
             // For direct report view, always show just this report
             setState(() {
               _userReports = [
@@ -711,7 +728,7 @@ class _MonitorPageState extends State<MonitorPage> {
               ];
               _currentReportIndex = 0;
             });
-            
+
             _showReportModal(context, _userReports[0], doc.id);
           } else {
             _showErrorOverlay('Report not found.');

@@ -365,7 +365,7 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
       }
 
       // Add report with timeout
-      await FirebaseFirestore.instance
+      final reportRef = await FirebaseFirestore.instance
           .collection('reports')
           .add(reportData)
           .timeout(
@@ -375,6 +375,27 @@ class _ReportProblemPageState extends State<ReportProblemPage> {
               'Report submission timed out. Please try again.');
         },
       );
+      final reportId = reportRef.id;
+
+      // If public report, notify all plumbers
+      if (_isPublicReport) {
+        final plumbersSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .where('role', isEqualTo: 'Plumber')
+            .get();
+        for (var plumberDoc in plumbersSnapshot.docs) {
+          await FirebaseFirestore.instance.collection('notifications').add({
+            'userId': plumberDoc.id,
+            'reportId': reportId,
+            'type': 'public_report',
+            'title': 'New Public Report',
+            'message':
+                'Resident ${userInfo['fullName']} reported: ${_issueController.text.trim()} at ${reportData['placeName']}',
+            'timestamp': Timestamp.now(),
+            'read': false,
+          });
+        }
+      }
 
       // Log the report submission (non-blocking)
       FirebaseFirestore.instance.collection('logs').add({
@@ -1321,3 +1342,4 @@ class TimeoutException implements Exception {
   @override
   String toString() => message;
 }
+  

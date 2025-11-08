@@ -146,6 +146,7 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                 ['Fixed'],
                 _fixedPage,
                 (page) => setState(() => _fixedPage = page),
+                includePublicFixed: true,
               ),
             ],
           ),
@@ -156,20 +157,27 @@ class _ViewReportsPageState extends State<ViewReportsPage>
 
   Widget _buildReportList(String userId, List<String>? statuses,
       int currentPage, Function(int) onPageChange,
-      {bool isPublic = false}) {
+      {bool isPublic = false, bool includePublicFixed = false}) {
     return StreamBuilder<QuerySnapshot>(
       stream: isPublic
           ? FirebaseFirestore.instance
               .collection('reports')
               .where('isPublic', isEqualTo: true)
+              .where('status', isNotEqualTo: 'Fixed')
               .orderBy('createdAt', descending: true)
               .snapshots()
-          : FirebaseFirestore.instance
-              .collection('reports')
-              .where('assignedPlumber', isEqualTo: userId)
-              .where('status', whereIn: statuses)
-              .orderBy('createdAt', descending: true)
-              .snapshots(),
+          : includePublicFixed
+              ? FirebaseFirestore.instance
+                  .collection('reports')
+                  .where('status', isEqualTo: 'Fixed')
+                  .orderBy('createdAt', descending: true)
+                  .snapshots()
+              : FirebaseFirestore.instance
+                  .collection('reports')
+                  .where('assignedPlumber', isEqualTo: userId)
+                  .where('status', whereIn: statuses ?? [])
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
           return Center(
@@ -192,7 +200,15 @@ class _ViewReportsPageState extends State<ViewReportsPage>
           );
         }
 
-        final reports = snapshot.data!.docs;
+        List<QueryDocumentSnapshot> reports = snapshot.data!.docs;
+        if (includePublicFixed) {
+          reports = reports.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return data['assignedPlumber'] == userId ||
+                data['isPublic'] == true;
+          }).toList();
+        }
+
         if (reports.isEmpty) {
           return Center(
             child: Text(

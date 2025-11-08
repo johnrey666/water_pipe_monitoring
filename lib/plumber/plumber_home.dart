@@ -10,6 +10,7 @@ import 'view_schedule_page.dart';
 import 'view_reports_page.dart';
 import 'geographic_mapping_page.dart';
 import 'auth/plumber_login.dart';
+import 'dart:async';
 
 enum PlumberPage { schedule, reports, mapping }
 
@@ -33,10 +34,16 @@ class _PlumberHomePageState extends State<PlumberHomePage>
   Set<String> _selectedStatuses = {'Monitoring', 'Unfixed Reports', 'Fixed'};
   CalendarFormat _calendarFormat = CalendarFormat.month;
 
+  // Notification state
+  List<Map<String, dynamic>> _notifications = [];
+  int _unreadCount = 0;
+  StreamSubscription<QuerySnapshot>? _notifSubscription;
+
   @override
   void initState() {
     super.initState();
     _fetchPlumberName();
+    _setupNotifications();
   }
 
   Future<void> _fetchPlumberName() async {
@@ -59,6 +66,119 @@ class _PlumberHomePageState extends State<PlumberHomePage>
     } catch (e) {
       print('Error fetching plumber name: $e');
     }
+  }
+
+  void _setupNotifications() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    _notifSubscription = FirebaseFirestore.instance
+        .collection('notifications')
+        .where('userId', isEqualTo: user.uid)
+        .orderBy('timestamp', descending: true)
+        .limit(20)
+        .snapshots()
+        .listen((snapshot) {
+      setState(() {
+        _notifications = snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          data['id'] = doc.id;
+          return data;
+        }).toList();
+        _unreadCount =
+            _notifications.where((n) => !(n['read'] ?? false)).length;
+      });
+    });
+  }
+
+  void _showNotifications(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.3,
+        maxChildSize: 0.9,
+        builder: (context, scrollController) => Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Text(
+                'Notifications',
+                style: GoogleFonts.poppins(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  itemCount: _notifications.length,
+                  itemBuilder: (context, index) {
+                    final notif = _notifications[index];
+                    final isRead = notif['read'] ?? false;
+                    return Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      color: isRead ? Colors.grey.shade50 : Colors.blue.shade50,
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.notifications,
+                          color: isRead ? Colors.grey : Colors.blue,
+                        ),
+                        title: Text(
+                          notif['title'] ?? '',
+                          style: GoogleFonts.poppins(
+                            fontWeight:
+                                isRead ? FontWeight.normal : FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(notif['message'] ?? ''),
+                            Text(
+                              _formatTimestamp(notif['timestamp']),
+                              style: GoogleFonts.poppins(
+                                  fontSize: 12, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                        onTap: () async {
+                          if (!isRead) {
+                            await FirebaseFirestore.instance
+                                .collection('notifications')
+                                .doc(notif['id'])
+                                .update({'read': true});
+                          }
+                          if (notif['reportId'] != null) {
+                            setState(() {
+                              _initialReportId = notif['reportId'];
+                              _selectedPage = PlumberPage.reports;
+                            });
+                            Navigator.pop(context);
+                          }
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatTimestamp(dynamic timestamp) {
+    if (timestamp is Timestamp) {
+      return DateFormat('MMM dd, yyyy HH:mm').format(timestamp.toDate());
+    }
+    return 'N/A';
   }
 
   void _onSelectPage(PlumberPage page) {
@@ -163,6 +283,40 @@ class _PlumberHomePageState extends State<PlumberHomePage>
               onPressed: () => Scaffold.of(context).openDrawer(),
             ),
           ),
+          actions: [
+            Stack(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_outlined),
+                  onPressed: () => _showNotifications(context),
+                ),
+                if (_unreadCount > 0)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        color: Colors.red,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 12,
+                        minHeight: 12,
+                      ),
+                      child: Text(
+                        _unreadCount.toString(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
         ),
         drawer: Drawer(
           backgroundColor: Colors.white,
@@ -1184,5 +1338,11 @@ class _PlumberHomePageState extends State<PlumberHomePage>
         },
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _notifSubscription?.cancel();
+    super.dispose();
   }
 }
