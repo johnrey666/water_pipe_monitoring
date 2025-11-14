@@ -21,6 +21,7 @@ enum ResidentPage { home, report, billing }
 
 class ResidentHomePage extends StatefulWidget {
   const ResidentHomePage({super.key});
+
   @override
   State<ResidentHomePage> createState() => _ResidentHomePageState();
 }
@@ -39,6 +40,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   bool _pagesInitialized = false;
   // PageStorage bucket to preserve state
   final PageStorageBucket _bucket = PageStorageBucket();
+
   @override
   void initState() {
     super.initState();
@@ -280,10 +282,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   void _onSelectPage(ResidentPage page) {
     if (!mounted) return;
-    if (_notificationOverlay != null) {
-      _removeNotificationOverlay();
-    }
-    // Use microtask to avoid rebuild cycles
+    _removeNotificationOverlay(); // Ensure overlay is removed first
+    // Use microtask to schedule the setState after current frame
     Future.microtask(() {
       if (mounted) {
         setState(() {
@@ -481,34 +481,49 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         final screenSize = MediaQuery.of(context).size;
         _notificationOverlay = OverlayEntry(
           builder: (context) {
-            return Positioned(
-              right: screenSize.width - position.dx - size.width,
-              top: position.dy + size.height + 8,
-              child: Material(
-                elevation: 8,
-                borderRadius: BorderRadius.circular(8),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(
-                    maxWidth: 300,
-                    maxHeight: 500,
-                  ),
-                  child: NotificationDropdown(
-                    onMarkAsRead: _markNotificationAsRead,
-                    onShowPaidBill: (notification) {
-                      _removeNotificationOverlay();
-                      _showPaidBillModal(notification);
-                    },
-                    onReportTap: () {
-                      _removeNotificationOverlay();
-                      Future.microtask(() {
-                        _onSelectPage(ResidentPage.report);
-                      });
-                    },
-                    fetchNotifications: _fetchNotifications,
-                    onClose: _removeNotificationOverlay,
+            return Stack(
+              children: [
+                // FULLSCREEN TRANSPARENT TAP-BARRIER
+                GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: _removeNotificationOverlay,
+                  child: Container(
+                    width: screenSize.width,
+                    height: screenSize.height,
+                    color: Colors.transparent,
                   ),
                 ),
-              ),
+                // Notification dropdown
+                Positioned(
+                  right: screenSize.width - position.dx - size.width,
+                  top: position.dy + size.height + 8,
+                  child: Material(
+                    elevation: 8,
+                    borderRadius: BorderRadius.circular(8),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(
+                        maxWidth: 300,
+                        maxHeight: 500,
+                      ),
+                      child: NotificationDropdown(
+                        onMarkAsRead: _markNotificationAsRead,
+                        onShowPaidBill: (notification) {
+                          _removeNotificationOverlay();
+                          _showPaidBillModal(notification);
+                        },
+                        onReportTap: () {
+                          _removeNotificationOverlay();
+                          Future.microtask(() {
+                            _onSelectPage(ResidentPage.report);
+                          });
+                        },
+                        fetchNotifications: _fetchNotifications,
+                        onClose: _removeNotificationOverlay,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             );
           },
         );
@@ -523,8 +538,10 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   }
 
   void _removeNotificationOverlay() {
-    _notificationOverlay?.remove();
-    _notificationOverlay = null;
+    if (_notificationOverlay != null) {
+      _notificationOverlay!.remove();
+      _notificationOverlay = null;
+    }
   }
 
   @override
@@ -1313,6 +1330,7 @@ class NotificationDropdown extends StatefulWidget {
     required this.fetchNotifications,
     required this.onClose,
   });
+
   @override
   State<NotificationDropdown> createState() => _NotificationDropdownState();
 }
@@ -1321,8 +1339,10 @@ class _NotificationDropdownState extends State<NotificationDropdown>
     with AutomaticKeepAliveClientMixin {
   int _page = 0;
   static const int _itemsPerPage = 3;
+
   @override
   bool get wantKeepAlive => true;
+
   @override
   Widget build(BuildContext context) {
     super.build(context); // Required by AutomaticKeepAliveClientMixin
@@ -1360,24 +1380,12 @@ class _NotificationDropdownState extends State<NotificationDropdown>
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: const Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: Text(
-                        'Notifications',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, size: 20),
-                    onPressed: widget.onClose,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ],
+              const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: Text(
+                  'Notifications',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
               ...currentItems.map((notif) =>
                   _buildNotificationItem(context, notif, notif['isRead'])),
@@ -1462,7 +1470,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
           } else if (notification['type'] == 'report_status') {
             widget.onReportTap?.call();
           } else {
-            widget.onClose();
+            Navigator.of(context).pop();
           }
         },
       ),
@@ -1498,6 +1506,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
 class _PaidBillDialog extends StatefulWidget {
   final Map<String, dynamic> billDetails;
   const _PaidBillDialog({required this.billDetails});
+
   @override
   State<_PaidBillDialog> createState() => _PaidBillDialogState();
 }
@@ -1505,6 +1514,7 @@ class _PaidBillDialog extends StatefulWidget {
 class _PaidBillDialogState extends State<_PaidBillDialog> {
   bool _showRates = false;
   final GlobalKey _boundaryKey = GlobalKey();
+
   Future<void> _downloadReceipt() async {
     try {
       final RenderRepaintBoundary boundary = _boundaryKey.currentContext!
@@ -1886,6 +1896,7 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
           ),
         ),
       );
+
   Widget _receiptRow(String label, String value,
       {Color? valueColor, bool isBold = false, double fontSize = 11}) {
     return Padding(
