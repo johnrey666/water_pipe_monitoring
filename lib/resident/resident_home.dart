@@ -21,7 +21,6 @@ enum ResidentPage { home, report, billing }
 
 class ResidentHomePage extends StatefulWidget {
   const ResidentHomePage({super.key});
-
   @override
   State<ResidentHomePage> createState() => _ResidentHomePageState();
 }
@@ -34,22 +33,23 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   String _residentName = 'Resident';
   String? _residentId;
   int _unreadNotifCount = 0;
-
   // Create page instances once and reuse them
   late final ReportProblemPage _reportPage;
   late final ViewBillingPage _billingPage;
-
+  bool _pagesInitialized = false;
   // PageStorage bucket to preserve state
   final PageStorageBucket _bucket = PageStorageBucket();
-
   @override
   void initState() {
     super.initState();
     _fetchResidentName();
     _fetchUnreadNotifCount();
     // Initialize pages once
-    _reportPage = const ReportProblemPage();
-    _billingPage = const ViewBillingPage();
+    if (!_pagesInitialized) {
+      _reportPage = const ReportProblemPage();
+      _billingPage = const ViewBillingPage();
+      _pagesInitialized = true;
+    }
   }
 
   Future<void> _fetchResidentName() async {
@@ -278,27 +278,19 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     }
   }
 
-  Widget _getPageContent() {
-    switch (_selectedPage) {
-      case ResidentPage.report:
-        return _reportPage;
-      case ResidentPage.billing:
-        return _billingPage;
-      case ResidentPage.home:
-      default:
-        return _buildDashboard();
-    }
-  }
-
   void _onSelectPage(ResidentPage page) {
-    if (mounted) {
-      setState(() {
-        _selectedPage = page;
-      });
-      if (_notificationOverlay != null) {
-        _removeNotificationOverlay();
-      }
+    if (!mounted) return;
+    if (_notificationOverlay != null) {
+      _removeNotificationOverlay();
     }
+    // Use microtask to avoid rebuild cycles
+    Future.microtask(() {
+      if (mounted) {
+        setState(() {
+          _selectedPage = page;
+        });
+      }
+    });
   }
 
   Future<Map<String, List<Map<String, dynamic>>>> _fetchNotifications() async {
@@ -475,40 +467,59 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   }
 
   void _showNotificationOverlay() {
-    final RenderBox renderBox =
-        _notificationButtonKey.currentContext!.findRenderObject() as RenderBox;
-    final position = renderBox.localToGlobal(Offset.zero);
-    final size = renderBox.size;
-    final screenSize = MediaQuery.of(context).size;
-    _notificationOverlay = OverlayEntry(
-      builder: (context) => Positioned(
-        right: screenSize.width - position.dx - size.width,
-        top: position.dy + size.height + 8,
-        child: Material(
-          elevation: 8,
-          borderRadius: BorderRadius.circular(8),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 300,
-              maxHeight: 500,
-            ),
-            child: NotificationDropdown(
-              onMarkAsRead: _markNotificationAsRead,
-              onShowPaidBill: (notification) {
-                _removeNotificationOverlay();
-                _showPaidBillModal(notification);
-              },
-              onReportTap: () {
-                _removeNotificationOverlay();
-                _onSelectPage(ResidentPage.report);
-              },
-              fetchNotifications: _fetchNotifications,
-            ),
-          ),
-        ),
-      ),
-    );
-    Overlay.of(context).insert(_notificationOverlay!);
+    if (_notificationOverlay != null) {
+      _removeNotificationOverlay();
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _notificationButtonKey.currentContext == null) return;
+      try {
+        final RenderBox renderBox = _notificationButtonKey.currentContext!
+            .findRenderObject() as RenderBox;
+        final position = renderBox.localToGlobal(Offset.zero);
+        final size = renderBox.size;
+        final screenSize = MediaQuery.of(context).size;
+        _notificationOverlay = OverlayEntry(
+          builder: (context) {
+            return Positioned(
+              right: screenSize.width - position.dx - size.width,
+              top: position.dy + size.height + 8,
+              child: Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(8),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                    maxWidth: 300,
+                    maxHeight: 500,
+                  ),
+                  child: NotificationDropdown(
+                    onMarkAsRead: _markNotificationAsRead,
+                    onShowPaidBill: (notification) {
+                      _removeNotificationOverlay();
+                      _showPaidBillModal(notification);
+                    },
+                    onReportTap: () {
+                      _removeNotificationOverlay();
+                      Future.microtask(() {
+                        _onSelectPage(ResidentPage.report);
+                      });
+                    },
+                    fetchNotifications: _fetchNotifications,
+                    onClose: _removeNotificationOverlay,
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+        if (mounted) {
+          Overlay.of(context).insert(_notificationOverlay!);
+        }
+      } catch (e) {
+        print('Error showing notification overlay: $e');
+        _removeNotificationOverlay();
+      }
+    });
   }
 
   void _removeNotificationOverlay() {
@@ -604,8 +615,19 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                     size: 26,
                   ),
                   onPressed: () {
+                    if (!mounted) return;
                     if (_notificationOverlay == null) {
-                      _showNotificationOverlay();
+                      // Use Future.delayed with a minimal delay to ensure UI is ready
+                      Future.delayed(const Duration(milliseconds: 50), () {
+                        if (mounted && _notificationOverlay == null) {
+                          // Add it to the next frame to ensure build is complete
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted && _notificationOverlay == null) {
+                              _showNotificationOverlay();
+                            }
+                          });
+                        }
+                      });
                     } else {
                       _removeNotificationOverlay();
                     }
@@ -745,12 +767,29 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         ),
         body: PageStorage(
           bucket: _bucket,
-          child: IndexedStack(
-            index: _selectedPage.index,
+          child: Stack(
             children: [
-              _buildDashboard(),
-              _reportPage,
-              _billingPage,
+              Offstage(
+                offstage: _selectedPage != ResidentPage.home,
+                child: TickerMode(
+                  enabled: _selectedPage == ResidentPage.home,
+                  child: _buildDashboard(),
+                ),
+              ),
+              Offstage(
+                offstage: _selectedPage != ResidentPage.report,
+                child: TickerMode(
+                  enabled: _selectedPage == ResidentPage.report,
+                  child: _reportPage,
+                ),
+              ),
+              Offstage(
+                offstage: _selectedPage != ResidentPage.billing,
+                child: TickerMode(
+                  enabled: _selectedPage == ResidentPage.billing,
+                  child: _billingPage,
+                ),
+              ),
             ],
           ),
         ),
@@ -1265,25 +1304,28 @@ class NotificationDropdown extends StatefulWidget {
   final VoidCallback? onReportTap;
   final Future<Map<String, List<Map<String, dynamic>>>> Function()
       fetchNotifications;
-
+  final VoidCallback onClose;
   const NotificationDropdown({
     super.key,
     required this.onMarkAsRead,
     required this.onShowPaidBill,
     this.onReportTap,
     required this.fetchNotifications,
+    required this.onClose,
   });
-
   @override
   State<NotificationDropdown> createState() => _NotificationDropdownState();
 }
 
-class _NotificationDropdownState extends State<NotificationDropdown> {
+class _NotificationDropdownState extends State<NotificationDropdown>
+    with AutomaticKeepAliveClientMixin {
   int _page = 0;
   static const int _itemsPerPage = 3;
-
+  @override
+  bool get wantKeepAlive => true;
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required by AutomaticKeepAliveClientMixin
     return FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
       future: widget.fetchNotifications(),
       builder: (context, snapshot) {
@@ -1307,26 +1349,35 @@ class _NotificationDropdownState extends State<NotificationDropdown> {
             child: Center(child: Text('No notifications')),
           );
         }
-
         allNotifications.sort((a, b) =>
             (b['createdAt'] as DateTime).compareTo(a['createdAt'] as DateTime));
-
         final totalPages = (allNotifications.length / _itemsPerPage).ceil();
         final currentItems = allNotifications
             .skip(_page * _itemsPerPage)
             .take(_itemsPerPage)
             .toList();
-
         return SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Text(
-                  'Notifications',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: const Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Text(
+                        'Notifications',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: widget.onClose,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
               ),
               ...currentItems.map((notif) =>
                   _buildNotificationItem(context, notif, notif['isRead'])),
@@ -1411,7 +1462,7 @@ class _NotificationDropdownState extends State<NotificationDropdown> {
           } else if (notification['type'] == 'report_status') {
             widget.onReportTap?.call();
           } else {
-            Navigator.of(context).pop();
+            widget.onClose();
           }
         },
       ),
@@ -1446,9 +1497,7 @@ class _NotificationDropdownState extends State<NotificationDropdown> {
 
 class _PaidBillDialog extends StatefulWidget {
   final Map<String, dynamic> billDetails;
-
   const _PaidBillDialog({required this.billDetails});
-
   @override
   State<_PaidBillDialog> createState() => _PaidBillDialogState();
 }
@@ -1456,7 +1505,6 @@ class _PaidBillDialog extends StatefulWidget {
 class _PaidBillDialogState extends State<_PaidBillDialog> {
   bool _showRates = false;
   final GlobalKey _boundaryKey = GlobalKey();
-
   Future<void> _downloadReceipt() async {
     try {
       final RenderRepaintBoundary boundary = _boundaryKey.currentContext!
@@ -1465,13 +1513,11 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
       final ByteData? byteData =
           await image.toByteData(format: ui.ImageByteFormat.png);
       final Uint8List pngBytes = byteData!.buffer.asUint8List();
-
       final result = await ImageGallerySaver.saveImage(
         pngBytes,
         quality: 100,
         name: 'paid_receipt_${DateTime.now().millisecondsSinceEpoch}',
       );
-
       if (mounted) {
         if (result['isSuccess']) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1521,7 +1567,6 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
     final formattedProcessedDate = processedDate != null
         ? DateFormat.yMMMd().format(processedDate)
         : DateFormat.yMMMd().format(DateTime.now());
-
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(16),
@@ -1841,7 +1886,6 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
           ),
         ),
       );
-
   Widget _receiptRow(String label, String value,
       {Color? valueColor, bool isBold = false, double fontSize = 11}) {
     return Padding(

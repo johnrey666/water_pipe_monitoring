@@ -29,6 +29,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
   @override
   bool get wantKeepAlive => true;
 
+  static bool _stateInitialized = false;
   final _formKey = GlobalKey<FormState>();
   final _picker = ImagePicker();
   XFile? _imageFile;
@@ -60,19 +61,37 @@ class _ReportProblemPageState extends State<ReportProblemPage>
   @override
   void initState() {
     super.initState();
-    if (!_isInitialized) {
+    if (!_stateInitialized) {
       _issueController.text = '';
       _additionalInfoController.text = '';
       _dateTimeController.text = '';
       _locationController.text = '';
       _imageNameController.text = '';
       _mapController = MapController();
+      _stateInitialized = true;
       _isInitialized = true;
+    }
+
+    // Add listeners to focus nodes
+    _issueFocusNode.addListener(_onFocusChange);
+    _additionalInfoFocusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (_issueFocusNode.hasFocus || _additionalInfoFocusNode.hasFocus) {
+      // Ensure the page doesn't rebuild when text fields get focus
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
     }
   }
 
   @override
   void dispose() {
+    // Remove focus listeners
+    _issueFocusNode.removeListener(_onFocusChange);
+    _additionalInfoFocusNode.removeListener(_onFocusChange);
+
     _issueController.dispose();
     _additionalInfoController.dispose();
     _dateTimeController.dispose();
