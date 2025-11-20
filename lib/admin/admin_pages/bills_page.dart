@@ -19,45 +19,66 @@ class _BillsPageState extends State<BillsPage> {
   int _totalPages = 1;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  Stream<QuerySnapshot> _getResidentsStream() {
+    Query query = FirebaseFirestore.instance
+        .collection('users')
+        .where('role', isEqualTo: 'Resident');
+
+    // Apply search filter BEFORE ordering (case-insensitive search)
+    if (_searchQuery.isNotEmpty) {
+      // Capitalize first letter for case-insensitive search
+      String searchQueryCapitalized = _searchQuery[0].toUpperCase() +
+          (_searchQuery.length > 1
+              ? _searchQuery.substring(1).toLowerCase()
+              : '');
+
+      query = query
+          .where('fullName', isGreaterThanOrEqualTo: searchQueryCapitalized)
+          .where('fullName',
+              isLessThanOrEqualTo: '$searchQueryCapitalized\uf8ff')
+          .orderBy('fullName')
+          .limit(_pageSize);
+    } else {
+      query = query.orderBy('fullName').limit(_pageSize);
+    }
+
+    // Apply pagination
+    if (_currentPage > 0 && _lastDocuments[_currentPage - 1] != null) {
+      query = query.startAfterDocument(_lastDocuments[_currentPage - 1]!);
+    }
+
+    return query.snapshots();
+  }
 
   Future<void> _fetchTotalPages() async {
     Query query = FirebaseFirestore.instance
         .collection('users')
         .where('role', isEqualTo: 'Resident');
+
     if (_searchQuery.isNotEmpty) {
+      // Capitalize first letter for case-insensitive search
+      String searchQueryCapitalized = _searchQuery[0].toUpperCase() +
+          (_searchQuery.length > 1
+              ? _searchQuery.substring(1).toLowerCase()
+              : '');
+
       query = query
-          .where('fullName', isGreaterThanOrEqualTo: _searchQuery)
-          .where('fullName', isLessThanOrEqualTo: '$_searchQuery\uf8ff');
+          .where('fullName', isGreaterThanOrEqualTo: searchQueryCapitalized)
+          .where('fullName',
+              isLessThanOrEqualTo: '$searchQueryCapitalized\uf8ff');
     }
+
     try {
       final snapshot = await query.get();
       final totalDocs = snapshot.docs.length;
       setState(() {
         _totalPages = (totalDocs / _pageSize).ceil();
-        while (_lastDocuments.length < _totalPages) {
-          _lastDocuments.add(null);
-        }
+        if (_totalPages == 0) _totalPages = 1;
+        _lastDocuments = List.generate(_totalPages, (index) => null);
       });
     } catch (e) {
       print('Error fetching total pages: $e');
     }
-  }
-
-  Stream<QuerySnapshot> _getResidentsStream() {
-    Query query = FirebaseFirestore.instance
-        .collection('users')
-        .where('role', isEqualTo: 'Resident')
-        .orderBy('fullName')
-        .limit(_pageSize);
-    if (_searchQuery.isNotEmpty) {
-      query = query
-          .where('fullName', isGreaterThanOrEqualTo: _searchQuery)
-          .where('fullName', isLessThanOrEqualTo: '$_searchQuery\uf8ff');
-    }
-    if (_currentPage > 0 && _lastDocuments[_currentPage - 1] != null) {
-      query = query.startAfterDocument(_lastDocuments[_currentPage - 1]!);
-    }
-    return query.snapshots();
   }
 
   Widget _buildPaginationButtons() {
