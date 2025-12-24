@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:water_pipe_monitoring/resident/auth/resident_login.dart';
 import 'package:water_pipe_monitoring/plumber/auth/plumber_login.dart';
+import 'package:water_pipe_monitoring/meter_reader/auth/meter_reader_login.dart';
 
 class LandingPage extends StatelessWidget {
   const LandingPage({super.key});
@@ -94,6 +95,25 @@ class LandingPage extends StatelessWidget {
                           context,
                           MaterialPageRoute(
                               builder: (_) => const ResidentLoginPage()),
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  // Meter Reader Button
+                  FadeInUp(
+                    duration: const Duration(milliseconds: 400),
+                    delay: const Duration(milliseconds: 300),
+                    child: RoleButton(
+                      title: 'Meter Reader',
+                      icon: Icons.speed_outlined,
+                      onTap: () {
+                        print(
+                            'Meter Reader button tapped, navigating to MeterReaderLoginPage');
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const MeterReaderLoginPage()),
                         );
                       },
                     ),
