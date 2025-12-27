@@ -30,6 +30,8 @@ class _UsersPageState extends State<UsersPage> {
         return const Color(0xFF2F8E2F);
       case 'resident':
         return const Color(0xFF0288D1);
+      case 'meter reader':
+        return const Color(0xFF9C27B0); // Purple color for Meter Reader
       default:
         return Colors.grey;
     }
@@ -44,7 +46,8 @@ class _UsersPageState extends State<UsersPage> {
   Future<void> _fetchTotalPages() async {
     Query query = FirebaseFirestore.instance.collection('users');
     if (_selectedRole == 'All') {
-      query = query.where('role', whereIn: ['Plumber', 'Resident']);
+      query =
+          query.where('role', whereIn: ['Plumber', 'Resident', 'Meter Reader']);
     } else {
       query = query.where('role', isEqualTo: _selectedRole);
     }
@@ -62,7 +65,8 @@ class _UsersPageState extends State<UsersPage> {
   Stream<QuerySnapshot> _getUsersStream() {
     Query query = FirebaseFirestore.instance.collection('users');
     if (_selectedRole == 'All') {
-      query = query.where('role', whereIn: ['Plumber', 'Resident']);
+      query =
+          query.where('role', whereIn: ['Plumber', 'Resident', 'Meter Reader']);
     } else {
       query = query.where('role', isEqualTo: _selectedRole);
     }
@@ -1210,13 +1214,14 @@ class _UsersPageState extends State<UsersPage> {
                       child: ElevatedButton(
                         onPressed: () async {
                           if (_formKey.currentState!.validate()) {
-                            await _registerPlumber(
+                            await _registerUser(
                               _firstNameController.text.trim(),
                               _lastNameController.text.trim(),
                               _emailController.text.trim(),
                               _addressController.text.trim(),
                               _contactNumberController.text.trim(),
                               _passwordController.text.trim(),
+                              'Plumber',
                             );
                             Navigator.of(context).pop();
                           }
@@ -1250,13 +1255,394 @@ class _UsersPageState extends State<UsersPage> {
     );
   }
 
-  Future<void> _registerPlumber(
+  void _showAddMeterReaderModal() {
+    final _formKey = GlobalKey<FormState>();
+    final _firstNameController = TextEditingController();
+    final _lastNameController = TextEditingController();
+    final _emailController = TextEditingController();
+    final _addressController = TextEditingController();
+    final _contactNumberController = TextEditingController();
+    final _passwordController = TextEditingController();
+    final _confirmPasswordController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        elevation: 2,
+        backgroundColor: Colors.white,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: 400,
+            maxHeight: MediaQuery.of(context).size.height * 0.8,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Form(
+              key: _formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Add Meter Reader',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close,
+                              color: Colors.grey, size: 18),
+                          onPressed: () => Navigator.of(context).pop(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            controller: _firstNameController,
+                            decoration: InputDecoration(
+                              labelText: 'First Name *',
+                              labelStyle: GoogleFonts.poppins(
+                                fontSize: 11,
+                                color: Colors.grey[700],
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey[50],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[300]!, width: 1),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: const BorderSide(
+                                    color: Color(0xFF4FC3F7), width: 1.5),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[300]!, width: 1),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
+                            ),
+                            style: GoogleFonts.poppins(fontSize: 12),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Required';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _lastNameController,
+                            decoration: InputDecoration(
+                              labelText: 'Last Name *',
+                              labelStyle: GoogleFonts.poppins(
+                                fontSize: 11,
+                                color: Colors.grey[700],
+                              ),
+                              filled: true,
+                              fillColor: Colors.grey[50],
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[300]!, width: 1),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: const BorderSide(
+                                    color: Color(0xFF4FC3F7), width: 1.5),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(6),
+                                borderSide: BorderSide(
+                                    color: Colors.grey[300]!, width: 1),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
+                            ),
+                            style: GoogleFonts.poppins(fontSize: 12),
+                            validator: (value) {
+                              if (value == null || value.trim().isEmpty) {
+                                return 'Required';
+                              }
+                              return null;
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _emailController,
+                      decoration: InputDecoration(
+                        labelText: 'Email *',
+                        labelStyle: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.grey[700],
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF4FC3F7), width: 1.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                      ),
+                      style: GoogleFonts.poppins(fontSize: 12),
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                            .hasMatch(value)) {
+                          return 'Invalid email';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _addressController,
+                      decoration: InputDecoration(
+                        labelText: 'Address *',
+                        labelStyle: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.grey[700],
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF4FC3F7), width: 1.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                      ),
+                      style: GoogleFonts.poppins(fontSize: 12),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _contactNumberController,
+                      decoration: InputDecoration(
+                        labelText: 'Contact Number *',
+                        labelStyle: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.grey[700],
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF4FC3F7), width: 1.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                      ),
+                      style: GoogleFonts.poppins(fontSize: 12),
+                      keyboardType: TextInputType.phone,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        if (!RegExp(r'^\+?\d{10,12}$').hasMatch(value)) {
+                          return 'Invalid number';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _passwordController,
+                      decoration: InputDecoration(
+                        labelText: 'Password *',
+                        labelStyle: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.grey[700],
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF4FC3F7), width: 1.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                      ),
+                      style: GoogleFonts.poppins(fontSize: 12),
+                      obscureText: true,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        if (value.length < 6) {
+                          return 'Min 6 chars';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _confirmPasswordController,
+                      decoration: InputDecoration(
+                        labelText: 'Confirm Password *',
+                        labelStyle: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: Colors.grey[700],
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey[50],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF4FC3F7), width: 1.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(6),
+                          borderSide:
+                              BorderSide(color: Colors.grey[300]!, width: 1),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                      ),
+                      style: GoogleFonts.poppins(fontSize: 12),
+                      obscureText: true,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Required';
+                        }
+                        if (value != _passwordController.text) {
+                          return 'No match';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          if (_formKey.currentState!.validate()) {
+                            await _registerUser(
+                              _firstNameController.text.trim(),
+                              _lastNameController.text.trim(),
+                              _emailController.text.trim(),
+                              _addressController.text.trim(),
+                              _contactNumberController.text.trim(),
+                              _passwordController.text.trim(),
+                              'Meter Reader',
+                            );
+                            Navigator.of(context).pop();
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF9C27B0),
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          elevation: 2,
+                          shadowColor: Colors.black12,
+                        ),
+                        child: Text(
+                          'Register Meter Reader',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _registerUser(
     String firstName,
     String lastName,
     String email,
     String address,
     String contactNumber,
     String password,
+    String role,
   ) async {
     try {
       UserCredential userCredential = await FirebaseAuth.instance
@@ -1269,10 +1655,10 @@ class _UsersPageState extends State<UsersPage> {
         'email': email,
         'address': address,
         'contactNumber': contactNumber,
-        'role': 'Plumber',
+        'role': role,
         'createdAt': Timestamp.now(),
       });
-      _showSuccessOverlay('Plumber registered successfully!');
+      _showSuccessOverlay('$role registered successfully!');
       // Refresh total pages after adding a new user
       await _fetchTotalPages();
     } catch (e) {
@@ -1289,10 +1675,10 @@ class _UsersPageState extends State<UsersPage> {
             errorMessage = 'The password is too weak.';
             break;
           default:
-            errorMessage = 'Error registering plumber: $e';
+            errorMessage = 'Error registering $role: $e';
         }
       } else {
-        errorMessage = 'Error registering plumber: $e';
+        errorMessage = 'Error registering $role: $e';
       }
       _showErrorOverlay(errorMessage);
     }
@@ -1328,6 +1714,29 @@ class _UsersPageState extends State<UsersPage> {
 
   Widget _buildFilterButton(String role) {
     final isSelected = _selectedRole == role;
+    Color backgroundColor;
+    Color foregroundColor;
+
+    if (isSelected) {
+      switch (role) {
+        case 'Plumber':
+          backgroundColor = const Color(0xFF2F8E2F);
+          break;
+        case 'Resident':
+          backgroundColor = const Color(0xFF0288D1);
+          break;
+        case 'Meter Reader':
+          backgroundColor = const Color(0xFF9C27B0);
+          break;
+        default:
+          backgroundColor = const Color(0xFF4FC3F7);
+      }
+      foregroundColor = Colors.white;
+    } else {
+      backgroundColor = Colors.grey.shade200;
+      foregroundColor = Colors.grey.shade800;
+    }
+
     return ElevatedButton(
       onPressed: () {
         setState(() {
@@ -1339,9 +1748,8 @@ class _UsersPageState extends State<UsersPage> {
         });
       },
       style: ElevatedButton.styleFrom(
-        backgroundColor:
-            isSelected ? const Color(0xFF4FC3F7) : Colors.grey.shade200,
-        foregroundColor: isSelected ? Colors.white : Colors.grey.shade800,
+        backgroundColor: backgroundColor,
+        foregroundColor: foregroundColor,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
@@ -1461,6 +1869,8 @@ class _UsersPageState extends State<UsersPage> {
                     _buildFilterButton('Plumber'),
                     const SizedBox(width: 8),
                     _buildFilterButton('Resident'),
+                    const SizedBox(width: 8),
+                    _buildFilterButton('Meter Reader'),
                   ],
                 ),
                 Row(
@@ -1515,8 +1925,8 @@ class _UsersPageState extends State<UsersPage> {
                     const SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: _showAddPlumberModal,
-                      icon:
-                          const Icon(Icons.add, color: Colors.white, size: 18),
+                      icon: const Icon(Icons.plumbing,
+                          color: Colors.white, size: 18),
                       label: Text(
                         'Add Plumber',
                         style: GoogleFonts.poppins(
@@ -1526,7 +1936,31 @@ class _UsersPageState extends State<UsersPage> {
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF4FC3F7),
+                        backgroundColor: const Color(0xFF2F8E2F),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        elevation: 2,
+                        shadowColor: Colors.black12,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton.icon(
+                      onPressed: _showAddMeterReaderModal,
+                      icon: const Icon(Icons.speed_outlined,
+                          color: Colors.white, size: 18),
+                      label: Text(
+                        'Add Meter Reader',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF9C27B0),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(6),
                         ),
@@ -1589,7 +2023,7 @@ class _UsersPageState extends State<UsersPage> {
                     return Center(
                       child: Text(
                         _selectedRole == 'All'
-                            ? 'No Plumbers or Residents found.'
+                            ? 'No users found.'
                             : 'No $_selectedRole users found.',
                         style: GoogleFonts.poppins(
                           fontSize: 18,

@@ -168,7 +168,7 @@ class _MeterReaderLoginPageState extends State<MeterReaderLoginPage> {
         const SnackBar(
           content: Text('Password reset email sent! Check your inbox.'),
           backgroundColor: Colors.green,
-          duration: Duration(seconds: 3),
+          duration: const Duration(seconds: 3),
         ),
       );
     } on FirebaseAuthException catch (e) {
@@ -347,7 +347,7 @@ class _MeterReaderLoginPageState extends State<MeterReaderLoginPage> {
                             const Icon(
                               Icons.speed_outlined,
                               size: 80,
-                              color: Color(0xFF0288D1),
+                              color: const Color(0xFF0288D1),
                             ),
                             const SizedBox(height: 8),
                             Text(
