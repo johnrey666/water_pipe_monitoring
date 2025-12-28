@@ -8,6 +8,7 @@ import 'package:animate_do/animate_do.dart';
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:convert';
+import 'package:carousel_slider/carousel_slider.dart';
 
 class GeographicMappingPage extends StatefulWidget {
   const GeographicMappingPage({super.key});
@@ -71,6 +72,170 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
     _showModal(context, _userReports[0], _userReports[0]['id']);
   }
 
+  // Widget to display images in a carousel
+  Widget _buildImageCarousel(
+      List<String> base64Images, String issueDescription) {
+    if (base64Images.isEmpty) {
+      return Container(
+        height: 150,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.image, size: 40, color: Colors.grey.shade500),
+              const SizedBox(height: 8),
+              Text(
+                'No images attached',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        CarouselSlider.builder(
+          itemCount: base64Images.length,
+          options: CarouselOptions(
+            height: 180,
+            aspectRatio: 16 / 9,
+            viewportFraction: 0.8,
+            initialPage: 0,
+            enableInfiniteScroll: base64Images.length > 1,
+            reverse: false,
+            autoPlay: base64Images.length > 1,
+            autoPlayInterval: const Duration(seconds: 3),
+            autoPlayAnimationDuration: const Duration(milliseconds: 800),
+            autoPlayCurve: Curves.fastOutSlowIn,
+            enlargeCenterPage: true,
+            enlargeFactor: 0.3,
+            scrollDirection: Axis.horizontal,
+          ),
+          itemBuilder: (context, index, realIndex) {
+            return Container(
+              margin: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.memory(
+                  base64Decode(base64Images[index]),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey.shade300,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.broken_image,
+                                size: 40, color: Colors.grey),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Image ${index + 1}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+        if (base64Images.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.swipe, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  'Swipe to view ${base64Images.length} images',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  // Widget for single image display
+  Widget _buildSingleImage(String base64Image, String issueDescription) {
+    return Container(
+      height: 180,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.memory(
+          base64Decode(base64Image),
+          fit: BoxFit.cover,
+          width: double.infinity,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: Colors.grey.shade300,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.broken_image,
+                        size: 40, color: Colors.grey),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Image not available',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   void _showModal(
       BuildContext context, Map<String, dynamic> data, String reportId) {
     bool isUpdating = false;
@@ -121,6 +286,11 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
       }
     }
 
+    // Get images data
+    final imageCount = data['imageCount'] ?? 0;
+    final images = (data['images'] as List<dynamic>?)?.cast<String>() ?? [];
+    final hasImages = images.isNotEmpty;
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -130,7 +300,7 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 maxWidth: 500,
-                maxHeight: MediaQuery.of(context).size.height * 0.75,
+                maxHeight: MediaQuery.of(context).size.height * 0.80,
               ),
               child: Dialog(
                 shape: RoundedRectangleBorder(
@@ -143,12 +313,12 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                   children: [
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-                      decoration: const BoxDecoration(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                      decoration: BoxDecoration(
                         color: Colors.white,
                         border: Border(
                           bottom:
-                              BorderSide(color: Color(0xFFE0E0E0), width: 1),
+                              BorderSide(color: Colors.grey.shade300, width: 1),
                         ),
                       ),
                       child: Row(
@@ -172,14 +342,15 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                     ),
                     Flexible(
                       child: SingleChildScrollView(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 CircleAvatar(
-                                  radius: 22,
+                                  radius: 24,
                                   backgroundColor: const Color(0xFFE3F2FD),
                                   child: data['avatarUrl'] != null &&
                                           data['avatarUrl'] is String
@@ -189,22 +360,22 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                                               const Icon(
                                             Icons.person,
                                             color: Color(0xFF0288D1),
-                                            size: 26,
+                                            size: 28,
                                           ),
                                           errorWidget: (context, url, error) =>
                                               const Icon(
                                             Icons.person,
                                             color: Color(0xFF0288D1),
-                                            size: 26,
+                                            size: 28,
                                           ),
                                         )
                                       : const Icon(
                                           Icons.person,
                                           color: Color(0xFF0288D1),
-                                          size: 26,
+                                          size: 28,
                                         ),
                                 ),
-                                const SizedBox(width: 8),
+                                const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
@@ -213,7 +384,7 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                                       Text(
                                         data['fullName'] ?? 'Unknown',
                                         style: GoogleFonts.poppins(
-                                          fontSize: 16,
+                                          fontSize: 17,
                                           fontWeight: FontWeight.w600,
                                           color: Colors.black87,
                                         ),
@@ -231,20 +402,28 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                                       Text(
                                         _formatTimestamp(data['createdAt']),
                                         style: GoogleFonts.poppins(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.black54,
+                                          fontSize: 13,
+                                          color: Colors.grey.shade600,
                                         ),
                                       ),
                                       if (data['isPublic'] == true)
                                         const SizedBox(height: 4),
                                       if (data['isPublic'] == true)
-                                        Text(
-                                          'Public Report',
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                            color: Colors.red.shade600,
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.red.shade100,
+                                            borderRadius:
+                                                BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            'Public Report',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Colors.red.shade700,
+                                            ),
                                           ),
                                         ),
                                     ],
@@ -252,48 +431,139 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            if (data['image'] != null &&
-                                data['image'] is String &&
-                                (data['image'] as String).isNotEmpty)
-                              ClipRRect(
+
+                            const SizedBox(height: 16),
+
+                            // Location information
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE3F2FD),
                                 borderRadius: BorderRadius.circular(8),
-                                child: Image.memory(
-                                  base64Decode(data['image'] as String),
-                                  height: 120,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) =>
-                                      Container(
-                                    height: 120,
-                                    color: const Color(0xFFE3F2FD),
-                                    child: Center(
-                                      child: Text(
-                                        'Unable to load image',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w500,
-                                          color: Colors.grey[600],
+                                border:
+                                    Border.all(color: const Color(0xFFBBDEFB)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.location_on_outlined,
+                                    size: 18,
+                                    color: Colors.blue.shade700,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Location',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.blue.shade800,
+                                          ),
                                         ),
-                                      ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          data['placeName'] ??
+                                              'Unknown location',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 13,
+                                            color: Colors.blue.shade700,
+                                          ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                ),
-                              ),
-                            const SizedBox(height: 8),
-                            Text(
-                              data['issueDescription'] ?? 'No description',
-                              style: GoogleFonts.poppins(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black87,
-                                height: 1.4,
+                                ],
                               ),
                             ),
+
+                            const SizedBox(height: 16),
+
+                            // Images section
+                            if (hasImages)
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.image_outlined,
+                                        size: 18,
+                                        color: Colors.green.shade700,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Attached Images ($imageCount)',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey.shade800,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  images.length == 1
+                                      ? _buildSingleImage(images[0],
+                                          data['issueDescription'] ?? '')
+                                      : _buildImageCarousel(images,
+                                          data['issueDescription'] ?? ''),
+                                  const SizedBox(height: 16),
+                                ],
+                              ),
+
+                            const SizedBox(height: 16),
+
+                            // Issue description
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade50,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.report_problem_outlined,
+                                        size: 16,
+                                        color: Colors.red.shade700,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Issue Description',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.grey.shade800,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    data['issueDescription'] ??
+                                        'No description',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
                             if (data['isPublic'] == true &&
                                 data['additionalLocationInfo'] != null &&
                                 data['additionalLocationInfo'].isNotEmpty)
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 12),
                             if (data['isPublic'] == true &&
                                 data['additionalLocationInfo'] != null &&
                                 data['additionalLocationInfo'].isNotEmpty)
@@ -301,36 +571,57 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                                 'Additional Location Info: ${data['additionalLocationInfo']}',
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.black54,
-                                  height: 1.4,
+                                  color: Colors.grey[600],
+                                  height: 1.5,
                                 ),
                               ),
-                            const SizedBox(height: 8),
-                            Chip(
-                              label: Text(
-                                data['status'] ?? 'Unknown',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              backgroundColor:
-                                  _getStatusColor(data['status'] ?? 'Unknown'),
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(
+
+                            const SizedBox(height: 16),
+
+                            // Status chip
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color:
+                                    _getStatusColor(data['status'] ?? 'Unknown')
+                                        .withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
                                   color: _getStatusColor(
                                           data['status'] ?? 'Unknown')
                                       .withOpacity(0.3),
                                 ),
                               ),
-                              elevation: 1,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 10,
+                                    height: 10,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: _getStatusColor(
+                                          data['status'] ?? 'Unknown'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    data['status'] ?? 'Unknown',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: _getStatusColor(
+                                          data['status'] ?? 'Unknown'),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 12),
+
+                            const SizedBox(height: 20),
+
+                            // Fix button for non-fixed reports
                             if (data['status'] != 'Fixed')
                               SizedBox(
                                 width: double.infinity,
@@ -343,84 +634,114 @@ class _GeographicMappingPageState extends State<GeographicMappingPage> {
                                     backgroundColor: const Color(0xFF0288D1),
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(10),
                                     ),
                                     padding: const EdgeInsets.symmetric(
-                                        vertical: 12),
-                                    elevation: 1,
+                                        vertical: 14),
+                                    elevation: 2,
+                                    shadowColor: Colors.black.withOpacity(0.1),
                                   ),
                                   child: isUpdating
-                                      ? const CircularProgressIndicator(
-                                          color: Colors.white,
-                                          strokeWidth: 2,
-                                        )
-                                      : Text(
-                                          'Mark as Fixed',
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
+                                      ? const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2,
                                           ),
+                                        )
+                                      : Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.check_circle_outline,
+                                              size: 20,
+                                              color: Colors.white,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Mark as Fixed',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                 ),
                               ),
+
+                            // Navigation for multiple reports
                             if (_userReports.length > 1)
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 16),
                             if (_userReports.length > 1)
-                              Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: [
-                                  IconButton(
-                                    icon: Icon(
-                                      Icons.chevron_left,
-                                      color: _currentReportIndex > 0
-                                          ? const Color(0xFF0288D1)
-                                          : Colors.grey.shade400,
-                                    ),
-                                    onPressed: _currentReportIndex > 0
-                                        ? () {
-                                            setDialogState(() {
-                                              _currentReportIndex--;
-                                              data = _userReports[
-                                                  _currentReportIndex];
-                                              reportId = _userReports[
-                                                  _currentReportIndex]['id'];
-                                              isUpdating = false;
-                                            });
-                                          }
-                                        : null,
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 16, vertical: 12),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade50,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: Colors.grey.shade300,
                                   ),
-                                  Text(
-                                    '${_currentReportIndex + 1}/${_userReports.length}',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.black87,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.chevron_left,
+                                        color: _currentReportIndex > 0
+                                            ? const Color(0xFF0288D1)
+                                            : Colors.grey.shade400,
+                                      ),
+                                      onPressed: _currentReportIndex > 0
+                                          ? () {
+                                              setDialogState(() {
+                                                _currentReportIndex--;
+                                                data = _userReports[
+                                                    _currentReportIndex];
+                                                reportId = _userReports[
+                                                    _currentReportIndex]['id'];
+                                                isUpdating = false;
+                                              });
+                                            }
+                                          : null,
                                     ),
-                                  ),
-                                  IconButton(
-                                    icon: Icon(
-                                      Icons.chevron_right,
-                                      color: _currentReportIndex <
+                                    Text(
+                                      'Report ${_currentReportIndex + 1} of ${_userReports.length}',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(
+                                        Icons.chevron_right,
+                                        color: _currentReportIndex <
+                                                _userReports.length - 1
+                                            ? const Color(0xFF0288D1)
+                                            : Colors.grey.shade400,
+                                      ),
+                                      onPressed: _currentReportIndex <
                                               _userReports.length - 1
-                                          ? const Color(0xFF0288D1)
-                                          : Colors.grey.shade400,
+                                          ? () {
+                                              setDialogState(() {
+                                                _currentReportIndex++;
+                                                data = _userReports[
+                                                    _currentReportIndex];
+                                                reportId = _userReports[
+                                                    _currentReportIndex]['id'];
+                                                isUpdating = false;
+                                              });
+                                            }
+                                          : null,
                                     ),
-                                    onPressed: _currentReportIndex <
-                                            _userReports.length - 1
-                                        ? () {
-                                            setDialogState(() {
-                                              _currentReportIndex++;
-                                              data = _userReports[
-                                                  _currentReportIndex];
-                                              reportId = _userReports[
-                                                  _currentReportIndex]['id'];
-                                              isUpdating = false;
-                                            });
-                                          }
-                                        : null,
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                           ],
                         ),

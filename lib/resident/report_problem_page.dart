@@ -32,18 +32,16 @@ class _ReportProblemPageState extends State<ReportProblemPage>
   static bool _stateInitialized = false;
   final _formKey = GlobalKey<FormState>();
   final _picker = ImagePicker();
-  XFile? _imageFile;
+  List<XFile> _imageFiles = [];
   latlong.LatLng? _selectedLocation;
   String? _selectedPlaceName;
   final _issueController = TextEditingController();
   final _additionalInfoController = TextEditingController();
-  final _dateTimeController = TextEditingController();
   final _locationController = TextEditingController();
   final _imageNameController = TextEditingController();
   final FocusNode _issueFocusNode = FocusNode();
   final FocusNode _additionalInfoFocusNode = FocusNode();
   MapController? _mapController;
-  DateTime? _selectedDateTime;
   bool _isSubmitting = false;
   bool _isSearchingLocation = false;
   bool _isPublicReport = false;
@@ -64,7 +62,6 @@ class _ReportProblemPageState extends State<ReportProblemPage>
     if (!_stateInitialized) {
       _issueController.text = '';
       _additionalInfoController.text = '';
-      _dateTimeController.text = '';
       _locationController.text = '';
       _imageNameController.text = '';
       _mapController = MapController();
@@ -94,7 +91,6 @@ class _ReportProblemPageState extends State<ReportProblemPage>
 
     _issueController.dispose();
     _additionalInfoController.dispose();
-    _dateTimeController.dispose();
     _locationController.dispose();
     _imageNameController.dispose();
     _issueFocusNode.dispose();
@@ -103,7 +99,8 @@ class _ReportProblemPageState extends State<ReportProblemPage>
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
+  // Updated to pick multiple images
+  Future<void> _pickImages() async {
     try {
       final androidInfo = await DeviceInfoPlugin().androidInfo;
       final sdkInt = androidInfo.version.sdkInt;
@@ -115,19 +112,90 @@ class _ReportProblemPageState extends State<ReportProblemPage>
         });
         return;
       }
-      final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-      if (image != null) {
+
+      // Pick multiple images
+      final List<XFile>? images = await _picker.pickMultiImage(
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (images != null && images.isNotEmpty) {
+        // Limit to 10 images maximum
+        final newImages = images.take(10).toList();
         setState(() {
-          _imageFile = image;
-          _imageNameController.text = image.name;
+          _imageFiles.addAll(newImages);
+          _updateImageNameController();
           _errorMessage = null;
         });
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'Error picking image: $e';
+        _errorMessage = 'Error picking images: $e';
       });
     }
+  }
+
+  // Pick single image from camera
+  Future<void> _takePhoto() async {
+    try {
+      final status = await Permission.camera.request();
+      if (!status.isGranted) {
+        setState(() {
+          _errorMessage = 'Permission denied to access camera';
+        });
+        return;
+      }
+
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1920,
+        maxHeight: 1080,
+        imageQuality: 85,
+      );
+
+      if (image != null) {
+        setState(() {
+          if (_imageFiles.length < 10) {
+            _imageFiles.add(image);
+            _updateImageNameController();
+          } else {
+            _errorMessage = 'Maximum 10 images allowed';
+          }
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error taking photo: $e';
+      });
+    }
+  }
+
+  // Update image name controller text
+  void _updateImageNameController() {
+    if (_imageFiles.isEmpty) {
+      _imageNameController.text = '';
+    } else if (_imageFiles.length == 1) {
+      _imageNameController.text = _imageFiles[0].name;
+    } else {
+      _imageNameController.text = '${_imageFiles.length} images selected';
+    }
+  }
+
+  // Remove specific image
+  void _removeImage(int index) {
+    setState(() {
+      _imageFiles.removeAt(index);
+      _updateImageNameController();
+    });
+  }
+
+  // Clear all images
+  void _clearAllImages() {
+    setState(() {
+      _imageFiles.clear();
+      _imageNameController.text = '';
+    });
   }
 
   Future<void> _searchLocation(String query) async {
@@ -204,64 +272,6 @@ class _ReportProblemPageState extends State<ReportProblemPage>
     }
   }
 
-  Future<void> _selectDateTime() async {
-    final DateTime? pickedDate = await showDatePicker(
-      context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: ColorScheme.light(
-              primary: accentColor,
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Colors.black87,
-            ),
-            dialogBackgroundColor: Colors.white,
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (pickedDate != null) {
-      final TimeOfDay? pickedTime = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.now(),
-        builder: (context, child) {
-          return Theme(
-            data: ThemeData.light().copyWith(
-              colorScheme: ColorScheme.light(
-                primary: accentColor,
-                onPrimary: Colors.white,
-                surface: Colors.white,
-                onSurface: Colors.black87,
-              ),
-              dialogBackgroundColor: Colors.white,
-            ),
-            child: child!,
-          );
-        },
-      );
-      if (pickedTime != null) {
-        final selectedDateTime = DateTime(
-          pickedDate.year,
-          pickedDate.month,
-          pickedDate.day,
-          pickedTime.hour,
-          pickedTime.minute,
-        );
-        setState(() {
-          _selectedDateTime = selectedDateTime;
-          _dateTimeController.text =
-              DateFormat('yyyy-MM-dd HH:mm').format(selectedDateTime);
-          _errorMessage = null;
-        });
-      }
-    }
-  }
-
   Future<Map<String, dynamic>?> _getUserInfo() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
@@ -300,17 +310,22 @@ class _ReportProblemPageState extends State<ReportProblemPage>
     }
   }
 
-  Future<String?> _convertImageToBase64(XFile? imageFile) async {
-    if (imageFile == null) return null;
-    try {
-      final bytes = await File(imageFile.path).readAsBytes();
-      return base64Encode(bytes);
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Error encoding image: $e';
-      });
-      return null;
+  // Updated to convert multiple images to base64
+  Future<List<String>> _convertImagesToBase64(List<XFile> imageFiles) async {
+    final List<String> base64Images = [];
+
+    for (final imageFile in imageFiles) {
+      try {
+        final bytes = await File(imageFile.path).readAsBytes();
+        final base64Image = base64Encode(bytes);
+        base64Images.add(base64Image);
+      } catch (e) {
+        print('Error encoding image ${imageFile.name}: $e');
+        // Continue with other images even if one fails
+      }
     }
+
+    return base64Images;
   }
 
   Future<void> _submitReport() async {
@@ -341,10 +356,6 @@ class _ReportProblemPageState extends State<ReportProblemPage>
         throw Exception('Issue description is required');
       }
 
-      if (_selectedDateTime == null) {
-        throw Exception('Date and time is required');
-      }
-
       if (_isPublicReport && _selectedLocation == null) {
         throw Exception('Please select a location for public report');
       }
@@ -352,6 +363,9 @@ class _ReportProblemPageState extends State<ReportProblemPage>
       if (!_isPublicReport && userInfo['location'] == null) {
         throw Exception('User location not found. Please update your profile.');
       }
+
+      // Get current date and time for real-time submission
+      final now = DateTime.now();
 
       final reportData = {
         'userId': userInfo['userId'],
@@ -368,8 +382,8 @@ class _ReportProblemPageState extends State<ReportProblemPage>
         'placeName': _isPublicReport
             ? (_selectedPlaceName ?? 'Unknown location')
             : userInfo['placeName'],
-        'dateTime': Timestamp.fromDate(_selectedDateTime!),
-        'createdAt': Timestamp.now(),
+        'dateTime': Timestamp.fromDate(now), // Current date and time
+        'createdAt': Timestamp.now(), // Also store creation timestamp
         'status': 'Unfixed Reports',
         'isPublic': _isPublicReport,
       };
@@ -379,9 +393,13 @@ class _ReportProblemPageState extends State<ReportProblemPage>
             _additionalInfoController.text.trim();
       }
 
-      final base64Image = await _convertImageToBase64(_imageFile);
-      if (base64Image != null) {
-        reportData['image'] = base64Image;
+      // Convert multiple images to base64
+      if (_imageFiles.isNotEmpty) {
+        final base64Images = await _convertImagesToBase64(_imageFiles);
+        if (base64Images.isNotEmpty) {
+          reportData['images'] = base64Images;
+          reportData['imageCount'] = base64Images.length;
+        }
       }
 
       // Add report with timeout
@@ -422,7 +440,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
         'action': 'Report Submitted',
         'userId': userInfo['userId'],
         'details':
-            'Report submitted by ${userInfo['fullName']}: ${_issueController.text.trim()}',
+            'Report submitted by ${userInfo['fullName']}: ${_issueController.text.trim()} with ${_imageFiles.length} images',
         'timestamp': FieldValue.serverTimestamp(),
       }).catchError((e) {
         print('Error writing log entry: $e');
@@ -433,7 +451,8 @@ class _ReportProblemPageState extends State<ReportProblemPage>
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Report submitted successfully'),
+          content: Text(
+              'Report submitted successfully with ${_imageFiles.length} images'),
           backgroundColor: Colors.green,
           duration: Duration(seconds: 2),
         ),
@@ -443,13 +462,11 @@ class _ReportProblemPageState extends State<ReportProblemPage>
       setState(() {
         _issueController.clear();
         _additionalInfoController.clear();
-        _dateTimeController.clear();
-        _imageFile = null;
+        _imageFiles.clear();
         _imageNameController.clear();
         _selectedLocation = null;
         _selectedPlaceName = null;
         _locationController.clear();
-        _selectedDateTime = null;
         _isPublicReport = false;
         _recentPage = 0;
       });
@@ -798,6 +815,139 @@ class _ReportProblemPageState extends State<ReportProblemPage>
     );
   }
 
+  // Widget to display selected images
+  Widget _selectedImagesPreview() {
+    if (_imageFiles.isEmpty) return const SizedBox.shrink();
+
+    return FadeInUp(
+      duration: const Duration(milliseconds: 400),
+      delay: const Duration(milliseconds: 450),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'Selected Images (${_imageFiles.length}/10):',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black87,
+                  ),
+                ),
+                const Spacer(),
+                if (_imageFiles.isNotEmpty)
+                  TextButton.icon(
+                    onPressed: _clearAllImages,
+                    icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                    label: Text(
+                      'Clear All',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.red,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 120,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _imageFiles.length,
+                itemBuilder: (context, index) {
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      right: index < _imageFiles.length - 1 ? 8 : 0,
+                    ),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            File(_imageFiles[index].path),
+                            height: 120,
+                            width: 120,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                height: 120,
+                                width: 120,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade200,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: const Icon(
+                                  Icons.broken_image,
+                                  color: Colors.grey,
+                                  size: 40,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        Positioned(
+                          top: 4,
+                          right: 4,
+                          child: GestureDetector(
+                            onTap: () => _removeImage(index),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.9),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.close,
+                                  size: 16, color: Colors.red),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          bottom: 4,
+                          left: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.6),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${index + 1}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 10,
+                                color: Colors.white,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _recentReports() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return const SizedBox();
@@ -959,6 +1109,24 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                                 ),
                               ),
                             ),
+                            if (data['imageCount'] != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.image,
+                                        size: 12, color: Colors.grey.shade600),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${data['imageCount']} images',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -1152,106 +1320,93 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                         hint: 'Optional details about the location',
                         validator: (v) => null,
                       ),
-                    _modernField(
-                      controller: _dateTimeController,
-                      label: 'Date & Time *',
-                      icon: Icons.calendar_today,
-                      readOnly: true,
-                      onTap: _selectDateTime,
-                      hint: 'Tap to select date and time',
-                      validator: (v) => _selectedDateTime == null
-                          ? 'Please select date and time'
-                          : null,
-                    ),
                     Row(
                       children: [
                         Expanded(
                           child: _modernField(
                             controller: _imageNameController,
-                            label: 'Upload Image',
+                            label: 'Upload Images (${_imageFiles.length}/10)',
                             icon: Icons.image_outlined,
                             readOnly: true,
                             validator: (v) => null,
+                            hint: _imageFiles.isEmpty
+                                ? 'No images selected'
+                                : '${_imageFiles.length} images selected',
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                         FadeInUp(
                           duration: const Duration(milliseconds: 400),
                           delay: const Duration(milliseconds: 400),
-                          child: SizedBox(
-                            height: 48,
-                            child: ElevatedButton.icon(
-                              onPressed: _pickImage,
-                              icon: const Icon(Icons.upload,
-                                  size: 20, color: Colors.white),
-                              label: Text(
-                                'Upload',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.white,
-                                ),
+                          child: PopupMenuButton<String>(
+                            icon: Container(
+                              height: 48,
+                              width: 48,
+                              decoration: BoxDecoration(
+                                color: accentColor,
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: accentColor,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 16),
+                              child: const Icon(
+                                Icons.add_photo_alternate,
+                                color: Colors.white,
+                                size: 24,
                               ),
                             ),
+                            onSelected: (value) {
+                              if (value == 'gallery') {
+                                _pickImages();
+                              } else if (value == 'camera') {
+                                _takePhoto();
+                              }
+                            },
+                            itemBuilder: (BuildContext context) {
+                              return [
+                                PopupMenuItem<String>(
+                                  value: 'gallery',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.photo_library,
+                                          color: accentColor, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Choose from Gallery',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem<String>(
+                                  value: 'camera',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.camera_alt,
+                                          color: accentColor, size: 20),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Take Photo',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: Colors.black87,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ];
+                            },
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 4,
                           ),
                         ),
                       ],
                     ),
-                    if (_imageFile != null)
-                      FadeInUp(
-                        duration: const Duration(milliseconds: 400),
-                        delay: const Duration(milliseconds: 450),
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 12),
-                          child: Stack(
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Image.file(
-                                  File(_imageFile!.path),
-                                  height: 120,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: GestureDetector(
-                                  onTap: () => setState(() {
-                                    _imageFile = null;
-                                    _imageNameController.clear();
-                                  }),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.white.withOpacity(0.8),
-                                      shape: BoxShape.circle,
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.2),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Icon(Icons.close,
-                                        size: 20, color: Colors.red),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
+                    // Display selected images
+                    _selectedImagesPreview(),
                     const SizedBox(height: 20),
                     FadeInUp(
                       duration: const Duration(milliseconds: 400),

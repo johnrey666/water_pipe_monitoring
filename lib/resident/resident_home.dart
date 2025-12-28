@@ -108,7 +108,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       }
       final snapshot = await FirebaseFirestore.instance
           .collection('notifications')
-          .where('residentId', isEqualTo: user.uid)
+          .where('userId', isEqualTo: user.uid)
           .where('read', isEqualTo: false)
           .get();
       if (mounted) {
@@ -282,8 +282,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   void _onSelectPage(ResidentPage page) {
     if (!mounted) return;
-    _removeNotificationOverlay(); // Ensure overlay is removed first
-    // Use microtask to schedule the setState after current frame
+    _removeNotificationOverlay();
     Future.microtask(() {
       if (mounted) {
         setState(() {
@@ -297,58 +296,63 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return {'unread': [], 'read': []};
+
+      // Fetch all notifications for this user
       final unreadSnapshot = await FirebaseFirestore.instance
           .collection('notifications')
-          .where('residentId', isEqualTo: user.uid)
+          .where('userId', isEqualTo: user.uid)
           .where('read', isEqualTo: false)
-          .orderBy('createdAt', descending: true)
+          .orderBy('timestamp', descending: true)
           .limit(30)
           .get();
+
       final readSnapshot = await FirebaseFirestore.instance
           .collection('notifications')
-          .where('residentId', isEqualTo: user.uid)
+          .where('userId', isEqualTo: user.uid)
           .where('read', isEqualTo: true)
-          .orderBy('createdAt', descending: true)
+          .orderBy('timestamp', descending: true)
           .limit(30)
           .get();
+
       final unreadNotifications = unreadSnapshot.docs.map((doc) {
         final data = doc.data();
         return {
           'id': doc.id,
           'type': data['type'] ?? 'unknown',
+          'title': data['title'] ?? '',
+          'message': data['message'] ?? '',
+          'reportId': data['reportId'],
+          'assessment': data['assessment'],
+          'timestamp': (data['timestamp'] as Timestamp?)?.toDate(),
+          'billId': data['billId'],
           'status': data['status'],
           'month': data['month'],
           'amount': data['amount']?.toDouble(),
-          'message': data['message'],
-          'billId': data['billId'],
-          'processedDate': (data['processedDate'] as Timestamp?)?.toDate(),
-          'createdAt': (data['createdAt'] as Timestamp?)?.toDate(),
           'isRead': false,
         };
       }).toList();
+
       final readNotifications = readSnapshot.docs.map((doc) {
         final data = doc.data();
         return {
           'id': doc.id,
           'type': data['type'] ?? 'unknown',
+          'title': data['title'] ?? '',
+          'message': data['message'] ?? '',
+          'reportId': data['reportId'],
+          'assessment': data['assessment'],
+          'timestamp': (data['timestamp'] as Timestamp?)?.toDate(),
+          'billId': data['billId'],
           'status': data['status'],
           'month': data['month'],
           'amount': data['amount']?.toDouble(),
-          'message': data['message'],
-          'billId': data['billId'],
-          'processedDate': (data['processedDate'] as Timestamp?)?.toDate(),
-          'createdAt': (data['createdAt'] as Timestamp?)?.toDate(),
           'isRead': true,
         };
       }).toList();
+
       return {'unread': unreadNotifications, 'read': readNotifications};
     } catch (e) {
       print('DEBUG: Error fetching notifications: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading notifications: $e')),
-        );
-      }
       return {'unread': [], 'read': []};
     }
   }
@@ -362,9 +366,46 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       _fetchUnreadNotifCount();
     } catch (e) {
       print('DEBUG: Error marking notification as read: $e');
+    }
+  }
+
+  // Function to handle notification tap
+  void _handleNotificationTap(Map<String, dynamic> notification) async {
+    // Mark as read if unread
+    if (!notification['isRead'] && notification['id'] != null) {
+      await _markNotificationAsRead(notification['id']);
+    }
+
+    // Remove overlay
+    _removeNotificationOverlay();
+
+    // Handle different notification types
+    if (notification['type'] == 'report_fixed' &&
+        notification['reportId'] != null) {
+      // For report_fixed notifications, we should navigate to a page that shows the fixed report
+      // For now, just show a snackbar with the message
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error marking notification as read: $e')),
+          SnackBar(
+            content: Text(notification['message'] ?? 'Report has been fixed'),
+            action: SnackBarAction(
+              label: 'View',
+              onPressed: () {
+                // TODO: Navigate to view reports page with the specific report
+              },
+            ),
+          ),
+        );
+      }
+    } else if (notification['type'] == 'payment' &&
+        notification['billId'] != null) {
+      // Handle payment notifications
+      _showPaidBillModal(notification);
+    } else {
+      // For other notifications, show a snackbar with the message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(notification['message'] ?? 'Notification')),
         );
       }
     }
@@ -373,7 +414,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   Future<Map<String, dynamic>?> _fetchPaidBillDetails(
       String billId, String month) async {
     try {
-      // Try to fetch from consumption_history for the month
       final monthDate = DateFormat('MMM yyyy').parse(month);
       final year = monthDate.year;
       final monthNum = monthDate.month;
@@ -389,7 +429,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         final data = snapshot.docs.first.data();
         final periodStart = data['periodStart'] as Timestamp?;
         final cubicMeterUsed = data['cubicMeterUsed']?.toDouble() ?? 0.0;
-        // Fetch payment for amount
+
         final paymentSnapshot = await FirebaseFirestore.instance
             .collection('payments')
             .where('residentId', isEqualTo: _residentId)
@@ -400,13 +440,13 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         if (paymentSnapshot.docs.isNotEmpty) {
           final paymentData = paymentSnapshot.docs.first.data();
           final amount = paymentData['billAmount']?.toDouble() ?? 0.0;
-          // Fetch user data for name, address, etc.
+
           final userSnapshot = await FirebaseFirestore.instance
               .collection('users')
               .doc(_residentId)
               .get();
           final userData = userSnapshot.data() ?? {};
-          // Fetch current reading from meter_readings
+
           final meterSnapshot = await FirebaseFirestore.instance
               .collection('users')
               .doc(_residentId)
@@ -451,19 +491,23 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     final billDetails = await _fetchPaidBillDetails(
         notification['billId'], notification['month']);
     if (billDetails == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unable to load bill details.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to load bill details.')),
+        );
+      }
       return;
     }
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(16),
-        child: _PaidBillDialog(billDetails: billDetails),
-      ),
-    );
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(16),
+          child: _PaidBillDialog(billDetails: billDetails),
+        ),
+      );
+    }
   }
 
   void _showNotificationOverlay() {
@@ -502,23 +546,14 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                     borderRadius: BorderRadius.circular(8),
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(
-                        maxWidth: 300,
+                        maxWidth: 350,
                         maxHeight: 500,
                       ),
                       child: NotificationDropdown(
+                        onNotificationTap: _handleNotificationTap,
                         onMarkAsRead: _markNotificationAsRead,
-                        onShowPaidBill: (notification) {
-                          _removeNotificationOverlay();
-                          _showPaidBillModal(notification);
-                        },
-                        onReportTap: () {
-                          _removeNotificationOverlay();
-                          Future.microtask(() {
-                            _onSelectPage(ResidentPage.report);
-                          });
-                        },
-                        fetchNotifications: _fetchNotifications,
                         onClose: _removeNotificationOverlay,
+                        fetchNotifications: _fetchNotifications,
                       ),
                     ),
                   ),
@@ -634,10 +669,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                   onPressed: () {
                     if (!mounted) return;
                     if (_notificationOverlay == null) {
-                      // Use Future.delayed with a minimal delay to ensure UI is ready
                       Future.delayed(const Duration(milliseconds: 50), () {
                         if (mounted && _notificationOverlay == null) {
-                          // Add it to the next frame to ensure build is complete
                           WidgetsBinding.instance.addPostFrameCallback((_) {
                             if (mounted && _notificationOverlay == null) {
                               _showNotificationOverlay();
@@ -661,7 +694,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                         shape: BoxShape.circle,
                       ),
                       child: Text(
-                        '$_unreadNotifCount',
+                        _unreadNotifCount > 9 ? '9+' : '$_unreadNotifCount',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -845,8 +878,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           ),
           selected: isSelected,
           onTap: () {
-            Navigator.of(context).pop(); // Close drawer
-            _onSelectPage(page); // Then switch page
+            Navigator.of(context).pop();
+            _onSelectPage(page);
           },
         ),
       ),
@@ -1314,21 +1347,20 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   }
 }
 
-// Notification classes remain the same...
+// UPDATED NOTIFICATION DROPDOWN
 class NotificationDropdown extends StatefulWidget {
+  final Function(Map<String, dynamic>) onNotificationTap;
   final Function(String) onMarkAsRead;
-  final Function(Map<String, dynamic>) onShowPaidBill;
-  final VoidCallback? onReportTap;
+  final VoidCallback onClose;
   final Future<Map<String, List<Map<String, dynamic>>>> Function()
       fetchNotifications;
-  final VoidCallback onClose;
+
   const NotificationDropdown({
     super.key,
+    required this.onNotificationTap,
     required this.onMarkAsRead,
-    required this.onShowPaidBill,
-    this.onReportTap,
-    required this.fetchNotifications,
     required this.onClose,
+    required this.fetchNotifications,
   });
 
   @override
@@ -1338,14 +1370,14 @@ class NotificationDropdown extends StatefulWidget {
 class _NotificationDropdownState extends State<NotificationDropdown>
     with AutomaticKeepAliveClientMixin {
   int _page = 0;
-  static const int _itemsPerPage = 3;
+  static const int _itemsPerPage = 5;
 
   @override
   bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required by AutomaticKeepAliveClientMixin
+    super.build(context);
     return FutureBuilder<Map<String, List<Map<String, dynamic>>>>(
       future: widget.fetchNotifications(),
       builder: (context, snapshot) {
@@ -1363,40 +1395,125 @@ class _NotificationDropdownState extends State<NotificationDropdown>
         final unread = notificationsData['unread']!;
         final read = notificationsData['read']!;
         final allNotifications = [...unread, ...read];
+
         if (allNotifications.isEmpty) {
-          return const SizedBox(
-            height: 50,
-            child: Center(child: Text('No notifications')),
+          return SizedBox(
+            height: 80,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.notifications_none,
+                      size: 32, color: Colors.grey.shade400),
+                  const SizedBox(height: 8),
+                  Text(
+                    'No notifications',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           );
         }
+
         allNotifications.sort((a, b) =>
-            (b['createdAt'] as DateTime).compareTo(a['createdAt'] as DateTime));
+            (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime));
+
         final totalPages = (allNotifications.length / _itemsPerPage).ceil();
         final currentItems = allNotifications
             .skip(_page * _itemsPerPage)
             .take(_itemsPerPage)
             .toList();
-        return SingleChildScrollView(
+
+        return Container(
+          width: 350,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Text(
-                  'Notifications',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+              // Header
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF87CEEB),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(8),
+                    topRight: Radius.circular(8),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Notifications',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close,
+                          size: 20, color: Colors.white),
+                      onPressed: widget.onClose,
+                    ),
+                  ],
                 ),
               ),
-              ...currentItems.map((notif) =>
-                  _buildNotificationItem(context, notif, notif['isRead'])),
+
+              // Notifications list
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: currentItems.length,
+                  itemBuilder: (context, index) {
+                    final notification = currentItems[index];
+                    return _buildNotificationItem(notification);
+                  },
+                ),
+              ),
+
+              // Pagination
               if (totalPages > 1)
-                _buildPaginationRow(
-                  currentPage: _page,
-                  totalPages: totalPages,
-                  onPrev: () => setState(
-                      () => _page = (_page - 1).clamp(0, totalPages - 1)),
-                  onNext: () => setState(
-                      () => _page = (_page + 1).clamp(0, totalPages - 1)),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    border: Border(
+                      top: BorderSide(color: Colors.grey.shade300),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      IconButton(
+                        icon: Icon(Icons.chevron_left,
+                            color:
+                                _page > 0 ? Colors.blue.shade700 : Colors.grey),
+                        onPressed:
+                            _page > 0 ? () => setState(() => _page--) : null,
+                      ),
+                      Text(
+                        '${_page + 1} / $totalPages',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.chevron_right,
+                            color: _page < totalPages - 1
+                                ? Colors.blue.shade700
+                                : Colors.grey),
+                        onPressed: _page < totalPages - 1
+                            ? () => setState(() => _page++)
+                            : null,
+                      ),
+                    ],
+                  ),
                 ),
             ],
           ),
@@ -1405,104 +1522,244 @@ class _NotificationDropdownState extends State<NotificationDropdown>
     );
   }
 
-  Widget _buildNotificationItem(
-      BuildContext context, Map<String, dynamic> notification, bool isRead) {
-    String text;
+  Widget _buildNotificationItem(Map<String, dynamic> notification) {
+    final isRead = notification['isRead'] ?? true;
+    final type = notification['type'] ?? 'unknown';
+    final title = notification['title'] ?? '';
+    final message = notification['message'] ?? '';
+    final timestamp = notification['timestamp'] as DateTime?;
+    final hasReport = notification['reportId'] != null;
+    final assessment = notification['assessment'];
+    final status = notification['status'];
+    final month = notification['month'];
+    final amount = notification['amount'];
+
+    // Determine icon and color based on type
     IconData icon;
     Color iconColor;
-    int titleMaxLines = 1;
-    if (notification['type'] == 'report_status') {
-      text = notification['message'] ?? 'Issue fixed';
-      icon = Icons.check_circle;
-      iconColor = isRead ? Colors.grey[400]! : Colors.green;
-      titleMaxLines = 2;
-    } else {
-      final status =
-          notification['status'] == 'approved' ? 'Successful' : 'Declined';
-      final month = notification['month'] ?? 'Unknown';
-      final amount = notification['amount']?.toStringAsFixed(2) ?? '0.00';
-      text = 'Payment of ₱$amount for $month is $status';
-      icon = notification['status'] == 'approved'
-          ? Icons.check_circle
-          : Icons.cancel;
-      iconColor = isRead
-          ? Colors.grey[400]!
-          : (notification['status'] == 'approved' ? Colors.green : Colors.red);
-    }
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
-      color: isRead ? Colors.white : Colors.grey[200],
-      elevation: 2,
-      child: ListTile(
-        contentPadding: const EdgeInsets.all(12),
-        leading: Icon(icon, color: iconColor, size: 20),
-        title: Text(
-          text,
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: isRead ? FontWeight.normal : FontWeight.bold,
-            color: isRead ? Colors.grey[600] : Colors.black87,
-          ),
-          maxLines: titleMaxLines,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          notification['createdAt'] != null
-              ? DateFormat.yMMMd().add_jm().format(notification['createdAt'])
-              : 'Unknown time',
-          style: GoogleFonts.poppins(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-        ),
-        onTap: () {
-          if (!isRead && notification['id'] != null) {
-            widget.onMarkAsRead(notification['id']);
-          }
-          if (notification['type'] == 'payment' &&
-              notification['status'] == 'approved') {
-            widget.onShowPaidBill(notification);
-          } else if (notification['type'] == 'report_status') {
-            widget.onReportTap?.call();
-          } else {
-            Navigator.of(context).pop();
-          }
-        },
-      ),
-    );
-  }
 
-  Widget _buildPaginationRow({
-    required int currentPage,
-    required int totalPages,
-    required VoidCallback onPrev,
-    required VoidCallback onNext,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          TextButton(
-            onPressed: currentPage > 0 ? onPrev : null,
-            child: const Text('Previous'),
+    switch (type) {
+      case 'report_fixed':
+        icon = Icons.check_circle_outline;
+        iconColor = Colors.green;
+        break;
+      case 'payment':
+        icon = Icons.payment;
+        iconColor = status == 'approved' ? Colors.green : Colors.red;
+        break;
+      default:
+        icon = Icons.notifications;
+        iconColor = Colors.blue.shade700;
+    }
+
+    return Material(
+      color: isRead ? Colors.white : Colors.blue.shade50,
+      child: InkWell(
+        onTap: () => widget.onNotificationTap(notification),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: Colors.grey.shade200),
+            ),
           ),
-          Text('${currentPage + 1} of $totalPages'),
-          TextButton(
-            onPressed: currentPage < totalPages - 1 ? onNext : null,
-            child: const Text('Next'),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Notification icon
+              Container(
+                margin: const EdgeInsets.only(right: 12),
+                child: CircleAvatar(
+                  radius: 16,
+                  backgroundColor: iconColor.withOpacity(0.1),
+                  child: Icon(icon, size: 18, color: iconColor),
+                ),
+              ),
+
+              // Notification content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Title
+                    Text(
+                      title,
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight:
+                            isRead ? FontWeight.normal : FontWeight.w600,
+                        color: isRead ? Colors.grey.shade700 : Colors.black87,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+
+                    // Message
+                    if (message.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        message,
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                        ),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+
+                    // Payment details (if applicable)
+                    if (type == 'payment' &&
+                        month != null &&
+                        amount != null) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: status == 'approved'
+                              ? Colors.green.shade50
+                              : Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: status == 'approved'
+                                ? Colors.green.shade200
+                                : Colors.red.shade200,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              status == 'approved'
+                                  ? Icons.check_circle
+                                  : Icons.error,
+                              size: 12,
+                              color: status == 'approved'
+                                  ? Colors.green.shade700
+                                  : Colors.red.shade700,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '₱${amount.toStringAsFixed(2)} for $month - ${status?.toUpperCase() ?? 'PENDING'}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                color: status == 'approved'
+                                    ? Colors.green.shade900
+                                    : Colors.red.shade900,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // Assessment preview (if available)
+                    if (assessment != null && assessment.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: Colors.amber.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.assessment,
+                                size: 12, color: Colors.amber.shade700),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'Assessment: ${assessment.length > 50 ? '${assessment.substring(0, 50)}...' : assessment}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  color: Colors.amber.shade900,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // Timestamp and status
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          timestamp != null
+                              ? DateFormat.yMMMd().add_jm().format(timestamp)
+                              : 'Recently',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                        if (!isRead)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              'NEW',
+                              style: GoogleFonts.poppins(
+                                fontSize: 9,
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        if (hasReport && type == 'report_fixed')
+                          Row(
+                            children: [
+                              Icon(Icons.visibility,
+                                  size: 12, color: Colors.blue.shade700),
+                              const SizedBox(width: 4),
+                              Text(
+                                'View Report',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  color: Colors.blue.shade700,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Mark as read button for unread notifications
+              if (!isRead)
+                IconButton(
+                  icon: Icon(Icons.mark_chat_read,
+                      size: 18, color: Colors.grey.shade600),
+                  onPressed: () {
+                    if (notification['id'] != null) {
+                      widget.onMarkAsRead(notification['id']);
+                    }
+                  },
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
 }
 
+// Existing PaidBillDialog class remains the same...
 class _PaidBillDialog extends StatefulWidget {
   final Map<String, dynamic> billDetails;
   const _PaidBillDialog({required this.billDetails});

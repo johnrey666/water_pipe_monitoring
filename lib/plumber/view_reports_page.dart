@@ -1,4 +1,5 @@
 import 'dart:convert';
+// ignore: unused_import
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,9 @@ import 'package:animate_do/animate_do.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:carousel_slider/carousel_slider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 class ViewReportsPage extends StatefulWidget {
   final String? initialReportId;
@@ -397,6 +401,16 @@ class ReportDetailsModal extends StatefulWidget {
 class _ReportDetailsModalState extends State<ReportDetailsModal> {
   bool _showLocation = false;
   bool _isUpdating = false;
+  final TextEditingController _assessmentController = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
+  List<XFile> _beforeFixImages = [];
+  List<XFile> _afterFixImages = [];
+
+  @override
+  void dispose() {
+    _assessmentController.dispose();
+    super.dispose();
+  }
 
   Future<void> _updateStatus(String newStatus) async {
     if (_isUpdating) return;
@@ -406,10 +420,62 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
     });
 
     try {
+      // Convert images to base64
+      List<String> beforeFixBase64 = [];
+      List<String> afterFixBase64 = [];
+
+      for (var image in _beforeFixImages) {
+        final bytes = await image.readAsBytes();
+        beforeFixBase64.add(base64Encode(bytes));
+      }
+
+      for (var image in _afterFixImages) {
+        final bytes = await image.readAsBytes();
+        afterFixBase64.add(base64Encode(bytes));
+      }
+
+      // Get plumber info
+      final plumber = FirebaseAuth.instance.currentUser;
+      String plumberName = 'Unknown Plumber';
+      if (plumber != null) {
+        final plumberDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(plumber.uid)
+            .get();
+        if (plumberDoc.exists && plumberDoc.data()?['fullName'] != null) {
+          plumberName = plumberDoc.data()!['fullName'];
+        }
+      }
+
+      final updateData = {
+        'status': newStatus,
+        'fixedAt': FieldValue.serverTimestamp(),
+        'fixedBy': plumber?.uid,
+        'fixedByName': plumberName,
+      };
+
+      // Add assessment if exists
+      final assessment = _assessmentController.text.trim();
+      if (assessment.isNotEmpty) {
+        updateData['assessment'] = assessment;
+      }
+
+      // Add before fix images if any
+      if (beforeFixBase64.isNotEmpty) {
+        updateData['beforeFixImages'] = beforeFixBase64;
+        updateData['beforeFixImageCount'] = beforeFixBase64.length;
+      }
+
+      // Add after fix images if any
+      if (afterFixBase64.isNotEmpty) {
+        updateData['afterFixImages'] = afterFixBase64;
+        updateData['afterFixImageCount'] = afterFixBase64.length;
+      }
+
       await FirebaseFirestore.instance
           .collection('reports')
           .doc(widget.report.id)
-          .update({'status': newStatus});
+          .update(updateData);
 
       if (newStatus == 'Fixed') {
         final reportData = widget.report.data() as Map<String, dynamic>;
@@ -417,32 +483,30 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
         final issueDescription =
             reportData['issueDescription']?.toString() ?? 'Water issue';
 
-        // Send notification to resident (already in your code)
+        // Send notification to resident
         if (residentId != null) {
-          await FirebaseFirestore.instance.collection('notifications').add({
-            'residentId': residentId,
-            'type': 'report_status',
+          final notificationData = {
+            'userId': residentId,
+            'type': 'report_fixed',
+            'title': 'Report Fixed',
             'message':
-                'Your reported issue: "$issueDescription" has been marked as Fixed.',
-            'status': 'fixed',
-            'createdAt': FieldValue.serverTimestamp(),
+                'Your reported issue: "$issueDescription" has been marked as Fixed by $plumberName.',
+            'timestamp': FieldValue.serverTimestamp(),
             'read': false,
-          });
-        }
+            'reportId': widget.report.id,
+          };
 
-        // Fetch plumber's full name from Firestore
-        final plumber = FirebaseAuth.instance.currentUser;
-        String plumberName = 'Unknown Plumber';
-        if (plumber != null) {
-          final plumberDoc = await FirebaseFirestore.instance
-              .collection('users')
-              .doc(plumber.uid)
-              .get();
-          if (plumberDoc.exists && plumberDoc.data()?['fullName'] != null) {
-            plumberName = plumberDoc.data()!['fullName'];
+          // Add assessment to notification if exists
+          if (assessment.isNotEmpty) {
+            notificationData['assessment'] = assessment;
           }
+
+          await FirebaseFirestore.instance
+              .collection('notifications')
+              .add(notificationData);
         }
 
+        // Log the action
         await FirebaseFirestore.instance.collection('logs').add({
           'action': 'Report Fixed',
           'userId': plumber?.uid,
@@ -473,6 +537,445 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
     }
   }
 
+  // Show assessment dialog
+  void _showAssessmentInputDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            title: Text(
+              'Add Assessment',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Provide assessment details (estimated time to fix, required materials, etc.)',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _assessmentController,
+                  maxLines: 5,
+                  decoration: InputDecoration(
+                    hintText:
+                        'e.g., Estimated time: 2 hours\nRequired: Pipe fittings, sealant',
+                    hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF87CEEB)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Cancel',
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Assessment saved')),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF87CEEB),
+                ),
+                child: Text(
+                  'Save Assessment',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // Show mark as fixed dialog with image upload options
+  void _showMarkFixedDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            title: Text(
+              'Mark as Fixed',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Upload images before and after fixing the issue:',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Before fix images
+                  _buildImageUploadSection(
+                    'Before Fix Images',
+                    _beforeFixImages,
+                    () async {
+                      final images = await _picker.pickMultiImage();
+                      setDialogState(() {
+                        _beforeFixImages.addAll(images);
+                      });
+                    },
+                    (index) {
+                      setDialogState(() {
+                        _beforeFixImages.removeAt(index);
+                      });
+                    },
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // After fix images
+                  _buildImageUploadSection(
+                    'After Fix Images',
+                    _afterFixImages,
+                    () async {
+                      final images = await _picker.pickMultiImage();
+                      setDialogState(() {
+                        _afterFixImages.addAll(images);
+                      });
+                    },
+                    (index) {
+                      setDialogState(() {
+                        _afterFixImages.removeAt(index);
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'Cancel',
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _updateStatus('Fixed');
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF87CEEB),
+                ),
+                child: Text(
+                  'Mark as Fixed',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildImageUploadSection(
+    String title,
+    List<XFile> images,
+    VoidCallback onPickImages,
+    void Function(int) onRemoveImage,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              title,
+              style: GoogleFonts.poppins(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '(${images.length})',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: Colors.grey[600],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ElevatedButton.icon(
+          onPressed: onPickImages,
+          icon: const Icon(Icons.photo_library, size: 20),
+          label: Text(
+            'Add Images',
+            style: GoogleFonts.poppins(fontSize: 14),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.grey[100],
+            foregroundColor: Colors.black87,
+            elevation: 0,
+          ),
+        ),
+        if (images.isNotEmpty) const SizedBox(height: 12),
+        if (images.isNotEmpty)
+          SizedBox(
+            height: 80,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: images.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.file(
+                          File(images[index].path),
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Positioned(
+                        top: 4,
+                        right: 4,
+                        child: GestureDetector(
+                          onTap: () => onRemoveImage(index),
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.close,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  // Widget to display images in a carousel
+  Widget _buildImageCarousel(
+      List<String> base64Images, String issueDescription) {
+    if (base64Images.isEmpty) {
+      return Container(
+        height: 150,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.image, size: 40, color: Colors.grey.shade500),
+              const SizedBox(height: 8),
+              Text(
+                'No images attached',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        CarouselSlider.builder(
+          itemCount: base64Images.length,
+          options: CarouselOptions(
+            height: 180,
+            aspectRatio: 16 / 9,
+            viewportFraction: 0.8,
+            initialPage: 0,
+            enableInfiniteScroll: base64Images.length > 1,
+            reverse: false,
+            autoPlay: base64Images.length > 1,
+            autoPlayInterval: const Duration(seconds: 3),
+            autoPlayAnimationDuration: const Duration(milliseconds: 800),
+            autoPlayCurve: Curves.fastOutSlowIn,
+            enlargeCenterPage: true,
+            enlargeFactor: 0.3,
+            scrollDirection: Axis.horizontal,
+          ),
+          itemBuilder: (context, index, realIndex) {
+            return Container(
+              margin: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.memory(
+                  base64Decode(base64Images[index]),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey.shade300,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.broken_image,
+                                size: 40, color: Colors.grey),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Image ${index + 1}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+        if (base64Images.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.swipe, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  'Swipe to view ${base64Images.length} images',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  // Widget for single image display
+  Widget _buildSingleImage(String base64Image, String issueDescription) {
+    return Container(
+      height: 180,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.memory(
+          base64Decode(base64Image),
+          fit: BoxFit.cover,
+          width: double.infinity,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: Colors.grey.shade300,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.broken_image,
+                        size: 40, color: Colors.grey),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Image not available',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final reportData = widget.report.data() as Map<String, dynamic>;
@@ -486,19 +989,18 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
         ? (reportData['createdAt'] as Timestamp).toDate()
         : null;
     final location = reportData['location'] as GeoPoint?;
-    final imageBase64 = reportData['image']?.toString();
     final currentStatus = reportData['status']?.toString() ?? 'Unfixed Reports';
+    final assessment = reportData['assessment']?.toString();
+
+    // Get images data
+    final imageCount = reportData['imageCount'] ?? 0;
+    final images =
+        (reportData['images'] as List<dynamic>?)?.cast<String>() ?? [];
+    final hasImages = images.isNotEmpty;
 
     final formattedDate = dateTime != null
         ? DateFormat.yMMMd().add_jm().format(dateTime)
         : 'Unknown';
-
-    Uint8List? imageBytes;
-    if (imageBase64 != null && imageBase64.isNotEmpty) {
-      try {
-        imageBytes = base64Decode(imageBase64);
-      } catch (_) {}
-    }
 
     latlong.LatLng? mapLocation;
     if (location != null) {
@@ -509,7 +1011,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
       duration: const Duration(milliseconds: 300),
       child: Container(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.80,
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
           maxWidth: 500,
         ),
         decoration: BoxDecoration(
@@ -625,40 +1127,129 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                         ),
                       ],
                     ),
+
                     const SizedBox(height: 16),
-                    if (imageBase64 != null && imageBytes != null)
-                      ClipRRect(
+
+                    // Location information
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE3F2FD),
                         borderRadius: BorderRadius.circular(8),
-                        child: Image.memory(
-                          imageBytes,
-                          height: 140,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                            height: 140,
-                            color: const Color(0xFFE3F2FD),
-                            child: Center(
-                              child: Text(
-                                'Unable to load image',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 13,
-                                  color: Colors.grey[600],
+                        border: Border.all(color: const Color(0xFFBBDEFB)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.location_on_outlined,
+                            size: 18,
+                            color: Colors.blue.shade700,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Location',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.blue.shade800,
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  placeName,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    color: Colors.blue.shade700,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                    Text(
-                      issueDescription,
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        color: Colors.black87,
-                        height: 1.4,
+                        ],
                       ),
                     ),
+
+                    const SizedBox(height: 16),
+
+                    // Images section
+                    if (hasImages)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.image_outlined,
+                                size: 18,
+                                color: Colors.green.shade700,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Attached Images ($imageCount)',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          images.length == 1
+                              ? _buildSingleImage(images[0], issueDescription)
+                              : _buildImageCarousel(images, issueDescription),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+
+                    const SizedBox(height: 16),
+
+                    // Issue description
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.report_problem_outlined,
+                                size: 16,
+                                color: Colors.red.shade700,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Issue Description',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            issueDescription,
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
                     if (reportData['isPublic'] == true &&
                         additionalLocationInfo != null &&
                         additionalLocationInfo.isNotEmpty)
@@ -669,31 +1260,115 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                       Text(
                         'Additional Location Info: $additionalLocationInfo',
                         style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          color: Colors.black54,
-                          height: 1.4,
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                          height: 1.5,
                         ),
                       ),
-                    const SizedBox(height: 12),
+
+                    // Assessment section
+                    if (assessment != null && assessment.isNotEmpty)
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 16),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.amber.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.amber.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.assessment_outlined,
+                                      size: 18,
+                                      color: Colors.amber.shade700,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'Plumber Assessment',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.amber.shade800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  assessment,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: Colors.amber.shade900,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+
+                    const SizedBox(height: 16),
+
+                    // Map location toggle
                     GestureDetector(
                       onTap: () {
                         setState(() {
                           _showLocation = !_showLocation;
                         });
                       },
-                      child: Text(
-                        _showLocation ? 'Hide Location' : 'View Location',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          color: const Color(0xFF87CEEB),
-                          fontWeight: FontWeight.w600,
-                          decoration: TextDecoration.underline,
-                          decorationColor:
-                              const Color(0xFF87CEEB).withOpacity(0.3),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  _showLocation
+                                      ? Icons.location_on
+                                      : Icons.location_off,
+                                  size: 18,
+                                  color: const Color(0xFF87CEEB),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _showLocation ? 'Hide Map' : 'Show Map',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: const Color(0xFF87CEEB),
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Icon(
+                              _showLocation
+                                  ? Icons.expand_less
+                                  : Icons.expand_more,
+                              color: const Color(0xFF87CEEB),
+                              size: 20,
+                            ),
+                          ],
                         ),
                       ),
                     ),
+
                     const SizedBox(height: 12),
+
+                    // Map display
                     if (_showLocation && mapLocation != null)
                       FadeIn(
                         duration: const Duration(milliseconds: 200),
@@ -718,7 +1393,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                                       'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                                   subdomains: const ['a', 'b', 'c'],
                                   userAgentPackageName:
-                                      'WaterPipeMonitoring/1.0 (contact@yourdomain.com)',
+                                      'WaterPipeMonitoring/1.0',
                                   tileProvider: CachedTileProvider(),
                                   errorTileCallback: (tile, error, stackTrace) {
                                     if (error.toString().contains('403')) {
@@ -763,6 +1438,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                           ),
                         ),
                       ),
+
                     if (_showLocation && mapLocation == null)
                       Text(
                         'No location data available',
@@ -771,43 +1447,130 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                           color: Colors.grey[600],
                         ),
                       ),
-                    const SizedBox(height: 12),
-                    Text(
-                      placeName,
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        color: Colors.black54,
+
+                    const SizedBox(height: 20),
+
+                    // Status section
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
                       ),
-                    ),
-                    if (currentStatus != 'Fixed') const SizedBox(height: 16),
-                    if (currentStatus != 'Fixed')
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed:
-                              _isUpdating ? null : () => _updateStatus('Fixed'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF87CEEB),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: currentStatus == 'Fixed'
+                                  ? Colors.green.shade600
+                                  : (currentStatus == 'Monitoring'
+                                      ? Colors.orange.shade600
+                                      : Colors.red.shade600),
                             ),
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            elevation: 0,
                           ),
-                          child: _isUpdating
-                              ? const CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                )
-                              : Text(
-                                  'Mark as Fixed',
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Current Status',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  currentStatus,
                                   style: GoogleFonts.poppins(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w600,
+                                    color: currentStatus == 'Fixed'
+                                        ? Colors.green.shade800
+                                        : (currentStatus == 'Monitoring'
+                                            ? Colors.orange.shade800
+                                            : Colors.red.shade800),
                                   ),
                                 ),
-                        ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Action buttons for non-fixed reports
+                    if (currentStatus != 'Fixed')
+                      Column(
+                        children: [
+                          // Add Assessment button
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: _showAssessmentInputDialog,
+                              icon: const Icon(Icons.assessment_outlined,
+                                  size: 20),
+                              label: Text(
+                                assessment != null && assessment.isNotEmpty
+                                    ? 'Edit Assessment'
+                                    : 'Add Assessment',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF4CAF50),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                elevation: 2,
+                                shadowColor: Colors.black.withOpacity(0.1),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Mark as Fixed button
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed:
+                                  _isUpdating ? null : _showMarkFixedDialog,
+                              icon: const Icon(Icons.check_circle_outline,
+                                  size: 20),
+                              label: Text(
+                                'Mark as Fixed',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF87CEEB),
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                elevation: 2,
+                                shadowColor: Colors.black.withOpacity(0.1),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     const SizedBox(height: 8),
                   ],

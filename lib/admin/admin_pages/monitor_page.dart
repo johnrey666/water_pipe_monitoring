@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:convert';
 import 'package:animate_do/animate_do.dart';
+import 'package:carousel_slider/carousel_slider.dart';
 import 'package:water_pipe_monitoring/admin/components/admin_layout.dart';
 
 class MonitorPage extends StatefulWidget {
@@ -171,6 +172,170 @@ class _MonitorPageState extends State<MonitorPage> {
     }
   }
 
+  // Widget to display images in a carousel
+  Widget _buildImageCarousel(
+      List<String> base64Images, String issueDescription) {
+    if (base64Images.isEmpty) {
+      return Container(
+        height: 150,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.image, size: 40, color: Colors.grey.shade500),
+              const SizedBox(height: 8),
+              Text(
+                'No images attached',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        CarouselSlider.builder(
+          itemCount: base64Images.length,
+          options: CarouselOptions(
+            height: 200,
+            aspectRatio: 16 / 9,
+            viewportFraction: 0.8,
+            initialPage: 0,
+            enableInfiniteScroll: base64Images.length > 1,
+            reverse: false,
+            autoPlay: base64Images.length > 1,
+            autoPlayInterval: const Duration(seconds: 3),
+            autoPlayAnimationDuration: const Duration(milliseconds: 800),
+            autoPlayCurve: Curves.fastOutSlowIn,
+            enlargeCenterPage: true,
+            enlargeFactor: 0.3,
+            scrollDirection: Axis.horizontal,
+          ),
+          itemBuilder: (context, index, realIndex) {
+            return Container(
+              margin: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.memory(
+                  base64Decode(base64Images[index]),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey.shade300,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.broken_image,
+                                size: 40, color: Colors.grey),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Image ${index + 1}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+        if (base64Images.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.swipe, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  'Swipe to view ${base64Images.length} images',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  // Widget for single image display
+  Widget _buildSingleImage(String base64Image, String issueDescription) {
+    return Container(
+      height: 200,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.memory(
+          base64Decode(base64Image),
+          fit: BoxFit.cover,
+          width: double.infinity,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: Colors.grey.shade300,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.broken_image,
+                        size: 40, color: Colors.grey),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Image not available',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   // Show report modal with modern design
   void _showReportModal(
       BuildContext context, Map<String, dynamic> data, String reportId) async {
@@ -180,6 +345,11 @@ class _MonitorPageState extends State<MonitorPage> {
         : null;
     bool isButtonDisabled = data['assignedPlumber'] != null;
     List<Map<String, dynamic>> plumbers = await _fetchPlumbers();
+
+    // Get images data
+    final imageCount = data['imageCount'] ?? 0;
+    final images = (data['images'] as List<dynamic>?)?.cast<String>() ?? [];
+    final hasImages = images.isNotEmpty;
 
     Future<void> _assignPlumber(StateSetter setDialogState) async {
       if (selectedPlumberUid == null) {
@@ -326,12 +496,20 @@ class _MonitorPageState extends State<MonitorPage> {
                                   if (data['isPublic'])
                                     const SizedBox(height: 4),
                                   if (data['isPublic'])
-                                    Text(
-                                      'Public Report',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 14,
-                                        color: Colors.red,
-                                        fontWeight: FontWeight.w600,
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.red.shade100,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        'Public Report',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          color: Colors.red,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                       ),
                                     ),
                                 ],
@@ -339,42 +517,133 @@ class _MonitorPageState extends State<MonitorPage> {
                             ),
                           ],
                         ),
+
                         const SizedBox(height: 16),
-                        if (data['image'] != null &&
-                            data['image'] is String &&
-                            (data['image'] as String).isNotEmpty)
-                          ClipRRect(
+
+                        // Location information
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: lightBlue,
                             borderRadius: BorderRadius.circular(12),
-                            child: Image.memory(
-                              base64Decode(data['image'] as String),
-                              width: double.infinity,
-                              height: 160,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) =>
-                                  Container(
-                                padding: const EdgeInsets.all(12),
-                                alignment: Alignment.center,
-                                height: 160,
-                                color: lightBlue,
-                                child: Text(
-                                  'Unable to load image',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    color: Colors.grey[600],
-                                  ),
+                            border:
+                                Border.all(color: primaryBlue.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.location_on_outlined,
+                                size: 18,
+                                color: Colors.blue.shade700,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Location',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.blue.shade800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      data['placeName'] ?? 'Unknown location',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        color: Colors.blue.shade700,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
                                 ),
                               ),
-                            ),
-                          ),
-                        const SizedBox(height: 16),
-                        Text(
-                          data['issueDescription'] ?? 'No issue description',
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: Colors.black87,
-                            height: 1.5,
+                            ],
                           ),
                         ),
+
+                        const SizedBox(height: 16),
+
+                        // Images section
+                        if (hasImages)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.image_outlined,
+                                    size: 18,
+                                    color: Colors.green.shade700,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Attached Images ($imageCount)',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              images.length == 1
+                                  ? _buildSingleImage(
+                                      images[0], data['issueDescription'] ?? '')
+                                  : _buildImageCarousel(
+                                      images, data['issueDescription'] ?? ''),
+                              const SizedBox(height: 16),
+                            ],
+                          ),
+
+                        const SizedBox(height: 16),
+
+                        // Issue description
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.report_problem_outlined,
+                                    size: 16,
+                                    color: Colors.red.shade700,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Issue Description',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey.shade800,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                data['issueDescription'] ??
+                                    'No issue description',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
                         if (data['isPublic'] &&
                             data['additionalLocationInfo'] != null)
                           const SizedBox(height: 12),
@@ -388,297 +657,385 @@ class _MonitorPageState extends State<MonitorPage> {
                               height: 1.5,
                             ),
                           ),
-                        const SizedBox(height: 12),
-                        Chip(
-                          label: Text(
-                            data['status'] ?? 'Unknown',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
+                        const SizedBox(height: 16),
+
+                        // Status chip
+                        Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _getStatusColor(
+                                    data['status'] ?? 'Unknown'),
+                              ),
                             ),
-                          ),
-                          backgroundColor:
-                              _getStatusColor(data['status'] ?? 'Unknown'),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        ),
-                        if (!data['isPublic'] &&
-                            data['assignedPlumber'] != null)
-                          const SizedBox(height: 12),
-                        if (!data['isPublic'] &&
-                            data['assignedPlumber'] != null)
-                          Text(
-                            'Assigned: ${plumbers.firstWhere(
-                              (p) => p['uid'] == data['assignedPlumber'],
-                              orElse: () => {'fullName': 'Unknown'},
-                            )['fullName']}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              color: primaryBlue,
-                              fontWeight: FontWeight.w600,
+                            const SizedBox(width: 8),
+                            Text(
+                              'Status: ',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade700,
+                              ),
                             ),
-                          ),
-                        if (!data['isPublic']) const SizedBox(height: 16),
-                        if (!data['isPublic'])
-                          const Divider(height: 1, color: Colors.grey),
-                        if (!data['isPublic']) const SizedBox(height: 16),
-                        if (!data['isPublic'])
-                          Row(
-                            children: [
-                              Expanded(
-                                child: DropdownButtonFormField<String>(
-                                  decoration: InputDecoration(
-                                    labelText: 'Assign Plumber',
-                                    labelStyle: GoogleFonts.poppins(
-                                      fontSize: 14,
-                                      color: Colors.grey[700],
-                                    ),
-                                    filled: true,
-                                    fillColor: lightBlue,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 10),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
-                                          color: Colors.grey, width: 1),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
-                                          color: primaryBlue, width: 1.5),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
-                                          color: Colors.grey, width: 1),
-                                    ),
-                                  ),
-                                  value: selectedPlumberUid,
-                                  dropdownColor: Colors.white,
-                                  items: plumbers.isNotEmpty
-                                      ? plumbers.map((plumber) {
-                                          return DropdownMenuItem<String>(
-                                            value: plumber['uid'],
-                                            child: Text(
-                                              plumber['fullName'],
-                                              style: GoogleFonts.poppins(
-                                                  fontSize: 14),
-                                            ),
-                                          );
-                                        }).toList()
-                                      : [
-                                          DropdownMenuItem<String>(
-                                            value: null,
-                                            child: Text(
-                                              'No plumbers available',
-                                              style: GoogleFonts.poppins(
-                                                color: Colors.grey,
-                                                fontSize: 14,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                  onChanged: plumbers.isNotEmpty
-                                      ? (value) {
-                                          setDialogState(() {
-                                            selectedPlumberUid = value;
-                                            isButtonDisabled = false;
-                                          });
-                                        }
-                                      : null,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextFormField(
-                                  readOnly: true,
-                                  decoration: InputDecoration(
-                                    labelText: 'Monitoring Date',
-                                    labelStyle: GoogleFonts.poppins(
-                                      fontSize: 14,
-                                      color: Colors.grey[700],
-                                    ),
-                                    filled: true,
-                                    fillColor: lightBlue,
-                                    contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 12, vertical: 10),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
-                                          color: Colors.grey, width: 1),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
-                                          color: primaryBlue, width: 1.5),
-                                    ),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: const BorderSide(
-                                          color: Colors.grey, width: 1),
-                                    ),
-                                    suffixIcon: const Icon(
-                                      Icons.calendar_today,
-                                      color: primaryBlue,
-                                      size: 20,
-                                    ),
-                                  ),
-                                  controller: TextEditingController(
-                                    text: selectedDate != null
-                                        ? DateFormat.yMMMd()
-                                            .format(selectedDate!)
-                                        : '',
-                                  ),
-                                  onTap: () async {
-                                    final pickedDate = await showDatePicker(
-                                      context: context,
-                                      initialDate:
-                                          selectedDate ?? DateTime.now(),
-                                      firstDate: DateTime.now(),
-                                      lastDate: DateTime.now()
-                                          .add(const Duration(days: 365)),
-                                      builder: (context, child) {
-                                        return Theme(
-                                          data: Theme.of(context).copyWith(
-                                            colorScheme:
-                                                const ColorScheme.light(
-                                              primary: primaryBlue,
-                                              onPrimary: Colors.white,
-                                              onSurface: Colors.black87,
-                                            ),
-                                            textButtonTheme:
-                                                TextButtonThemeData(
-                                              style: TextButton.styleFrom(
-                                                foregroundColor: primaryBlue,
-                                              ),
-                                            ),
-                                          ),
-                                          child: child!,
-                                        );
-                                      },
-                                    );
-                                    if (pickedDate != null) {
-                                      setDialogState(() {
-                                        selectedDate = pickedDate;
-                                      });
-                                    }
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
-                        if (!data['isPublic']) const SizedBox(height: 16),
-                        if (!data['isPublic'])
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: isButtonDisabled
-                                  ? null
-                                  : () => _assignPlumber(setDialogState),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: isButtonDisabled
-                                    ? Colors.grey[400]
-                                    : primaryBlue,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: isButtonDisabled ? 0 : 4,
-                                shadowColor: Colors.black26,
-                              ),
-                              child: Text(
-                                isButtonDisabled
-                                    ? 'Plumber Assigned'
-                                    : (data['assignedPlumber'] != null
-                                        ? 'Re-assign Plumber'
-                                        : 'Assign Plumber'),
+                            Chip(
+                              label: Text(
+                                data['status'] ?? 'Unknown',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 14,
+                                  fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white,
                                 ),
                               ),
+                              backgroundColor:
+                                  _getStatusColor(data['status'] ?? 'Unknown'),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 4),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        if (!data['isPublic'] &&
+                            data['assignedPlumber'] != null)
+                          const SizedBox(height: 16),
+                        if (!data['isPublic'] &&
+                            data['assignedPlumber'] != null)
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.green.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.check_circle,
+                                  size: 18,
+                                  color: Colors.green.shade700,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'Assigned to: ${plumbers.firstWhere(
+                                      (p) =>
+                                          p['uid'] == data['assignedPlumber'],
+                                      orElse: () => {'fullName': 'Unknown'},
+                                    )['fullName']}',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      color: Colors.green.shade800,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        if (!data['isPublic'] && _userReports.length > 1)
-                          const SizedBox(height: 16),
-                        if (!data['isPublic'] && _userReports.length > 1)
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                        if (!data['isPublic']) const SizedBox(height: 20),
+                        if (!data['isPublic'])
+                          const Divider(height: 1, color: Colors.grey),
+                        if (!data['isPublic']) const SizedBox(height: 20),
+
+                        // Assignment section for non-public reports
+                        if (!data['isPublic'])
+                          Column(
                             children: [
-                              IconButton(
-                                icon: Icon(Icons.chevron_left,
-                                    color: _currentReportIndex > 0
-                                        ? primaryBlue
-                                        : Colors.grey),
-                                onPressed: _currentReportIndex > 0
-                                    ? () {
-                                        setDialogState(() {
-                                          _currentReportIndex--;
-                                          data =
-                                              _userReports[_currentReportIndex];
-                                          reportId =
-                                              _userReports[_currentReportIndex]
-                                                  ['id'];
-                                          selectedPlumberUid =
-                                              data['assignedPlumber']
-                                                  as String?;
-                                          selectedDate = data['monitoringDate']
-                                                  is Timestamp
-                                              ? (data['monitoringDate']
-                                                      as Timestamp)
-                                                  .toDate()
-                                              : null;
-                                          isButtonDisabled =
-                                              data['assignedPlumber'] != null;
-                                        });
-                                      }
-                                    : null,
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: DropdownButtonFormField<String>(
+                                      decoration: InputDecoration(
+                                        labelText: 'Assign Plumber',
+                                        labelStyle: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: Colors.grey[700],
+                                        ),
+                                        filled: true,
+                                        fillColor: lightBlue,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 10),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: const BorderSide(
+                                              color: Colors.grey, width: 1),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: const BorderSide(
+                                              color: primaryBlue, width: 1.5),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: const BorderSide(
+                                              color: Colors.grey, width: 1),
+                                        ),
+                                      ),
+                                      value: selectedPlumberUid,
+                                      dropdownColor: Colors.white,
+                                      items: plumbers.isNotEmpty
+                                          ? plumbers.map((plumber) {
+                                              return DropdownMenuItem<String>(
+                                                value: plumber['uid'],
+                                                child: Text(
+                                                  plumber['fullName'],
+                                                  style: GoogleFonts.poppins(
+                                                      fontSize: 14),
+                                                ),
+                                              );
+                                            }).toList()
+                                          : [
+                                              DropdownMenuItem<String>(
+                                                value: null,
+                                                child: Text(
+                                                  'No plumbers available',
+                                                  style: GoogleFonts.poppins(
+                                                    color: Colors.grey,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                      onChanged: plumbers.isNotEmpty
+                                          ? (value) {
+                                              setDialogState(() {
+                                                selectedPlumberUid = value;
+                                                isButtonDisabled = false;
+                                              });
+                                            }
+                                          : null,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextFormField(
+                                      readOnly: true,
+                                      decoration: InputDecoration(
+                                        labelText: 'Monitoring Date',
+                                        labelStyle: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: Colors.grey[700],
+                                        ),
+                                        filled: true,
+                                        fillColor: lightBlue,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 12, vertical: 10),
+                                        border: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: const BorderSide(
+                                              color: Colors.grey, width: 1),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: const BorderSide(
+                                              color: primaryBlue, width: 1.5),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                          borderSide: const BorderSide(
+                                              color: Colors.grey, width: 1),
+                                        ),
+                                        suffixIcon: const Icon(
+                                          Icons.calendar_today,
+                                          color: primaryBlue,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      controller: TextEditingController(
+                                        text: selectedDate != null
+                                            ? DateFormat.yMMMd()
+                                                .format(selectedDate!)
+                                            : '',
+                                      ),
+                                      onTap: () async {
+                                        final pickedDate = await showDatePicker(
+                                          context: context,
+                                          initialDate:
+                                              selectedDate ?? DateTime.now(),
+                                          firstDate: DateTime.now(),
+                                          lastDate: DateTime.now()
+                                              .add(const Duration(days: 365)),
+                                          builder: (context, child) {
+                                            return Theme(
+                                              data: Theme.of(context).copyWith(
+                                                colorScheme:
+                                                    const ColorScheme.light(
+                                                  primary: primaryBlue,
+                                                  onPrimary: Colors.white,
+                                                  onSurface: Colors.black87,
+                                                ),
+                                                textButtonTheme:
+                                                    TextButtonThemeData(
+                                                  style: TextButton.styleFrom(
+                                                    foregroundColor:
+                                                        primaryBlue,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: child!,
+                                            );
+                                          },
+                                        );
+                                        if (pickedDate != null) {
+                                          setDialogState(() {
+                                            selectedDate = pickedDate;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ],
                               ),
-                              Text(
-                                '${_currentReportIndex + 1}/${_userReports.length}',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: Colors.black87,
+                              const SizedBox(height: 20),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton(
+                                  onPressed: isButtonDisabled
+                                      ? null
+                                      : () => _assignPlumber(setDialogState),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: isButtonDisabled
+                                        ? Colors.grey[400]
+                                        : primaryBlue,
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: isButtonDisabled ? 0 : 4,
+                                    shadowColor: Colors.black26,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        isButtonDisabled
+                                            ? Icons.check_circle
+                                            : Icons.person_add,
+                                        size: 20,
+                                        color: Colors.white,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        isButtonDisabled
+                                            ? 'Already Assigned'
+                                            : (data['assignedPlumber'] != null
+                                                ? 'Re-assign Plumber'
+                                                : 'Assign Plumber'),
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                              IconButton(
-                                icon: Icon(Icons.chevron_right,
-                                    color: _currentReportIndex <
-                                            _userReports.length - 1
-                                        ? primaryBlue
-                                        : Colors.grey),
-                                onPressed: _currentReportIndex <
-                                        _userReports.length - 1
-                                    ? () {
-                                        setDialogState(() {
-                                          _currentReportIndex++;
-                                          data =
-                                              _userReports[_currentReportIndex];
-                                          reportId =
-                                              _userReports[_currentReportIndex]
-                                                  ['id'];
-                                          selectedPlumberUid =
-                                              data['assignedPlumber']
-                                                  as String?;
-                                          selectedDate = data['monitoringDate']
-                                                  is Timestamp
-                                              ? (data['monitoringDate']
-                                                      as Timestamp)
-                                                  .toDate()
-                                              : null;
-                                          isButtonDisabled =
-                                              data['assignedPlumber'] != null;
-                                        });
-                                      }
-                                    : null,
-                              ),
                             ],
+                          ),
+
+                        // Navigation for multiple reports
+                        if (!data['isPublic'] && _userReports.length > 1)
+                          const SizedBox(height: 20),
+                        if (!data['isPublic'] && _userReports.length > 1)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.grey.shade300,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                IconButton(
+                                  icon: Icon(Icons.chevron_left,
+                                      color: _currentReportIndex > 0
+                                          ? primaryBlue
+                                          : Colors.grey),
+                                  onPressed: _currentReportIndex > 0
+                                      ? () {
+                                          setDialogState(() {
+                                            _currentReportIndex--;
+                                            data = _userReports[
+                                                _currentReportIndex];
+                                            reportId = _userReports[
+                                                _currentReportIndex]['id'];
+                                            selectedPlumberUid =
+                                                data['assignedPlumber']
+                                                    as String?;
+                                            selectedDate =
+                                                data['monitoringDate']
+                                                        is Timestamp
+                                                    ? (data['monitoringDate']
+                                                            as Timestamp)
+                                                        .toDate()
+                                                    : null;
+                                            isButtonDisabled =
+                                                data['assignedPlumber'] != null;
+                                          });
+                                        }
+                                      : null,
+                                ),
+                                Text(
+                                  'Report ${_currentReportIndex + 1} of ${_userReports.length}',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: Colors.black87,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: Icon(Icons.chevron_right,
+                                      color: _currentReportIndex <
+                                              _userReports.length - 1
+                                          ? primaryBlue
+                                          : Colors.grey),
+                                  onPressed: _currentReportIndex <
+                                          _userReports.length - 1
+                                      ? () {
+                                          setDialogState(() {
+                                            _currentReportIndex++;
+                                            data = _userReports[
+                                                _currentReportIndex];
+                                            reportId = _userReports[
+                                                _currentReportIndex]['id'];
+                                            selectedPlumberUid =
+                                                data['assignedPlumber']
+                                                    as String?;
+                                            selectedDate =
+                                                data['monitoringDate']
+                                                        is Timestamp
+                                                    ? (data['monitoringDate']
+                                                            as Timestamp)
+                                                        .toDate()
+                                                    : null;
+                                            isButtonDisabled =
+                                                data['assignedPlumber'] != null;
+                                          });
+                                        }
+                                      : null,
+                                ),
+                              ],
+                            ),
                           ),
                       ],
                     ),
@@ -852,6 +1209,14 @@ class _MonitorPageState extends State<MonitorPage> {
                                             : _getStatusColor(status),
                                         border: Border.all(
                                             color: Colors.white, width: 2),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color:
+                                                Colors.black.withOpacity(0.2),
+                                            blurRadius: 4,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                     isPublic
