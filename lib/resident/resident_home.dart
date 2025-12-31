@@ -1,4 +1,5 @@
 // ignore_for_file: unused_import
+import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -16,8 +17,9 @@ import 'dart:ui' as ui;
 import 'auth/resident_login.dart';
 import 'report_problem_page.dart';
 import 'view_billing_page.dart';
+import 'transaction_history_page.dart';
 
-enum ResidentPage { home, report, billing }
+enum ResidentPage { home, report, billing, transactionHistory }
 
 class ResidentHomePage extends StatefulWidget {
   const ResidentHomePage({super.key});
@@ -34,10 +36,12 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   String _residentName = 'Resident';
   String? _residentId;
   int _unreadNotifCount = 0;
+
   // Create page instances once and reuse them
   late final ReportProblemPage _reportPage;
   late final ViewBillingPage _billingPage;
   bool _pagesInitialized = false;
+
   // PageStorage bucket to preserve state
   final PageStorageBucket _bucket = PageStorageBucket();
 
@@ -46,7 +50,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     super.initState();
     _fetchResidentName();
     _fetchUnreadNotifCount();
-    // Initialize pages once
+
+    // Initialize pages that don't need residentId
     if (!_pagesInitialized) {
       _reportPage = const ReportProblemPage();
       _billingPage = const ViewBillingPage();
@@ -296,24 +301,21 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return {'unread': [], 'read': []};
-
       // Fetch all notifications for this user
       final unreadSnapshot = await FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: user.uid)
           .where('read', isEqualTo: false)
           .orderBy('timestamp', descending: true)
-          .limit(30)
+          .limit(20)
           .get();
-
       final readSnapshot = await FirebaseFirestore.instance
           .collection('notifications')
           .where('userId', isEqualTo: user.uid)
           .where('read', isEqualTo: true)
           .orderBy('timestamp', descending: true)
-          .limit(30)
+          .limit(20)
           .get();
-
       final unreadNotifications = unreadSnapshot.docs.map((doc) {
         final data = doc.data();
         return {
@@ -328,10 +330,11 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           'status': data['status'],
           'month': data['month'],
           'amount': data['amount']?.toDouble(),
+          'rejectionReason': data['rejectionReason'],
+          'receiptImage': data['receiptImage'],
           'isRead': false,
         };
       }).toList();
-
       final readNotifications = readSnapshot.docs.map((doc) {
         final data = doc.data();
         return {
@@ -346,10 +349,11 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           'status': data['status'],
           'month': data['month'],
           'amount': data['amount']?.toDouble(),
+          'rejectionReason': data['rejectionReason'],
+          'receiptImage': data['receiptImage'],
           'isRead': true,
         };
       }).toList();
-
       return {'unread': unreadNotifications, 'read': readNotifications};
     } catch (e) {
       print('DEBUG: Error fetching notifications: $e');
@@ -375,10 +379,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     if (!notification['isRead'] && notification['id'] != null) {
       await _markNotificationAsRead(notification['id']);
     }
-
     // Remove overlay
     _removeNotificationOverlay();
-
     // Handle different notification types
     if (notification['type'] == 'report_fixed' &&
         notification['reportId'] != null) {
@@ -400,7 +402,21 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     } else if (notification['type'] == 'payment' &&
         notification['billId'] != null) {
       // Handle payment notifications
-      _showPaidBillModal(notification);
+      if (notification['status'] == 'approved') {
+        _showPaidBillModal(notification);
+      } else if (notification['status'] == 'rejected') {
+        _showRejectedPaymentModal(notification);
+      } else {
+        // For pending payments, just show a snackbar
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(notification['message'] ?? 'Payment notification'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
     } else {
       // For other notifications, show a snackbar with the message
       if (mounted) {
@@ -419,7 +435,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       final monthNum = monthDate.month;
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
-          .doc(_residentId)
+          .doc(_residentId!)
           .collection('consumption_history')
           .where('year', isEqualTo: year)
           .where('month', isEqualTo: monthNum)
@@ -427,9 +443,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           .get();
       if (snapshot.docs.isNotEmpty) {
         final data = snapshot.docs.first.data();
-        final periodStart = data['periodStart'] as Timestamp?;
+        final periodStart = (data['periodStart'] as Timestamp?)?.toDate();
         final cubicMeterUsed = data['cubicMeterUsed']?.toDouble() ?? 0.0;
-
         final paymentSnapshot = await FirebaseFirestore.instance
             .collection('payments')
             .where('residentId', isEqualTo: _residentId)
@@ -440,16 +455,14 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         if (paymentSnapshot.docs.isNotEmpty) {
           final paymentData = paymentSnapshot.docs.first.data();
           final amount = paymentData['billAmount']?.toDouble() ?? 0.0;
-
           final userSnapshot = await FirebaseFirestore.instance
               .collection('users')
               .doc(_residentId)
               .get();
           final userData = userSnapshot.data() ?? {};
-
           final meterSnapshot = await FirebaseFirestore.instance
               .collection('users')
-              .doc(_residentId)
+              .doc(_residentId!)
               .collection('meter_readings')
               .doc('latest')
               .get();
@@ -468,7 +481,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
             'contactNumber': userData['contactNumber'] ?? 'N/A',
             'meterNumber': userData['meterNumber'] ?? 'N/A',
             'purok': userData['purok'] ?? 'PUROK 1',
-            'periodStart': periodStart?.toDate(),
+            'periodStart': periodStart,
             'previousReading': previousReading,
             'currentReading': currentReading,
             'cubicMeterUsed': cubicMeterUsed,
@@ -481,6 +494,85 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       return null;
     } catch (e) {
       print('Error fetching paid bill details: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> _fetchRejectedPaymentDetails(String billId,
+      String month, String? rejectionReason, String? receiptImage) async {
+    try {
+      final monthDate = DateFormat('MMM yyyy').parse(month);
+      final year = monthDate.year;
+      final monthNum = monthDate.month;
+      // Try to get bill details from consumption history
+      final consumptionSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_residentId!)
+          .collection('consumption_history')
+          .where('year', isEqualTo: year)
+          .where('month', isEqualTo: monthNum)
+          .limit(1)
+          .get();
+      double cubicMeterUsed = 0.0;
+      DateTime? periodStart;
+      if (consumptionSnapshot.docs.isNotEmpty) {
+        final data = consumptionSnapshot.docs.first.data();
+        final periodStartTimestamp = data['periodStart'] as Timestamp?;
+        periodStart = periodStartTimestamp?.toDate();
+        cubicMeterUsed = data['cubicMeterUsed']?.toDouble() ?? 0.0;
+      }
+      // Get payment details
+      final paymentSnapshot = await FirebaseFirestore.instance
+          .collection('payments')
+          .where('residentId', isEqualTo: _residentId)
+          .where('billId', isEqualTo: billId)
+          .where('status', isEqualTo: 'rejected')
+          .limit(1)
+          .get();
+      double amount = 0.0;
+      DateTime? processedDate;
+      if (paymentSnapshot.docs.isNotEmpty) {
+        final paymentData = paymentSnapshot.docs.first.data();
+        amount = paymentData['billAmount']?.toDouble() ?? 0.0;
+        final processedDateTimestamp =
+            paymentData['processedDate'] as Timestamp?;
+        processedDate = processedDateTimestamp?.toDate();
+      }
+      final userSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_residentId!)
+          .get();
+      final userData = userSnapshot.data() ?? {};
+      final meterSnapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(_residentId!)
+          .collection('meter_readings')
+          .doc('latest')
+          .get();
+      final currentReading = meterSnapshot.exists
+          ? (meterSnapshot.data()!['currentConsumedWaterMeter'] as num?)
+                  ?.toDouble() ??
+              0.0
+          : 0.0;
+      final previousReading = currentReading - cubicMeterUsed;
+      return {
+        'fullName': userData['fullName'] ?? 'N/A',
+        'address': userData['address'] ?? 'N/A',
+        'contactNumber': userData['contactNumber'] ?? 'N/A',
+        'meterNumber': userData['meterNumber'] ?? 'N/A',
+        'purok': userData['purok'] ?? 'PUROK 1',
+        'periodStart': periodStart,
+        'previousReading': previousReading,
+        'currentReading': currentReading,
+        'cubicMeterUsed': cubicMeterUsed,
+        'currentMonthBill': amount,
+        'processedDate': processedDate ?? DateTime.now(),
+        'status': 'REJECTED',
+        'rejectionReason': rejectionReason ?? 'No reason provided',
+        'receiptImage': receiptImage,
+      };
+    } catch (e) {
+      print('Error fetching rejected payment details: $e');
       return null;
     }
   }
@@ -505,6 +597,34 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.all(16),
           child: _PaidBillDialog(billDetails: billDetails),
+        ),
+      );
+    }
+  }
+
+  void _showRejectedPaymentModal(Map<String, dynamic> notification) async {
+    if (notification['type'] != 'payment' ||
+        notification['status'] != 'rejected') return;
+    final paymentDetails = await _fetchRejectedPaymentDetails(
+        notification['billId'],
+        notification['month'],
+        notification['rejectionReason'],
+        notification['receiptImage']);
+    if (paymentDetails == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to load payment details.')),
+        );
+      }
+      return;
+    }
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.all(16),
+          child: _RejectedPaymentDialog(paymentDetails: paymentDetails),
         ),
       );
     }
@@ -543,11 +663,11 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                   top: position.dy + size.height + 8,
                   child: Material(
                     elevation: 8,
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: 350,
-                        maxHeight: 500,
+                      constraints: BoxConstraints(
+                        maxWidth: screenSize.width * 0.9,
+                        maxHeight: screenSize.height * 0.7,
                       ),
                       child: NotificationDropdown(
                         onNotificationTap: _handleNotificationTap,
@@ -642,7 +762,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         appBar: AppBar(
           backgroundColor: Colors.white,
           title: Text(
-            'Resident',
+            _getAppBarTitle(),
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -661,10 +781,19 @@ class _ResidentHomePageState extends State<ResidentHomePage>
               children: [
                 IconButton(
                   key: _notificationButtonKey,
-                  icon: Icon(
-                    Icons.notifications_outlined,
-                    color: Colors.blue.shade700,
-                    size: 26,
+                  icon: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.blue.shade50,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Icon(
+                        Icons.notifications_outlined,
+                        color: Colors.blue.shade700,
+                        size: 24,
+                      ),
+                    ),
                   ),
                   onPressed: () {
                     if (!mounted) return;
@@ -686,12 +815,16 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                 if (_unreadNotifCount > 0)
                   Positioned(
                     right: 8,
-                    top: 8,
+                    top: 6,
                     child: Container(
                       padding: const EdgeInsets.all(4),
                       decoration: const BoxDecoration(
                         color: Colors.red,
                         shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
                       ),
                       child: Text(
                         _unreadNotifCount > 9 ? '9+' : '$_unreadNotifCount',
@@ -700,6 +833,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                           fontSize: 10,
                           fontWeight: FontWeight.bold,
                         ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
@@ -791,6 +925,11 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                         title: 'View Billing',
                         page: ResidentPage.billing,
                       ),
+                      _buildDrawerItem(
+                        icon: Icons.history_outlined,
+                        title: 'Transaction History',
+                        page: ResidentPage.transactionHistory,
+                      ),
                     ],
                   ),
                 ),
@@ -840,11 +979,54 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                   child: _billingPage,
                 ),
               ),
+              Offstage(
+                offstage: _selectedPage != ResidentPage.transactionHistory,
+                child: TickerMode(
+                  enabled: _selectedPage == ResidentPage.transactionHistory,
+                  // FIXED: Create TransactionHistoryPage on demand with the residentId
+                  child: _residentId != null && _residentId!.isNotEmpty
+                      ? TransactionHistoryPage(residentId: _residentId!)
+                      : Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                    Color(0xFF87CEEB)),
+                              ),
+                              SizedBox(height: 16),
+                              Text(
+                                'Loading user data...',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                ),
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  String _getAppBarTitle() {
+    switch (_selectedPage) {
+      case ResidentPage.home:
+        return 'Resident';
+      case ResidentPage.report:
+        return 'Report Problem';
+      case ResidentPage.billing:
+        return 'View Billing';
+      case ResidentPage.transactionHistory:
+        return 'Transaction History';
+      default:
+        return 'Resident';
+    }
   }
 
   Widget _buildDrawerItem({
@@ -1329,25 +1511,18 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       barRods: [
         BarChartRodData(
           toY: y,
-          gradient: const LinearGradient(
-            colors: [
-              Color(0xFF87CEEB),
-              Color(0xFFE0F7FA),
-            ],
-            begin: Alignment.bottomCenter,
-            end: Alignment.topCenter,
-          ),
           width: 16,
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(4),
           ),
+          color: const Color(0xFF87CEEB),
         ),
       ],
     );
   }
 }
 
-// UPDATED NOTIFICATION DROPDOWN
+// Enhanced Notification Dropdown - More Compact Version
 class NotificationDropdown extends StatefulWidget {
   final Function(Map<String, dynamic>) onNotificationTap;
   final Function(String) onMarkAsRead;
@@ -1370,7 +1545,7 @@ class NotificationDropdown extends StatefulWidget {
 class _NotificationDropdownState extends State<NotificationDropdown>
     with AutomaticKeepAliveClientMixin {
   int _page = 0;
-  static const int _itemsPerPage = 5;
+  static const int _itemsPerPage = 6; // Reduced from 8
 
   @override
   bool get wantKeepAlive => true;
@@ -1382,9 +1557,14 @@ class _NotificationDropdownState extends State<NotificationDropdown>
       future: widget.fetchNotifications(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-            height: 100,
-            child: Center(
+          return Container(
+            width: 350,
+            height: 200,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Center(
               child: CircularProgressIndicator(
                 valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF87CEEB)),
               ),
@@ -1395,22 +1575,35 @@ class _NotificationDropdownState extends State<NotificationDropdown>
         final unread = notificationsData['unread']!;
         final read = notificationsData['read']!;
         final allNotifications = [...unread, ...read];
-
         if (allNotifications.isEmpty) {
-          return SizedBox(
-            height: 80,
+          return Container(
+            width: 350,
+            height: 150,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.notifications_none,
-                      size: 32, color: Colors.grey.shade400),
+                  Icon(Icons.notifications_off,
+                      size: 40, color: Colors.grey.shade400),
                   const SizedBox(height: 8),
                   Text(
                     'No notifications',
                     style: GoogleFonts.poppins(
                       fontSize: 14,
+                      fontWeight: FontWeight.w500,
                       color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'You\'re all caught up!',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: Colors.grey.shade500,
                     ),
                   ),
                 ],
@@ -1418,66 +1611,89 @@ class _NotificationDropdownState extends State<NotificationDropdown>
             ),
           );
         }
-
         allNotifications.sort((a, b) =>
             (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime));
-
         final totalPages = (allNotifications.length / _itemsPerPage).ceil();
         final currentItems = allNotifications
             .skip(_page * _itemsPerPage)
             .take(_itemsPerPage)
             .toList();
-
         return Container(
-          width: 350,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF87CEEB),
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(8),
-                    topRight: Radius.circular(8),
+            width: 350,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF87CEEB),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Notifications',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          if (unread.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '${unread.length} new',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: const Color(0xFF87CEEB),
+                                ),
+                              ),
+                            ),
+                          const SizedBox(width: 4),
+                          IconButton(
+                            icon: const Icon(Icons.close,
+                                size: 18, color: Colors.white),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: widget.onClose,
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Notifications',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close,
-                          size: 20, color: Colors.white),
-                      onPressed: widget.onClose,
-                    ),
-                  ],
+                // Notifications list
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 300),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: currentItems.length,
+                    itemBuilder: (context, index) {
+                      final notification = currentItems[index];
+                      return _buildNotificationItem(notification);
+                    },
+                  ),
                 ),
-              ),
-
-              // Notifications list
-              Flexible(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: currentItems.length,
-                  itemBuilder: (context, index) {
-                    final notification = currentItems[index];
-                    return _buildNotificationItem(notification);
-                  },
-                ),
-              ),
-
-              // Pagination
-              if (totalPages > 1)
+                // Footer
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
@@ -1485,39 +1701,90 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                     border: Border(
                       top: BorderSide(color: Colors.grey.shade300),
                     ),
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(12),
+                      bottomRight: Radius.circular(12),
+                    ),
                   ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      IconButton(
-                        icon: Icon(Icons.chevron_left,
-                            color:
-                                _page > 0 ? Colors.blue.shade700 : Colors.grey),
-                        onPressed:
-                            _page > 0 ? () => setState(() => _page--) : null,
-                      ),
-                      Text(
-                        '${_page + 1} / $totalPages',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.grey.shade700,
+                      // Mark all as read button
+                      if (unread.isNotEmpty)
+                        TextButton.icon(
+                          onPressed: () {
+                            for (final notification in unread) {
+                              if (notification['id'] != null) {
+                                widget.onMarkAsRead(notification['id']);
+                              }
+                            }
+                          },
+                          icon: Icon(Icons.mark_chat_read,
+                              size: 14, color: Colors.blue.shade700),
+                          label: Text(
+                            'Mark all read',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: Colors.blue.shade700,
+                            ),
+                          ),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                          ),
                         ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.chevron_right,
-                            color: _page < totalPages - 1
-                                ? Colors.blue.shade700
-                                : Colors.grey),
-                        onPressed: _page < totalPages - 1
-                            ? () => setState(() => _page++)
-                            : null,
-                      ),
+                      // Pagination
+                      if (totalPages > 1)
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: Icon(Icons.chevron_left,
+                                  color: _page > 0
+                                      ? Colors.blue.shade700
+                                      : Colors.grey,
+                                  size: 20),
+                              onPressed: _page > 0
+                                  ? () => setState(() => _page--)
+                                  : null,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: Text(
+                                '${_page + 1} / $totalPages',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.chevron_right,
+                                  color: _page < totalPages - 1
+                                      ? Colors.blue.shade700
+                                      : Colors.grey,
+                                  size: 20),
+                              onPressed: _page < totalPages - 1
+                                  ? () => setState(() => _page++)
+                                  : null,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
-            ],
-          ),
-        );
+              ],
+            ));
       },
     );
   }
@@ -1528,24 +1795,47 @@ class _NotificationDropdownState extends State<NotificationDropdown>
     final title = notification['title'] ?? '';
     final message = notification['message'] ?? '';
     final timestamp = notification['timestamp'] as DateTime?;
-    final hasReport = notification['reportId'] != null;
-    final assessment = notification['assessment'];
     final status = notification['status'];
     final month = notification['month'];
     final amount = notification['amount'];
+    // ignore: unused_local_variable
+    final rejectionReason = notification['rejectionReason'];
 
-    // Determine icon and color based on type
+    // Determine icon and color based on type and status
     IconData icon;
     Color iconColor;
+    Color backgroundColor = isRead ? Colors.white : Colors.blue.shade50;
 
     switch (type) {
       case 'report_fixed':
         icon = Icons.check_circle_outline;
         iconColor = Colors.green;
+        backgroundColor = isRead
+            ? Colors.green.shade50
+            : Colors.green.shade100.withOpacity(0.5);
         break;
       case 'payment':
-        icon = Icons.payment;
-        iconColor = status == 'approved' ? Colors.green : Colors.red;
+        icon = status == 'approved'
+            ? Icons.check_circle
+            : status == 'rejected'
+                ? Icons.cancel
+                : Icons.payment;
+        iconColor = status == 'approved'
+            ? Colors.green
+            : status == 'rejected'
+                ? Colors.red
+                : Colors.orange;
+        backgroundColor = isRead
+            ? (status == 'approved'
+                ? Colors.green.shade50
+                : status == 'rejected'
+                    ? Colors.red.shade50
+                    : Colors.orange.shade50)
+            : (status == 'approved'
+                ? Colors.green.shade100.withOpacity(0.5)
+                : status == 'rejected'
+                    ? Colors.red.shade100.withOpacity(0.5)
+                    : Colors.orange.shade100.withOpacity(0.5));
         break;
       default:
         icon = Icons.notifications;
@@ -1553,7 +1843,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
     }
 
     return Material(
-      color: isRead ? Colors.white : Colors.blue.shade50,
+      color: backgroundColor,
       child: InkWell(
         onTap: () => widget.onNotificationTap(notification),
         child: Container(
@@ -1568,62 +1858,80 @@ class _NotificationDropdownState extends State<NotificationDropdown>
             children: [
               // Notification icon
               Container(
-                margin: const EdgeInsets.only(right: 12),
+                margin: const EdgeInsets.only(right: 10),
                 child: CircleAvatar(
                   radius: 16,
                   backgroundColor: iconColor.withOpacity(0.1),
                   child: Icon(icon, size: 18, color: iconColor),
                 ),
               ),
-
               // Notification content
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Title
-                    Text(
-                      title,
-                      style: GoogleFonts.poppins(
-                        fontSize: 14,
-                        fontWeight:
-                            isRead ? FontWeight.normal : FontWeight.w600,
-                        color: isRead ? Colors.grey.shade700 : Colors.black87,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    // Title row
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight:
+                                  isRead ? FontWeight.w500 : FontWeight.w600,
+                              color:
+                                  isRead ? Colors.grey.shade800 : Colors.black,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (!isRead)
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                      ],
                     ),
-
                     // Message
                     if (message.isNotEmpty) ...[
                       const SizedBox(height: 4),
                       Text(
                         message,
                         style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          color: Colors.grey.shade600,
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
                         ),
-                        maxLines: 3,
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
-
                     // Payment details (if applicable)
                     if (type == 'payment' &&
                         month != null &&
                         amount != null) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           color: status == 'approved'
                               ? Colors.green.shade50
-                              : Colors.red.shade50,
+                              : status == 'rejected'
+                                  ? Colors.red.shade50
+                                  : Colors.orange.shade50,
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(
                             color: status == 'approved'
                                 ? Colors.green.shade200
-                                : Colors.red.shade200,
+                                : status == 'rejected'
+                                    ? Colors.red.shade200
+                                    : Colors.orange.shade200,
                           ),
                         ),
                         child: Row(
@@ -1631,126 +1939,70 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                             Icon(
                               status == 'approved'
                                   ? Icons.check_circle
-                                  : Icons.error,
+                                  : status == 'rejected'
+                                      ? Icons.cancel
+                                      : Icons.hourglass_bottom,
                               size: 12,
                               color: status == 'approved'
                                   ? Colors.green.shade700
-                                  : Colors.red.shade700,
+                                  : status == 'rejected'
+                                      ? Colors.red.shade700
+                                      : Colors.orange.shade700,
                             ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '₱${amount.toStringAsFixed(2)} for $month - ${status?.toUpperCase() ?? 'PENDING'}',
-                              style: GoogleFonts.poppins(
-                                fontSize: 11,
-                                color: status == 'approved'
-                                    ? Colors.green.shade900
-                                    : Colors.red.shade900,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-
-                    // Assessment preview (if available)
-                    if (assessment != null && assessment.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.amber.shade50,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: Colors.amber.shade200),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.assessment,
-                                size: 12, color: Colors.amber.shade700),
                             const SizedBox(width: 4),
                             Expanded(
-                              child: Text(
-                                'Assessment: ${assessment.length > 50 ? '${assessment.substring(0, 50)}...' : assessment}',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  color: Colors.amber.shade900,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '₱${amount.toStringAsFixed(2)} for $month',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: status == 'approved'
+                                          ? Colors.green.shade900
+                                          : status == 'rejected'
+                                              ? Colors.red.shade900
+                                              : Colors.orange.shade900,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Status: ${status?.toUpperCase() ?? 'PENDING'}',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 10,
+                                      color: status == 'approved'
+                                          ? Colors.green.shade700
+                                          : status == 'rejected'
+                                              ? Colors.red.shade700
+                                              : Colors.orange.shade700,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
                     ],
-
-                    // Timestamp and status
+                    // Timestamp
                     const SizedBox(height: 6),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
                           timestamp != null
-                              ? DateFormat.yMMMd().add_jm().format(timestamp)
+                              ? DateFormat('MMM d, h:mm a').format(timestamp)
                               : 'Recently',
                           style: GoogleFonts.poppins(
-                            fontSize: 11,
+                            fontSize: 10,
                             color: Colors.grey.shade500,
                           ),
                         ),
-                        if (!isRead)
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.red,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              'NEW',
-                              style: GoogleFonts.poppins(
-                                fontSize: 9,
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        if (hasReport && type == 'report_fixed')
-                          Row(
-                            children: [
-                              Icon(Icons.visibility,
-                                  size: 12, color: Colors.blue.shade700),
-                              const SizedBox(width: 4),
-                              Text(
-                                'View Report',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  color: Colors.blue.shade700,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
                       ],
                     ),
                   ],
                 ),
               ),
-
-              // Mark as read button for unread notifications
-              if (!isRead)
-                IconButton(
-                  icon: Icon(Icons.mark_chat_read,
-                      size: 18, color: Colors.grey.shade600),
-                  onPressed: () {
-                    if (notification['id'] != null) {
-                      widget.onMarkAsRead(notification['id']);
-                    }
-                  },
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
-                ),
             ],
           ),
         ),
@@ -1759,9 +2011,607 @@ class _NotificationDropdownState extends State<NotificationDropdown>
   }
 }
 
-// Existing PaidBillDialog class remains the same...
+// Rejected Payment Dialog
+class _RejectedPaymentDialog extends StatefulWidget {
+  final Map<String, dynamic> paymentDetails;
+
+  const _RejectedPaymentDialog({required this.paymentDetails});
+
+  @override
+  State<_RejectedPaymentDialog> createState() => _RejectedPaymentDialogState();
+}
+
+class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
+  bool _showRates = false;
+  bool _showReceipt = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final fullName = widget.paymentDetails['fullName'] ?? 'N/A';
+    final address = widget.paymentDetails['address'] ?? 'N/A';
+    final contactNumber = widget.paymentDetails['contactNumber'] ?? 'N/A';
+    final meterNumber = widget.paymentDetails['meterNumber'] ?? 'N/A';
+    final purok = widget.paymentDetails['purok'] ?? 'PUROK 1';
+    final periodStart = widget.paymentDetails['periodStart'] as DateTime?;
+    final previousReading =
+        widget.paymentDetails['previousReading']?.toDouble() ?? 0.0;
+    final currentReading =
+        widget.paymentDetails['currentReading']?.toDouble() ?? 0.0;
+    final cubicMeterUsed =
+        widget.paymentDetails['cubicMeterUsed']?.toDouble() ?? 0.0;
+    final amount = widget.paymentDetails['currentMonthBill']?.toDouble() ?? 0.0;
+    final processedDate = widget.paymentDetails['processedDate'] as DateTime?;
+    final rejectionReason =
+        widget.paymentDetails['rejectionReason'] ?? 'No reason provided';
+    final receiptImage = widget.paymentDetails['receiptImage'] as String?;
+    final formattedPeriodStart = periodStart != null
+        ? DateFormat('MM-dd-yyyy').format(periodStart)
+        : 'N/A';
+    final formattedProcessedDate = processedDate != null
+        ? DateFormat.yMMMd().format(processedDate)
+        : DateFormat.yMMMd().format(DateTime.now());
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(16),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 750),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(16)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.red.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  const Text(
+                    'PAYMENT REJECTED',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Please resubmit with corrections',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Image.asset('assets/images/icon.png', height: 40),
+                            const SizedBox(width: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'San Jose Water Services',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF4A90E2),
+                                  ),
+                                ),
+                                Text(
+                                  purok,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        Text(
+                          formattedProcessedDate,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'PAYMENT REJECTION NOTICE',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _dashedDivider(),
+                    _receiptRow('Name', fullName),
+                    _receiptRow('Address', address),
+                    _receiptRow('Contact', contactNumber),
+                    _receiptRow('Meter No.', meterNumber),
+                    _receiptRow('Billing Period Start', formattedPeriodStart),
+                    _receiptRow('Processed Date', formattedProcessedDate),
+                    _dashedDivider(),
+                    _receiptRow('Previous Reading',
+                        '${previousReading.toStringAsFixed(2)} m³'),
+                    _receiptRow('Current Reading',
+                        '${currentReading.toStringAsFixed(2)} m³'),
+                    _receiptRow('Cubic Meter Used',
+                        '${cubicMeterUsed.toStringAsFixed(2)} m³'),
+                    _dashedDivider(),
+                    _receiptRow('Amount', '₱${amount.toStringAsFixed(2)}',
+                        valueColor: Colors.red, isBold: true, fontSize: 14),
+                    // Rejection Reason Section
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.red.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.error_outline,
+                                  color: Colors.red.shade700, size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Rejection Reason',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            rejectionReason,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.red.shade900,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Receipt Image Section
+                    if (receiptImage != null) ...[
+                      GestureDetector(
+                        onTap: () =>
+                            setState(() => _showReceipt = !_showReceipt),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 10, horizontal: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.receipt,
+                                      color: Colors.blue.shade700, size: 18),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'View Submitted Receipt',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Icon(
+                                _showReceipt
+                                    ? Icons.expand_less
+                                    : Icons.expand_more,
+                                size: 18,
+                                color: Colors.blue.shade700,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      AnimatedCrossFade(
+                        firstChild: const SizedBox.shrink(),
+                        secondChild: Container(
+                          margin: const EdgeInsets.only(top: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey.shade300),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: Column(
+                            children: [
+                              Text(
+                                'Submitted Receipt',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                height: 200,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(8),
+                                  border:
+                                      Border.all(color: Colors.grey.shade300),
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.memory(
+                                    base64.decode(receiptImage),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Center(
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.error,
+                                                color: Colors.red.shade400,
+                                                size: 40),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              'Unable to load receipt',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        crossFadeState: _showReceipt
+                            ? CrossFadeState.showSecond
+                            : CrossFadeState.showFirst,
+                        duration: const Duration(milliseconds: 300),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    // Rate Information
+                    GestureDetector(
+                      onTap: () => setState(() => _showRates = !_showRates),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Rate Information',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey.shade800,
+                              ),
+                            ),
+                            Icon(
+                              _showRates
+                                  ? Icons.expand_less
+                                  : Icons.expand_more,
+                              size: 18,
+                              color: Colors.grey.shade700,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    AnimatedCrossFade(
+                      firstChild: const SizedBox.shrink(),
+                      secondChild: Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade300),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 6,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _rateRow('Residential',
+                                'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
+                            const SizedBox(height: 6),
+                            _rateRow('Commercial',
+                                'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
+                            const SizedBox(height: 6),
+                            _rateRow('Non Residence',
+                                'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
+                            const SizedBox(height: 6),
+                            _rateRow('Industrial',
+                                'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
+                          ],
+                        ),
+                      ),
+                      crossFadeState: _showRates
+                          ? CrossFadeState.showSecond
+                          : CrossFadeState.showFirst,
+                      duration: const Duration(milliseconds: 300),
+                    ),
+                    const SizedBox(height: 16),
+                    // Instructions
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline,
+                              color: Colors.amber.shade700, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Please correct the issue mentioned above and resubmit your payment.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.amber.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.phone,
+                              color: Colors.blue.shade700, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'GCash Payment',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue.shade800,
+                                  ),
+                                ),
+                                Text(
+                                  '09853886411',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.blue.shade900,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Action buttons
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        // Navigate to billing page to resubmit payment
+                        // This would be handled by the parent widget
+                      },
+                      icon: const Icon(Icons.refresh, color: Colors.white),
+                      label: const Text(
+                        'Resubmit Payment',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade700,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      label: const Text(
+                        'Close',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.grey.shade600,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dashedDivider() => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: List.generate(
+            30,
+            (i) => Expanded(
+              child: Container(
+                height: 1,
+                color: i.isEven ? Colors.grey[300] : Colors.transparent,
+              ),
+            ),
+          ),
+        ),
+      );
+
+  Widget _receiptRow(String label, String value,
+      {Color? valueColor, bool isBold = false, double fontSize = 12}) {
+    return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+            Expanded(
+              flex: 3,
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                  fontSize: fontSize,
+                  color: valueColor ?? Colors.grey[800],
+                ),
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ],
+        ));
+  }
+
+  Widget _rateRow(String category, String details) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            category,
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              details,
+              style: const TextStyle(
+                fontSize: 11,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+        ],
+      );
+}
+
+// Existing PaidBillDialog class (kept for reference)
 class _PaidBillDialog extends StatefulWidget {
   final Map<String, dynamic> billDetails;
+
   const _PaidBillDialog({required this.billDetails});
 
   @override
@@ -1849,11 +2699,6 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
               offset: const Offset(0, 5),
             ),
           ],
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFFFFFF), Color(0xFFEDF7FF)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -1998,7 +2843,7 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                                   color: Colors.grey[200]!, width: 1),
                               boxShadow: [
                                 BoxShadow(
-                                  color: Colors.black12.withOpacity(0.05),
+                                  color: Colors.black.withOpacity(0.05),
                                   blurRadius: 6,
                                   offset: const Offset(0, 2),
                                 ),
@@ -2157,35 +3002,34 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
   Widget _receiptRow(String label, String value,
       {Color? valueColor, bool isBold = false, double fontSize = 11}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-                color: Colors.black,
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                  color: Colors.black,
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-                fontSize: fontSize,
-                color: valueColor ?? Colors.grey[700],
+            Expanded(
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                  fontSize: fontSize,
+                  color: valueColor ?? Colors.grey[700],
+                ),
+                textAlign: TextAlign.right,
               ),
-              textAlign: TextAlign.right,
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ));
   }
 
   Widget _rateRow(String category, String details) => Row(

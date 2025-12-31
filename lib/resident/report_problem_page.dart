@@ -47,7 +47,6 @@ class _ReportProblemPageState extends State<ReportProblemPage>
   bool _isPublicReport = false;
   bool _isInitialized = false;
   String? _errorMessage;
-  int _recentPage = 0;
 
   // Add PageStorageKey to preserve ListView state (scroll, focus)
   final PageStorageKey _listKey = PageStorageKey('report_problem_list');
@@ -468,7 +467,6 @@ class _ReportProblemPageState extends State<ReportProblemPage>
         _selectedPlaceName = null;
         _locationController.clear();
         _isPublicReport = false;
-        _recentPage = 0;
       });
     } catch (e) {
       if (!mounted) return;
@@ -948,219 +946,84 @@ class _ReportProblemPageState extends State<ReportProblemPage>
     );
   }
 
-  Widget _recentReports() {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return const SizedBox();
-    return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('reports')
-          .where('userId', isEqualTo: user.uid)
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-            height: 100,
-            child: Center(child: CircularProgressIndicator()),
-          );
-        }
-        if (snapshot.hasError) {
-          return FadeInUp(
-            duration: const Duration(milliseconds: 400),
-            delay: const Duration(milliseconds: 500),
-            child: Container(
-              margin: const EdgeInsets.only(top: 18),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.shade100,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Text(
-                'Error loading recent reports',
-                style: GoogleFonts.poppins(
-                    fontSize: 14, color: Colors.red.shade800),
-                textAlign: TextAlign.center,
-              ),
+  Widget _reportsCompilationButton() {
+    return FadeInUp(
+      duration: const Duration(milliseconds: 400),
+      delay: const Duration(milliseconds: 500),
+      child: Container(
+        margin: const EdgeInsets.only(top: 18),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-          );
-        }
-        if (snapshot.data!.docs.isEmpty) {
-          return const SizedBox();
-        }
-        final docs = snapshot.data!.docs;
-        final totalPages = docs.length;
-        final index = _recentPage.clamp(0, docs.length - 1);
-        final doc = docs[index];
-        final data = doc.data() as Map<String, dynamic>;
-
-        return FadeInUp(
-          duration: const Duration(milliseconds: 400),
-          delay: const Duration(milliseconds: 500),
-          child: Container(
-            margin: const EdgeInsets.only(top: 18),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.history, color: accentColor, size: 24),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Recent Report',
-                      style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const Spacer(),
-                    if (totalPages > 1)
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.chevron_left, color: accentColor),
-                            onPressed: _recentPage > 0
-                                ? () => setState(() => _recentPage--)
-                                : null,
-                          ),
-                          Text(
-                            '${_recentPage + 1}/$totalPages',
-                            style: GoogleFonts.poppins(
-                                fontSize: 14, color: Colors.black87),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.chevron_right, color: accentColor),
-                            onPressed: _recentPage < totalPages - 1
-                                ? () => setState(() => _recentPage++)
-                                : null,
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.report, color: Colors.red.shade700, size: 24),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              data['issueDescription'] ?? 'No description',
-                              style: GoogleFonts.poppins(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black87,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (data['placeName'] != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  data['placeName'],
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                DateFormat('yyyy-MM-dd HH:mm').format(
-                                    (data['dateTime'] as Timestamp).toDate()),
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ),
-                            if (data['imageCount'] != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.image,
-                                        size: 12, color: Colors.grey.shade600),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${data['imageCount']} images',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Chip(
-                        label: Text(
-                          (data['status'] ?? '')
-                              .toString()
-                              .replaceAll('Reports', ''),
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: data['status'] == 'Fixed'
-                                ? Colors.green.shade700
-                                : (data['status'] == 'Unfixed Reports'
-                                    ? Colors.red.shade700
-                                    : Colors.orange.shade800),
-                          ),
-                        ),
-                        backgroundColor: Colors.grey.shade100,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 0),
-                      ),
-                    ],
+                Icon(Icons.collections_bookmark, color: accentColor, size: 24),
+                const SizedBox(width: 8),
+                Text(
+                  'View All Reports',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.black87,
                   ),
                 ),
               ],
             ),
-          ),
-        );
-      },
+            const SizedBox(height: 12),
+            Text(
+              'View complete details of all your submitted reports including status, images, location, and more.',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ReportsCompilationPage(),
+                    ),
+                  );
+                },
+                icon: Icon(Icons.arrow_forward_rounded, size: 20),
+                label: Text(
+                  'Open Reports Compilation',
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentColor,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 2,
+                  shadowColor: Colors.grey.withOpacity(0.5),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -1452,12 +1315,539 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                   ],
                 ),
               ),
-              _recentReports(),
+              // Reports Compilation Button
+              _reportsCompilationButton(),
             ],
           ),
         ),
       ),
     );
+  }
+}
+
+// New Reports Compilation Page
+class ReportsCompilationPage extends StatefulWidget {
+  const ReportsCompilationPage({super.key});
+
+  @override
+  State<ReportsCompilationPage> createState() => _ReportsCompilationPageState();
+}
+
+class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
+  final Color accentColor = const Color(0xFF0288D1);
+  final user = FirebaseAuth.instance.currentUser;
+  String _searchQuery = '';
+  String _selectedStatus = 'All';
+  List<String> statusOptions = [
+    'All',
+    'Unfixed Reports',
+    'Fixed',
+    'In Progress'
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0,
+        title: Text(
+          'Reports Compilation',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_rounded),
+          onPressed: () => Navigator.pop(context),
+        ),
+        centerTitle: true,
+      ),
+      body: Column(
+        children: [
+          // Search and Filter Section
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                // Search Bar
+                TextField(
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: 'Search reports...',
+                    hintStyle: GoogleFonts.poppins(color: Colors.grey),
+                    prefixIcon: Icon(Icons.search, color: accentColor),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    filled: true,
+                    fillColor: Colors.white,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  style: GoogleFonts.poppins(fontSize: 14),
+                ),
+                const SizedBox(height: 12),
+                // Status Filter
+                Container(
+                  height: 40,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: statusOptions.length,
+                    itemBuilder: (context, index) {
+                      final status = statusOptions[index];
+                      final isSelected = _selectedStatus == status;
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          right: index < statusOptions.length - 1 ? 8 : 0,
+                        ),
+                        child: ChoiceChip(
+                          label: Text(
+                            status,
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: isSelected ? Colors.white : Colors.black87,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          selected: isSelected,
+                          selectedColor: accentColor,
+                          backgroundColor: Colors.grey.shade200,
+                          onSelected: (selected) {
+                            setState(() {
+                              _selectedStatus = selected ? status : 'All';
+                            });
+                          },
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 0,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Reports List
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('reports')
+                  .where('userId', isEqualTo: user?.uid)
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(
+                    child: CircularProgressIndicator(
+                      color: accentColor,
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Error loading reports',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        color: Colors.red,
+                      ),
+                    ),
+                  );
+                }
+
+                final docs = snapshot.data!.docs;
+                if (docs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.description_outlined,
+                          size: 64,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No reports found',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Submit your first report to see it here',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                // Filter reports
+                List<QueryDocumentSnapshot> filteredDocs = docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+
+                  // Status filter
+                  if (_selectedStatus != 'All' &&
+                      data['status'] != _selectedStatus) {
+                    return false;
+                  }
+
+                  // Search filter
+                  if (_searchQuery.isNotEmpty) {
+                    final issueDesc = (data['issueDescription'] ?? '')
+                        .toString()
+                        .toLowerCase();
+                    final placeName =
+                        (data['placeName'] ?? '').toString().toLowerCase();
+                    final status =
+                        (data['status'] ?? '').toString().toLowerCase();
+
+                    return issueDesc.contains(_searchQuery.toLowerCase()) ||
+                        placeName.contains(_searchQuery.toLowerCase()) ||
+                        status.contains(_searchQuery.toLowerCase());
+                  }
+
+                  return true;
+                }).toList();
+
+                if (filteredDocs.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search_off_rounded,
+                          size: 64,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No matching reports',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Try a different search or filter',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  itemCount: filteredDocs.length,
+                  itemBuilder: (context, index) {
+                    final doc = filteredDocs[index];
+                    final data = doc.data() as Map<String, dynamic>;
+                    final reportId = doc.id;
+
+                    return _buildReportCard(data, reportId, index);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportCard(
+      Map<String, dynamic> data, String reportId, int index) {
+    final issueDesc = data['issueDescription'] ?? 'No description';
+    final placeName = data['placeName'] ?? 'Unknown location';
+    final status = data['status'] ?? 'Unfixed Reports';
+    final dateTime =
+        (data['dateTime'] as Timestamp?)?.toDate() ?? DateTime.now();
+    final imageCount = data['imageCount'] ?? 0;
+    final isPublic = data['isPublic'] ?? false;
+    final additionalInfo = data['additionalLocationInfo'] ?? '';
+
+    // Status color
+    Color statusColor = Colors.red.shade700;
+    if (status == 'Fixed') {
+      statusColor = Colors.green.shade700;
+    } else if (status == 'In Progress') {
+      statusColor = Colors.orange.shade800;
+    }
+
+    return FadeInUp(
+      duration: Duration(milliseconds: 300 + (index * 100)),
+      child: Container(
+        margin: EdgeInsets.fromLTRB(16, 0, 16, 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ExpansionTile(
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: accentColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              Icons.report_problem_outlined,
+              color: accentColor,
+              size: 24,
+            ),
+          ),
+          title: Text(
+            issueDesc.length > 40
+                ? '${issueDesc.substring(0, 40)}...'
+                : issueDesc,
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: Colors.black87,
+            ),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 4),
+              Text(
+                DateFormat('MMM dd, yyyy • hh:mm a').format(dateTime),
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+          trailing: Chip(
+            label: Text(
+              status.replaceAll('Reports', ''),
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: statusColor,
+              ),
+            ),
+            backgroundColor: statusColor.withOpacity(0.1),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+          ),
+          children: [
+            Divider(height: 1, color: Colors.grey.shade200),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Report ID
+                  Row(
+                    children: [
+                      Icon(Icons.fingerprint,
+                          size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Report ID: $reportId',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Full Issue Description
+                  Text(
+                    'Issue Description:',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    issueDesc,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Location Information
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.location_on_outlined,
+                          size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Location:',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            Text(
+                              placeName,
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            if (additionalInfo.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Additional Info: $additionalInfo',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Report Type
+                  Row(
+                    children: [
+                      Icon(Icons.public_outlined,
+                          size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Report Type: ${isPublic ? 'Public' : 'Private'}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Images Count
+                  if (imageCount > 0)
+                    Row(
+                      children: [
+                        Icon(Icons.image_outlined,
+                            size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Images: $imageCount',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (imageCount > 0) const SizedBox(height: 12),
+
+                  // Status with icon
+                  Row(
+                    children: [
+                      Icon(
+                        _getStatusIcon(status),
+                        size: 16,
+                        color: statusColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Status: $status',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: statusColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Full Date Time
+                  Row(
+                    children: [
+                      Icon(Icons.calendar_today_outlined,
+                          size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 8),
+                      Text(
+                        DateFormat('EEEE, MMMM dd, yyyy • hh:mm:ss a')
+                            .format(dateTime),
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getStatusIcon(String status) {
+    switch (status) {
+      case 'Fixed':
+        return Icons.check_circle_outline;
+      case 'In Progress':
+        return Icons.build_outlined;
+      case 'Unfixed Reports':
+      default:
+        return Icons.report_problem_outlined;
+    }
   }
 }
 

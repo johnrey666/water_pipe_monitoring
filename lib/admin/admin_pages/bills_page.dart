@@ -14,35 +14,27 @@ class BillsPage extends StatefulWidget {
 
 class _BillsPageState extends State<BillsPage> {
   int _currentPage = 0;
-  final int _pageSize = 4;
+  final int _pageSize = 10;
   List<DocumentSnapshot?> _lastDocuments = [null];
   int _totalPages = 1;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
   Stream<QuerySnapshot> _getResidentsStream() {
     Query query = FirebaseFirestore.instance
         .collection('users')
         .where('role', isEqualTo: 'Resident');
 
-    // Apply search filter BEFORE ordering (case-insensitive search)
     if (_searchQuery.isNotEmpty) {
-      // Capitalize first letter for case-insensitive search
-      String searchQueryCapitalized = _searchQuery[0].toUpperCase() +
-          (_searchQuery.length > 1
-              ? _searchQuery.substring(1).toLowerCase()
-              : '');
-
       query = query
-          .where('fullName', isGreaterThanOrEqualTo: searchQueryCapitalized)
-          .where('fullName',
-              isLessThanOrEqualTo: '$searchQueryCapitalized\uf8ff')
+          .where('fullName', isGreaterThanOrEqualTo: _searchQuery)
+          .where('fullName', isLessThanOrEqualTo: '$_searchQuery\uf8ff')
           .orderBy('fullName')
           .limit(_pageSize);
     } else {
       query = query.orderBy('fullName').limit(_pageSize);
     }
 
-    // Apply pagination
     if (_currentPage > 0 && _lastDocuments[_currentPage - 1] != null) {
       query = query.startAfterDocument(_lastDocuments[_currentPage - 1]!);
     }
@@ -56,16 +48,9 @@ class _BillsPageState extends State<BillsPage> {
         .where('role', isEqualTo: 'Resident');
 
     if (_searchQuery.isNotEmpty) {
-      // Capitalize first letter for case-insensitive search
-      String searchQueryCapitalized = _searchQuery[0].toUpperCase() +
-          (_searchQuery.length > 1
-              ? _searchQuery.substring(1).toLowerCase()
-              : '');
-
       query = query
-          .where('fullName', isGreaterThanOrEqualTo: searchQueryCapitalized)
-          .where('fullName',
-              isLessThanOrEqualTo: '$searchQueryCapitalized\uf8ff');
+          .where('fullName', isGreaterThanOrEqualTo: _searchQuery)
+          .where('fullName', isLessThanOrEqualTo: '$_searchQuery\uf8ff');
     }
 
     try {
@@ -223,7 +208,6 @@ class _BillsPageState extends State<BillsPage> {
                   ),
                 ),
                 style: GoogleFonts.inter(fontSize: 14),
-                onChanged: (value) {},
               ),
             ),
             Expanded(
@@ -296,7 +280,7 @@ class _BillsPageState extends State<BillsPage> {
                           },
                         ),
                       ),
-                      _buildPaginationButtons(),
+                      if (_totalPages > 1) _buildPaginationButtons(),
                     ],
                   );
                 },
@@ -364,137 +348,136 @@ class _ResidentCardState extends State<_ResidentCard> {
   @override
   Widget build(BuildContext context) {
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 6,
-      shadowColor: Colors.black.withOpacity(0.1),
-      color: Colors.white,
-      child: Column(
-        children: [
-          ListTile(
-            contentPadding: const EdgeInsets.all(16),
-            leading: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1E88E5), Color(0xFF64B5F6)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 6,
+        shadowColor: Colors.black.withOpacity(0.1),
+        color: Colors.white,
+        child: Column(
+          children: [
+            ListTile(
+              contentPadding: const EdgeInsets.all(16),
+              leading: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1E88E5), Color(0xFF64B5F6)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
+                child: const Icon(Icons.person, color: Colors.white, size: 20),
+              ),
+              title: Text(
+                widget.fullName,
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  color: const Color(0xFF2D3748),
+                ),
+              ),
+              subtitle: Text(
+                '${widget.address}\n${widget.contactNumber}',
+                style: GoogleFonts.inter(
+                  fontSize: 13,
+                  color: const Color(0xFF718096),
+                  height: 1.4,
+                ),
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      _showPayments ? Icons.expand_less : Icons.expand_more,
+                      color: const Color(0xFF1E88E5),
+                      size: 20,
+                    ),
+                    onPressed: () =>
+                        setState(() => _showPayments = !_showPayments),
+                  ),
+                  const SizedBox(width: 8),
+                  AnimatedScale(
+                    scale: 1.0,
+                    duration: const Duration(milliseconds: 200),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF1E88E5),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
+                        textStyle: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        elevation: 2,
+                      ),
+                      onPressed: _isCheckingBills
+                          ? null
+                          : () {
+                              showDialog(
+                                context: context,
+                                barrierColor: Colors.black54,
+                                builder: (context) => Dialog(
+                                  backgroundColor: Colors.transparent,
+                                  elevation: 0,
+                                  insetPadding: const EdgeInsets.all(10),
+                                  child: _BillReceiptForm(
+                                    residentId: widget.residentId,
+                                    fullName: widget.fullName,
+                                    address: widget.address,
+                                    contactNumber: widget.contactNumber,
+                                  ),
+                                ),
+                              ).then((value) {
+                                widget.onBillCreated();
+                                _checkForExistingBills();
+                              });
+                            },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_hasBills && !_isCheckingBills) ...[
+                            const Icon(
+                              Icons.check_circle,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 6),
+                          ],
+                          Text(_isCheckingBills
+                              ? 'Loading...'
+                              : (_hasBills ? 'Update Bill' : 'Create Bill')),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
-              child: const Icon(Icons.person, color: Colors.white, size: 20),
             ),
-            title: Text(
-              widget.fullName,
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.w700,
-                fontSize: 16,
-                color: const Color(0xFF2D3748),
-              ),
+            AnimatedCrossFade(
+              firstChild: const SizedBox.shrink(),
+              secondChild: _PaymentSection(
+                  residentId: widget.residentId, fullName: widget.fullName),
+              crossFadeState: _showPayments
+                  ? CrossFadeState.showSecond
+                  : CrossFadeState.showFirst,
+              duration: const Duration(milliseconds: 500),
+              sizeCurve: Curves.easeInOutCubic,
             ),
-            subtitle: Text(
-              '${widget.address}\n${widget.contactNumber}',
-              style: GoogleFonts.inter(
-                fontSize: 13,
-                color: const Color(0xFF718096),
-                height: 1.4,
-              ),
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: Icon(
-                    _showPayments ? Icons.expand_less : Icons.expand_more,
-                    color: const Color(0xFF1E88E5),
-                    size: 20,
-                  ),
-                  onPressed: () =>
-                      setState(() => _showPayments = !_showPayments),
-                ),
-                const SizedBox(width: 8),
-                AnimatedScale(
-                  scale: 1.0,
-                  duration: const Duration(milliseconds: 200),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1E88E5),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
-                      textStyle: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      elevation: 2,
-                    ),
-                    onPressed: _isCheckingBills
-                        ? null
-                        : () {
-                            showDialog(
-                              context: context,
-                              barrierColor: Colors.black54,
-                              builder: (context) => Dialog(
-                                backgroundColor: Colors.transparent,
-                                elevation: 0,
-                                insetPadding: const EdgeInsets.all(10),
-                                child: _BillReceiptForm(
-                                  residentId: widget.residentId,
-                                  fullName: widget.fullName,
-                                  address: widget.address,
-                                  contactNumber: widget.contactNumber,
-                                ),
-                              ),
-                            ).then((value) {
-                              widget.onBillCreated();
-                              _checkForExistingBills();
-                            });
-                          },
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (_hasBills && !_isCheckingBills) ...[
-                          const Icon(
-                            Icons.check_circle,
-                            size: 16,
-                            color: Colors.white,
-                          ),
-                          const SizedBox(width: 6),
-                        ],
-                        Text(_isCheckingBills
-                            ? 'Loading...'
-                            : (_hasBills ? 'Update Bill' : 'Create Bill')),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AnimatedCrossFade(
-            firstChild: const SizedBox.shrink(),
-            secondChild: _PaymentSection(
-                residentId: widget.residentId, fullName: widget.fullName),
-            crossFadeState: _showPayments
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 500),
-            sizeCurve: Curves.easeInOutCubic,
-          ),
-        ],
-      ),
-    );
+          ],
+        ));
   }
 }
 
@@ -544,12 +527,39 @@ class _PaymentSectionState extends State<_PaymentSection> {
           'Added consumption history for $userId: $docId, $cubicMeterUsed m³');
     } catch (e) {
       print('Error adding consumption history: $e');
-      if (mounted) {
-        setState(() {
-          _error = 'Error saving consumption history: $e';
-          _isLoading = false;
-        });
-      }
+    }
+  }
+
+  Future<void> _recordTransactionHistory({
+    required String residentId,
+    required String type,
+    required String status,
+    required double amount,
+    required String description,
+    required String? billId,
+    required String? month,
+  }) async {
+    try {
+      final transactionData = {
+        'residentId': residentId,
+        'type': type,
+        'status': status,
+        'amount': amount,
+        'description': description,
+        'billId': billId,
+        'month': month,
+        'timestamp': FieldValue.serverTimestamp(),
+        'processedBy': 'Admin',
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      await FirebaseFirestore.instance
+          .collection('transaction_history')
+          .add(transactionData);
+
+      print('Transaction history recorded: $transactionData');
+    } catch (e) {
+      print('Error recording transaction history: $e');
     }
   }
 
@@ -559,21 +569,25 @@ class _PaymentSectionState extends State<_PaymentSection> {
         _isLoading = true;
         _error = null;
       });
+      // Fetch ALL payments (not just pending)
       final paymentSnapshot = await FirebaseFirestore.instance
           .collection('payments')
           .where('residentId', isEqualTo: widget.residentId)
-          .where('status', isEqualTo: 'pending')
+          .orderBy('submissionDate', descending: true)
           .get();
+
       final payments = paymentSnapshot.docs.map((doc) {
         final data = doc.data();
         data['paymentId'] = doc.id;
         return data;
       }).toList();
+
       final billData = <String, String>{};
       final billIds = payments
           .map((payment) => payment['billId'] as String?)
           .where((billId) => billId != null)
           .toSet();
+
       if (billIds.isNotEmpty) {
         final billFutures = billIds.map((billId) => FirebaseFirestore.instance
             .collection('users')
@@ -596,12 +610,14 @@ class _PaymentSectionState extends State<_PaymentSection> {
           }
         }
       }
+
       final combinedData = payments.map((payment) {
         return {
           ...payment,
           'billingDate': billData[payment['billId']] ?? 'N/A',
         };
       }).toList();
+
       if (mounted) {
         setState(() {
           _paymentData = combinedData;
@@ -620,234 +636,337 @@ class _PaymentSectionState extends State<_PaymentSection> {
   }
 
   Future<void> _updatePaymentStatus(BuildContext context, String paymentId,
-      String status, String? billId) async {
+      String status, String? billId, String? rejectionReason) async {
     print(
         'Updating payment status: paymentId=$paymentId, status=$status, billId=$billId');
     try {
-      await showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          backgroundColor: Colors.white,
-          title: Text(
-            'Confirm ${status == 'approved' ? 'Approval' : 'Rejection'}',
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              color: const Color(0xFF2D3748),
-              fontWeight: FontWeight.w600,
+      final paymentDoc = await FirebaseFirestore.instance
+          .collection('payments')
+          .doc(paymentId)
+          .get();
+      if (!paymentDoc.exists) {
+        print('Payment document not found: $paymentId');
+        throw Exception('Payment not found');
+      }
+      final paymentData = paymentDoc.data()!;
+      print('Payment data: $paymentData');
+
+      String month = 'Unknown';
+      double currentReading = 0.0;
+      double cubicMeterUsed = 0.0;
+      DateTime? periodStart;
+      double amount = paymentData['billAmount']?.toDouble() ?? 0.0;
+
+      if (billId != null) {
+        final billDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.residentId)
+            .collection('bills')
+            .doc(billId)
+            .get();
+        if (billDoc.exists) {
+          final billData = billDoc.data()!;
+          periodStart = (billData['periodStart'] as Timestamp?)?.toDate();
+          month = periodStart != null
+              ? DateFormat('MMM yyyy').format(periodStart)
+              : 'Unknown';
+          currentReading =
+              billData['currentConsumedWaterMeter']?.toDouble() ?? 0.0;
+          cubicMeterUsed = billData['cubicMeterUsed']?.toDouble() ?? 0.0;
+          print(
+              'Bill found, month: $month, currentReading: $currentReading, cubicMeterUsed: $cubicMeterUsed');
+        } else {
+          print('Bill not found for billId: $billId');
+        }
+      } else {
+        print('No billId provided');
+      }
+
+      // Create notification for resident with rejection reason
+      String message;
+      if (status == 'approved') {
+        message =
+            'Your payment of ₱${amount.toStringAsFixed(2)} for $month has been approved.';
+      } else {
+        message =
+            'Your payment of ₱${amount.toStringAsFixed(2)} for $month has been rejected.';
+        if (rejectionReason != null && rejectionReason.isNotEmpty) {
+          message += '\n\nReason: $rejectionReason';
+        }
+      }
+
+      final notificationData = {
+        'userId': widget.residentId,
+        'type': 'payment',
+        'title': status == 'approved' ? 'Payment Approved' : 'Payment Rejected',
+        'message': message,
+        'billId': billId ?? 'Unknown',
+        'status': status,
+        'month': month,
+        'amount': amount,
+        'rejectionReason': rejectionReason,
+        'read': false,
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+
+      print('Saving notification: $notificationData');
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .add(notificationData);
+      print('Notification saved successfully');
+
+      // Record transaction history
+      await _recordTransactionHistory(
+        residentId: widget.residentId,
+        type: 'Payment',
+        status: status,
+        amount: amount,
+        description: status == 'approved'
+            ? 'Payment approved for $month'
+            : 'Payment rejected for $month${rejectionReason != null ? ' - $rejectionReason' : ''}',
+        billId: billId,
+        month: month,
+      );
+
+      if (status == 'approved') {
+        await FirebaseFirestore.instance
+            .collection('payments')
+            .doc(paymentId)
+            .update({
+          'status': 'approved',
+          'processedDate': FieldValue.serverTimestamp(),
+          'processedBy': 'Admin',
+        });
+        print('Payment updated to approved');
+
+        // Add to logs
+        await FirebaseFirestore.instance.collection('logs').add({
+          'action': 'Payment Accepted',
+          'userId': widget.residentId,
+          'details':
+              'Payment for $month by ${widget.fullName} accepted. Amount: ₱${amount.toStringAsFixed(2)}',
+          'timestamp': FieldValue.serverTimestamp(),
+        });
+
+        // Add consumption history if bill exists
+        if (billId != null && periodStart != null) {
+          await _addConsumptionHistory(
+            userId: widget.residentId,
+            periodStart: periodStart,
+            cubicMeterUsed: cubicMeterUsed,
+          );
+        }
+
+        // Update meter readings
+        if (billId != null) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(widget.residentId)
+              .collection('meter_readings')
+              .doc('latest')
+              .set({
+            'currentConsumedWaterMeter': currentReading,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+          print('Stored current reading: $currentReading');
+        }
+
+        // Delete unpaid bills after payment approval
+        final unpaidBillsSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.residentId)
+            .collection('bills')
+            .get();
+        for (var billDoc in unpaidBillsSnapshot.docs) {
+          await billDoc.reference.delete();
+          print('Bill deleted: ${billDoc.id}');
+        }
+
+        // Update the local state immediately
+        if (mounted) {
+          setState(() {
+            // Find and update the payment in the list
+            final index =
+                _paymentData.indexWhere((p) => p['paymentId'] == paymentId);
+            if (index != -1) {
+              _paymentData[index]['status'] = 'approved';
+              _paymentData[index]['processedDate'] = Timestamp.now();
+            }
+          });
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Payment approved and all bills cleared!',
+                style: GoogleFonts.inter(fontSize: 13),
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
-          ),
-          content: Text(
-            'Are you sure you want to ${status == 'approved' ? 'approve' : 'reject'} this payment?',
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              color: const Color(0xFF718096),
+          );
+        }
+      } else if (status == 'rejected') {
+        // For rejection, keep payment but mark as rejected
+        await FirebaseFirestore.instance
+            .collection('payments')
+            .doc(paymentId)
+            .update({
+          'status': 'rejected',
+          'rejectionReason': rejectionReason,
+          'processedDate': FieldValue.serverTimestamp(),
+          'processedBy': 'Admin',
+        });
+        print('Payment marked as rejected');
+
+        // Update the local state immediately
+        if (mounted) {
+          setState(() {
+            // Find and update the payment in the list
+            final index =
+                _paymentData.indexWhere((p) => p['paymentId'] == paymentId);
+            if (index != -1) {
+              _paymentData[index]['status'] = 'rejected';
+              _paymentData[index]['rejectionReason'] = rejectionReason;
+              _paymentData[index]['processedDate'] = Timestamp.now();
+            }
+          });
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Payment rejected successfully!',
+                style: GoogleFonts.inter(fontSize: 13),
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
             ),
+          );
+        }
+      }
+
+      // Refresh data from server to ensure consistency
+      await _fetchPaymentsAndBills();
+    } catch (e) {
+      print('Error updating payment status: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error ${status == 'approved' ? 'approving payment and clearing bills' : 'rejecting payment'}: $e',
+              style: GoogleFonts.inter(fontSize: 13),
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: const Color(0xFF1E88E5),
+        );
+      }
+    }
+  }
+
+  void _showRejectDialog(
+      BuildContext context, String paymentId, String? billId) {
+    final TextEditingController reasonController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: Colors.white,
+        title: Text(
+          'Reject Payment',
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            color: const Color(0xFF2D3748),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Please provide a reason for rejecting this payment:',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: const Color(0xFF718096),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Enter reason for rejection...',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFFEDF2F7)),
                 ),
-              ),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    status == 'approved' ? Colors.green : Colors.red,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                textStyle: GoogleFonts.inter(
-                    fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-              onPressed: () async {
-                try {
-                  final paymentDoc = await FirebaseFirestore.instance
-                      .collection('payments')
-                      .doc(paymentId)
-                      .get();
-                  if (!paymentDoc.exists) {
-                    print('Payment document not found: $paymentId');
-                    throw Exception('Payment not found');
-                  }
-                  final paymentData = paymentDoc.data()!;
-                  print('Payment data: $paymentData');
-                  String month = 'Unknown';
-                  double currentReading = 0.0;
-                  double cubicMeterUsed = 0.0;
-                  DateTime? periodStart;
-                  if (billId != null) {
-                    final billDoc = await FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(widget.residentId)
-                        .collection('bills')
-                        .doc(billId)
-                        .get();
-                    if (billDoc.exists) {
-                      final billData = billDoc.data()!;
-                      periodStart =
-                          (billData['periodStart'] as Timestamp?)?.toDate();
-                      month = periodStart != null
-                          ? DateFormat('MMM yyyy').format(periodStart)
-                          : 'Unknown';
-                      currentReading =
-                          billData['currentConsumedWaterMeter']?.toDouble() ??
-                              0.0;
-                      cubicMeterUsed =
-                          billData['cubicMeterUsed']?.toDouble() ?? 0.0;
-                      print(
-                          'Bill found, month: $month, currentReading: $currentReading, cubicMeterUsed: $cubicMeterUsed');
-                    } else {
-                      print('Bill not found for billId: $billId');
-                    }
-                  } else {
-                    print('No billId provided');
-                  }
-                  final notificationData = {
-                    'type': 'payment',
-                    'residentId': widget.residentId,
-                    'billId': billId ?? 'Unknown',
-                    'status': status,
-                    'month': month,
-                    'processedDate': FieldValue.serverTimestamp(),
-                    'processedBy': 'Admin',
-                    'amount': paymentData['billAmount']?.toDouble() ?? 0.0,
-                    'read': false,
-                    'createdAt': FieldValue.serverTimestamp(),
-                  };
-                  print('Saving notification: $notificationData');
-                  await FirebaseFirestore.instance
-                      .collection('notifications')
-                      .add(notificationData);
-                  print('Notification saved successfully');
-                  if (status == 'approved') {
-                    await FirebaseFirestore.instance
-                        .collection('payments')
-                        .doc(paymentId)
-                        .update({
-                      'status': 'approved',
-                      'processedDate': FieldValue.serverTimestamp(),
-                      'processedBy': 'Admin',
-                    });
-                    print('Payment updated to approved');
-                    await FirebaseFirestore.instance.collection('logs').add({
-                      'action': 'Payment Accepted',
-                      'userId': widget.residentId,
-                      'details':
-                          'Payment for $month by ${widget.fullName} accepted. Amount: ₱${paymentData['billAmount']?.toStringAsFixed(2) ?? '0.00'}',
-                      'timestamp': FieldValue.serverTimestamp(),
-                    });
-                    if (billId != null && periodStart != null) {
-                      await _addConsumptionHistory(
-                        userId: widget.residentId,
-                        periodStart: periodStart,
-                        cubicMeterUsed: cubicMeterUsed,
-                      );
-                    }
-                    if (billId != null) {
-                      await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(widget.residentId)
-                          .collection('meter_readings')
-                          .doc('latest')
-                          .set({
-                        'currentConsumedWaterMeter': currentReading,
-                        'updatedAt': FieldValue.serverTimestamp(),
-                      });
-                      print('Stored current reading: $currentReading');
-                    }
-                    final unpaidBillsSnapshot = await FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(widget.residentId)
-                        .collection('bills')
-                        .get();
-                    for (var billDoc in unpaidBillsSnapshot.docs) {
-                      await billDoc.reference.delete();
-                      print('Bill deleted: ${billDoc.id}');
-                    }
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Payment approved and all bills cleared!',
-                          style: GoogleFonts.inter(fontSize: 13),
-                        ),
-                        backgroundColor: Colors.green,
-                        duration: const Duration(seconds: 2),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                      ),
-                    );
-                    await _fetchPaymentsAndBills();
-                  } else if (status == 'rejected') {
-                    await FirebaseFirestore.instance
-                        .collection('payments')
-                        .doc(paymentId)
-                        .delete();
-                    print('Payment deleted: $paymentId');
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Payment rejected and removed successfully!',
-                          style: GoogleFonts.inter(fontSize: 13),
-                        ),
-                        backgroundColor: Colors.red,
-                        duration: const Duration(seconds: 2),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8)),
-                      ),
-                    );
-                    await _fetchPaymentsAndBills();
-                  }
-                } catch (e) {
-                  print('Error updating payment status: $e');
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Error ${status == 'approved' ? 'approving payment and clearing bills' : 'rejecting payment'}: $e',
-                        style: GoogleFonts.inter(fontSize: 13),
-                      ),
-                      backgroundColor: Colors.red,
-                      duration: const Duration(seconds: 2),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                    ),
-                  );
-                }
-              },
-              child: Text(
-                status == 'approved' ? 'Approve' : 'Reject',
-                style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: Color(0xFF1E88E5)),
+                ),
               ),
             ),
           ],
         ),
-      );
-    } catch (e) {
-      print('Error initiating update: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error initiating update: $e',
-              style: GoogleFonts.inter(fontSize: 13)),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        ),
-      );
-    }
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: const Color(0xFF1E88E5),
+              ),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              textStyle:
+                  GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+            onPressed: () async {
+              final reason = reasonController.text.trim();
+              if (reason.isEmpty) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please provide a reason for rejection'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+                return;
+              }
+              Navigator.pop(context);
+              await _updatePaymentStatus(
+                  context, paymentId, 'rejected', billId, reason);
+            },
+            child: Text(
+              'Reject',
+              style: GoogleFonts.inter(color: Colors.white, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -887,7 +1006,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Text(
-                'No pending payments for this resident.',
+                'No payment history for this resident.',
                 style: GoogleFonts.inter(
                     fontSize: 13, color: const Color(0xFF718096)),
               ),
@@ -906,6 +1025,10 @@ class _PaymentSectionState extends State<_PaymentSection> {
                 final status = payment['status'] ?? 'pending';
                 final receiptImage = payment['receiptImage'] as String?;
                 final billingDate = payment['billingDate'] as String;
+                final submissionDate = payment['submissionDate'] as Timestamp?;
+                final processedDate = payment['processedDate'] as Timestamp?;
+                final rejectionReason = payment['rejectionReason'] as String?;
+
                 return Container(
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   padding: const EdgeInsets.all(12),
@@ -972,6 +1095,43 @@ class _PaymentSectionState extends State<_PaymentSection> {
                                 color: const Color(0xFF718096),
                               ),
                             ),
+                            if (rejectionReason != null &&
+                                rejectionReason.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4),
+                                child: Text(
+                                  'Reason: $rejectionReason',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: Colors.red.shade700,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ),
+                            if (submissionDate != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  'Submitted: ${DateFormat('MMM dd, yyyy').format(submissionDate.toDate())}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                              ),
+                            if (processedDate != null && status != 'pending')
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  'Processed: ${DateFormat('MMM dd, yyyy').format(processedDate.toDate())}',
+                                  style: GoogleFonts.inter(
+                                    fontSize: 11,
+                                    color: status == 'approved'
+                                        ? Colors.green.shade600
+                                        : Colors.red.shade600,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ),
@@ -1057,8 +1217,8 @@ class _PaymentSectionState extends State<_PaymentSection> {
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600),
                                 ),
-                                onPressed: () => _updatePaymentStatus(
-                                    context, paymentId, 'approved', billId),
+                                onPressed: () => _updatePaymentStatus(context,
+                                    paymentId, 'approved', billId, null),
                                 child: const Text('Accept'),
                               ),
                             ),
@@ -1079,8 +1239,8 @@ class _PaymentSectionState extends State<_PaymentSection> {
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600),
                                 ),
-                                onPressed: () => _updatePaymentStatus(
-                                    context, paymentId, 'rejected', billId),
+                                onPressed: () => _showRejectDialog(
+                                    context, paymentId, billId),
                                 child: const Text('Reject'),
                               ),
                             ),
@@ -1332,6 +1492,38 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
           _error = 'Error loading data: $e';
         });
       }
+    }
+  }
+
+  Future<void> _recordTransactionHistory({
+    required String residentId,
+    required String type,
+    required String status,
+    required double amount,
+    required String description,
+    required String? billId,
+    required String? month,
+  }) async {
+    try {
+      final transactionData = {
+        'residentId': residentId,
+        'type': type,
+        'status': status,
+        'amount': amount,
+        'description': description,
+        'billId': billId,
+        'month': month,
+        'timestamp': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      await FirebaseFirestore.instance
+          .collection('transaction_history')
+          .add(transactionData);
+
+      print('Transaction history recorded for bill creation: $transactionData');
+    } catch (e) {
+      print('Error recording transaction history: $e');
     }
   }
 
@@ -1690,15 +1882,18 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                       _loading = true;
                                       _error = null;
                                     });
+                                    final periodStartDate = periodStart!;
+                                    final month = DateFormat('MMM yyyy')
+                                        .format(periodStartDate);
+
                                     final billData = {
                                       'residentId': widget.residentId,
                                       'fullName': widget.fullName,
                                       'address': widget.address,
                                       'contactNumber': widget.contactNumber,
                                       'meterNumber': meterNumber,
-                                      'periodStart': periodStart != null
-                                          ? Timestamp.fromDate(periodStart!)
-                                          : FieldValue.serverTimestamp(),
+                                      'periodStart':
+                                          Timestamp.fromDate(periodStartDate),
                                       'periodDue': periodDue != null
                                           ? Timestamp.fromDate(periodDue!)
                                           : FieldValue.serverTimestamp(),
@@ -1710,12 +1905,26 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                       'purok': selectedPurok,
                                     };
                                     print('Creating bill with data: $billData');
+
                                     // Save bill to Firestore
-                                    await FirebaseFirestore.instance
+                                    final billRef = await FirebaseFirestore
+                                        .instance
                                         .collection('users')
                                         .doc(widget.residentId)
                                         .collection('bills')
                                         .add(billData);
+
+                                    // Record transaction history for bill creation
+                                    await _recordTransactionHistory(
+                                      residentId: widget.residentId,
+                                      type: 'Bill',
+                                      status: 'created',
+                                      amount: currentBill,
+                                      description: 'Bill created for $month',
+                                      billId: billRef.id,
+                                      month: month,
+                                    );
+
                                     // Save meter number to user document
                                     await FirebaseFirestore.instance
                                         .collection('users')
@@ -1725,14 +1934,14 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                     }, SetOptions(merge: true));
                                     print(
                                         'Saved meter number ${meterNumber} to user document');
+
                                     // Add to consumption history
-                                    if (periodStart != null) {
-                                      await _addConsumptionHistory(
-                                        userId: widget.residentId,
-                                        periodStart: periodStart!,
-                                        cubicMeterUsed: cubicMeterUsed,
-                                      );
-                                    }
+                                    await _addConsumptionHistory(
+                                      userId: widget.residentId,
+                                      periodStart: periodStartDate,
+                                      cubicMeterUsed: cubicMeterUsed,
+                                    );
+
                                     // Update meter readings with current as latest
                                     await FirebaseFirestore.instance
                                         .collection('users')
@@ -1745,6 +1954,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                     });
                                     print(
                                         'Updated meter readings with current: $current');
+
                                     if (mounted) {
                                       Navigator.pop(context);
                                       ScaffoldMessenger.of(context)

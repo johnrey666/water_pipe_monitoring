@@ -126,13 +126,24 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
           .collection('payments')
           .where('residentId', isEqualTo: _residentId)
           .where('billId', isEqualTo: billId)
+          .orderBy('submissionDate', descending: true)
+          .limit(1)
           .get();
 
       if (paymentSnapshot.docs.isNotEmpty) {
         final payment = paymentSnapshot.docs.first.data();
+        final status = payment['status'] ?? 'pending';
+        
         setState(() {
           _paymentSubmitted = true;
-          _paymentStatus = payment['status'] ?? 'pending';
+          _paymentStatus = status;
+          
+          // Allow resubmission only if payment was rejected
+          // For approved payments, keep the status displayed
+          if (status == 'rejected') {
+            _paymentSubmitted = false; // Allow new submission
+            _paymentStatus = 'rejected'; // Still show rejection status
+          }
         });
       } else {
         setState(() {
@@ -336,7 +347,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
             ),
           ),
         ),
-      ),
+      )
     );
   }
 
@@ -1005,16 +1016,17 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  if (_paymentSubmitted) ...[
+                  
+                  // Show payment status only if payment is approved or pending (not rejected)
+                  if (_paymentStatus != null && _paymentStatus != 'rejected') ...[
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color:
-                            _getStatusColor(_paymentStatus!).withOpacity(0.1),
+                        color: _getStatusColor(_paymentStatus!).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                            color: _getStatusColor(_paymentStatus!)
-                                .withOpacity(0.3)),
+                          color: _getStatusColor(_paymentStatus!).withOpacity(0.3)
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -1049,15 +1061,85 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                         ],
                       ),
                     ),
+                    const SizedBox(height: 12),
                   ],
-                  if (!_paymentSubmitted) ...[
+                  
+                  // Show rejected status separately with option to resubmit
+                  if (_paymentStatus == 'rejected') ...[
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.red.withOpacity(0.3)
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.cancel,
+                                color: Colors.red,
+                                size: 18,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Payment Rejected',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Please check the notification for details and resubmit your payment.',
+                            style: const TextStyle(
+                              fontSize: 9,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: () {
+                              // Optionally, you could show a message or navigate
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Please upload a new receipt below.'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+                            },
+                            icon: Icon(Icons.info_outline, size: 14, color: Colors.red),
+                            label: Text(
+                              'View notification for details',
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.red,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  
+                  // Show payment form if no payment submitted or payment was rejected
+                  if (!_paymentSubmitted || _paymentStatus == 'rejected') ...[
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: Colors.green.withOpacity(0.05),
                         borderRadius: BorderRadius.circular(8),
-                        border:
-                            Border.all(color: Colors.green.withOpacity(0.3)),
+                        border: Border.all(color: Colors.green.withOpacity(0.3)),
                       ),
                       child: Row(
                         children: [
@@ -1224,13 +1306,13 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                 fontSize: fontSize,
                 color: valueColor ?? Colors.grey[700],
               ),
-              textAlign: TextAlign.right,
+              textAlign: TextAlign.right, 
               overflow: label == 'Address' ? TextOverflow.ellipsis : null,
               maxLines: label == 'Address' ? 2 : null,
             ),
           ),
         ],
-      ),
+      )
     );
   }
 
