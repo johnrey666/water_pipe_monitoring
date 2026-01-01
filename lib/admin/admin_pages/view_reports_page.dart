@@ -535,6 +535,23 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
     );
   }
 
+  // Convert XFile to base64
+  Future<List<String>> _convertImagesToBase64(List<File> imageFiles) async {
+    final List<String> base64Images = [];
+
+    for (final imageFile in imageFiles) {
+      try {
+        final bytes = await imageFile.readAsBytes();
+        final base64Image = base64Encode(bytes);
+        base64Images.add(base64Image);
+      } catch (e) {
+        print('Error encoding image: $e');
+      }
+    }
+
+    return base64Images;
+  }
+
   // Updated minimalist illegal tapping report dialog
   void _showCreateIllegalTappingDialog(BuildContext context) {
     String locationName = '';
@@ -542,10 +559,12 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
     String description = '';
     String evidenceNotes = '';
     LatLng? selectedLocation;
-    List<String> base64Images = [];
+    List<File> _imageFiles = [];
     bool isUploading = false;
+    String? _errorMessage;
 
     final formKey = GlobalKey<FormState>();
+    final _picker = ImagePicker();
 
     showDialog(
       context: context,
@@ -553,42 +572,210 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            Future<void> pickImage() async {
-              final picker = ImagePicker();
-              final pickedFile = await picker.pickImage(
-                source: ImageSource.gallery,
-                imageQuality: 70,
-                maxWidth: 1200,
-              );
-              if (pickedFile != null) {
-                final bytes = await File(pickedFile.path).readAsBytes();
-                final base64String = base64Encode(bytes);
+            Future<void> _pickImages() async {
+              try {
+                // Pick multiple images
+                final List<XFile>? images = await _picker.pickMultiImage(
+                  maxWidth: 1920,
+                  maxHeight: 1080,
+                  imageQuality: 85,
+                );
+
+                if (images != null && images.isNotEmpty) {
+                  // Limit to 10 images maximum
+                  final newImages = images.take(10 - _imageFiles.length).toList();
+                  final newFiles = <File>[];
+                  for (var image in newImages) {
+                    newFiles.add(File(image.path));
+                  }
+                  setState(() {
+                    _imageFiles.addAll(newFiles);
+                    _errorMessage = null;
+                  });
+                }
+              } catch (e) {
                 setState(() {
-                  base64Images.add(base64String);
+                  _errorMessage = 'Error picking images: $e';
+                });
+              }
+            }
+
+            Future<void> _takePhoto() async {
+              try {
+                final XFile? image = await _picker.pickImage(
+                  source: ImageSource.camera,
+                  maxWidth: 1920,
+                  maxHeight: 1080,
+                  imageQuality: 85,
+                );
+
+                if (image != null) {
+                  setState(() {
+                    if (_imageFiles.length < 10) {
+                      _imageFiles.add(File(image.path));
+                    } else {
+                      _errorMessage = 'Maximum 10 images allowed';
+                    }
+                  });
+                }
+              } catch (e) {
+                setState(() {
+                  _errorMessage = 'Error taking photo: $e';
                 });
               }
             }
 
             void removeImage(int index) {
               setState(() {
-                base64Images.removeAt(index);
+                _imageFiles.removeAt(index);
               });
             }
 
-            Widget _buildImagePreview(String base64Image) {
+            void _clearAllImages() {
+              setState(() {
+                _imageFiles.clear();
+              });
+            }
+
+            Widget _selectedImagesPreview() {
+              if (_imageFiles.isEmpty) return const SizedBox.shrink();
+
               return Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.memory(
-                    base64Decode(base64Image),
-                    fit: BoxFit.cover,
-                  ),
+                margin: const EdgeInsets.only(top: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Selected Images (${_imageFiles.length}/10):',
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const Spacer(),
+                        if (_imageFiles.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: _clearAllImages,
+                            icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                            label: Text(
+                              'Clear All',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: Colors.red,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 120, // Fixed height
+                      child: _imageFiles.isEmpty
+                          ? Container(
+                              alignment: Alignment.center,
+                              child: Text(
+                                'No images selected',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _imageFiles.length,
+                              itemBuilder: (context, index) {
+                                return Container(
+                                  margin: EdgeInsets.only(
+                                    right: index < _imageFiles.length - 1 ? 8 : 0,
+                                  ),
+                                  width: 120, // Fixed width
+                                  height: 120, // Fixed height
+                                  child: Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Image.file(
+                                          _imageFiles[index],
+                                          width: 120,
+                                          height: 120,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Container(
+                                              width: 120,
+                                              height: 120,
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey.shade200,
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: const Icon(
+                                                Icons.broken_image,
+                                                color: Colors.grey,
+                                                size: 40,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      Positioned(
+                                        top: 4,
+                                        right: 4,
+                                        child: GestureDetector(
+                                          onTap: () => removeImage(index),
+                                          child: Container(
+                                            width: 24,
+                                            height: 24,
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withOpacity(0.9),
+                                              shape: BoxShape.circle,
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(0.2),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ],
+                                            ),
+                                            child: const Icon(Icons.close,
+                                                size: 16, color: Colors.red),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        bottom: 4,
+                                        left: 4,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(0.6),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: Text(
+                                            '${index + 1}',
+                                            style: GoogleFonts.poppins(
+                                              fontSize: 10,
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
                 ),
               );
             }
@@ -600,6 +787,9 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                 setState(() => isUploading = true);
 
                 try {
+                  // Convert images to base64
+                  final base64Images = await _convertImagesToBase64(_imageFiles);
+
                   final reportData = {
                     'fullName': 'Staff Report',
                     'issueDescription': 'ILLEGAL TAPPING: $description',
@@ -619,6 +809,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                     'reportedByStaff': true,
                     'assignedPlumber': null,
                     'hasEvidence': base64Images.isNotEmpty,
+                    'imageCount': base64Images.length,
                   };
 
                   await FirebaseFirestore.instance
@@ -650,6 +841,9 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                   );
                   _fetchTotalPages(_selectedStatus);
                 } catch (e) {
+                  setState(() {
+                    _errorMessage = 'Error: ${e.toString()}';
+                  });
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Row(
@@ -751,6 +945,24 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Error Message
+                              if (_errorMessage != null)
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade100,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    _errorMessage!,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      color: Colors.red.shade800,
+                                    ),
+                                  ),
+                                ),
+                              
                               // Location Field
                               Text(
                                 'Location',
@@ -761,49 +973,48 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-
+                              
                               // Location Selection
                               if (selectedLocation == null)
-                                ElevatedButton(
-                                  onPressed: () async {
-                                    final location =
-                                        await _showMapLocationPicker(context);
-                                    if (location != null) {
-                                      setState(() {
-                                        selectedLocation = location;
-                                      });
-                                    }
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.blue.shade50,
-                                    foregroundColor: Colors.blue.shade800,
-                                    minimumSize: Size(double.infinity, 48),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 48, // Fixed height
+                                  child: ElevatedButton(
+                                    onPressed: () async {
+                                      final location = await _showMapLocationPicker(context);
+                                      if (location != null) {
+                                        setState(() {
+                                          selectedLocation = location;
+                                        });
+                                      }
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blue.shade50,
+                                      foregroundColor: Colors.blue.shade800,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
                                     ),
+                                    child: Text('Select Location on Map'),
                                   ),
-                                  child: Text('Select Location on Map'),
                                 ),
-
+                              
                               if (selectedLocation != null)
                                 Container(
                                   padding: const EdgeInsets.all(12),
+                                  margin: const EdgeInsets.only(bottom: 16),
                                   decoration: BoxDecoration(
                                     color: Colors.green.shade50,
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(
-                                        color: Colors.green.shade200),
+                                    border: Border.all(color: Colors.green.shade200),
                                   ),
                                   child: Row(
                                     children: [
-                                      Icon(Icons.check_circle,
-                                          color: Colors.green.shade600,
-                                          size: 20),
+                                      Icon(Icons.check_circle, color: Colors.green.shade600, size: 20),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               'Location Selected',
@@ -824,13 +1035,9 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                         ),
                                       ),
                                       IconButton(
-                                        icon: Icon(Icons.edit,
-                                            size: 18,
-                                            color: Colors.blue.shade700),
+                                        icon: Icon(Icons.edit, size: 18, color: Colors.blue.shade700),
                                         onPressed: () async {
-                                          final location =
-                                              await _showMapLocationPicker(
-                                                  context);
+                                          final location = await _showMapLocationPicker(context);
                                           if (location != null) {
                                             setState(() {
                                               selectedLocation = location;
@@ -841,32 +1048,34 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                     ],
                                   ),
                                 ),
-
+                              
                               const SizedBox(height: 16),
-
+                              
                               // Location Name
-                              TextFormField(
-                                decoration: InputDecoration(
-                                  labelText: 'Location Name / Address',
-                                  hintText: 'Enter exact address or landmark',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                              SizedBox(
+                                height: 70, // Fixed height for text field
+                                child: TextFormField(
+                                  decoration: InputDecoration(
+                                    labelText: 'Location Name / Address',
+                                    hintText: 'Enter exact address or landmark',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                                   ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 14),
+                                  style: GoogleFonts.poppins(fontSize: 14),
+                                  onSaved: (value) => locationName = value ?? '',
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter location name';
+                                    }
+                                    return null;
+                                  },
                                 ),
-                                style: GoogleFonts.poppins(fontSize: 14),
-                                onSaved: (value) => locationName = value ?? '',
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter location name';
-                                  }
-                                  return null;
-                                },
                               ),
-
+                              
                               const SizedBox(height: 20),
-
+                              
                               // Type of Illegal Activity
                               Text(
                                 'Type of Illegal Activity',
@@ -877,41 +1086,43 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              DropdownButtonFormField(
-                                value: type,
-                                items: [
-                                  DropdownMenuItem(
-                                    value: 'Unauthorized Connection',
-                                    child: Text('Unauthorized Connection'),
+                              SizedBox(
+                                height: 70, // Fixed height for dropdown
+                                child: DropdownButtonFormField(
+                                  value: type,
+                                  items: [
+                                    DropdownMenuItem(
+                                      value: 'Unauthorized Connection',
+                                      child: Text('Unauthorized Connection'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'Meter Tampering/Bypass',
+                                      child: Text('Meter Tampering/Bypass'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'Pipe Diversion',
+                                      child: Text('Pipe Diversion'),
+                                    ),
+                                    DropdownMenuItem(
+                                      value: 'Other Illegal Activity',
+                                      child: Text('Other Illegal Activity'),
+                                    ),
+                                  ],
+                                  onChanged: (value) {
+                                    setState(() => type = value!);
+                                  },
+                                  decoration: InputDecoration(
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                                   ),
-                                  DropdownMenuItem(
-                                    value: 'Meter Tampering/Bypass',
-                                    child: Text('Meter Tampering/Bypass'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'Pipe Diversion',
-                                    child: Text('Pipe Diversion'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'Other Illegal Activity',
-                                    child: Text('Other Illegal Activity'),
-                                  ),
-                                ],
-                                onChanged: (value) {
-                                  setState(() => type = value!);
-                                },
-                                decoration: InputDecoration(
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 14),
+                                  style: GoogleFonts.poppins(fontSize: 14),
                                 ),
-                                style: GoogleFonts.poppins(fontSize: 14),
                               ),
-
+                              
                               const SizedBox(height: 20),
-
+                              
                               // Description
                               Text(
                                 'Description',
@@ -922,29 +1133,31 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              TextFormField(
-                                maxLines: 3,
-                                decoration: InputDecoration(
-                                  labelText: 'Detailed description',
-                                  hintText: 'Describe what you observed...',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                              SizedBox(
+                                height: 120, // Fixed height for description field
+                                child: TextFormField(
+                                  maxLines: 3,
+                                  decoration: InputDecoration(
+                                    labelText: 'Detailed description',
+                                    hintText: 'Describe what you observed...',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                                   ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 14),
+                                  style: GoogleFonts.poppins(fontSize: 14),
+                                  onSaved: (value) => description = value ?? '',
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Please enter description';
+                                    }
+                                    return null;
+                                  },
                                 ),
-                                style: GoogleFonts.poppins(fontSize: 14),
-                                onSaved: (value) => description = value ?? '',
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter description';
-                                  }
-                                  return null;
-                                },
                               ),
-
+                              
                               const SizedBox(height: 20),
-
+                              
                               // Evidence Photos
                               Text(
                                 'Evidence Photos',
@@ -963,81 +1176,70 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                 ),
                               ),
                               const SizedBox(height: 12),
-
-                              OutlinedButton.icon(
-                                onPressed:
-                                    base64Images.length < 10 ? pickImage : null,
-                                icon: Icon(Icons.photo_camera, size: 18),
-                                label: Text('Upload Photos'),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: Size(double.infinity, 48),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
-                              ),
-
-                              if (base64Images.isNotEmpty) ...[
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Uploaded Photos (${base64Images.length}/10):',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: List.generate(base64Images.length,
-                                      (index) {
-                                    return Stack(
-                                      children: [
-                                        _buildImagePreview(base64Images[index]),
-                                        Positioned(
-                                          top: -6,
-                                          right: -6,
-                                          child: IconButton(
-                                            icon: CircleAvatar(
-                                              backgroundColor: Colors.red,
-                                              radius: 10,
-                                              child: Icon(Icons.close,
-                                                  size: 12,
-                                                  color: Colors.white),
-                                            ),
-                                            onPressed: () => removeImage(index),
-                                            padding: EdgeInsets.zero,
+                              
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 48, // Fixed height
+                                      child: OutlinedButton.icon(
+                                        onPressed: _imageFiles.length < 10 ? _pickImages : null,
+                                        icon: Icon(Icons.photo_library, size: 18),
+                                        label: Text('Gallery'),
+                                        style: OutlinedButton.styleFrom(
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(10),
                                           ),
                                         ),
-                                      ],
-                                    );
-                                  }),
-                                ),
-                              ],
-
-                              const SizedBox(height: 20),
-
-                              // Additional Notes (Optional)
-                              TextFormField(
-                                maxLines: 2,
-                                decoration: InputDecoration(
-                                  labelText: 'Additional Notes (Optional)',
-                                  hintText: 'Witness info, time, etc.',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
                                   ),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 14),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 48, // Fixed height
+                                      child: OutlinedButton.icon(
+                                        onPressed: _imageFiles.length < 10 ? _takePhoto : null,
+                                        icon: Icon(Icons.camera_alt, size: 18),
+                                        label: Text('Camera'),
+                                        style: OutlinedButton.styleFrom(
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              
+                              // Display selected images
+                              _selectedImagesPreview(),
+                              
+                              const SizedBox(height: 20),
+                              
+                              // Additional Notes (Optional)
+                              SizedBox(
+                                height: 100, // Fixed height for additional notes
+                                child: TextFormField(
+                                  maxLines: 3,
+                                  decoration: InputDecoration(
+                                    labelText: 'Additional Notes (Optional)',
+                                    hintText: 'Witness info, time, etc.',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                  ),
+                                  style: GoogleFonts.poppins(fontSize: 14),
+                                  onSaved: (value) => evidenceNotes = value ?? '',
                                 ),
-                                style: GoogleFonts.poppins(fontSize: 14),
-                                onSaved: (value) => evidenceNotes = value ?? '',
                               ),
                             ],
                           ),
                         ),
                       ),
-
+                      
                       // Footer Actions
                       Container(
                         padding: const EdgeInsets.all(16),
@@ -1049,56 +1251,55 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                         child: Row(
                           children: [
                             Expanded(
-                              child: OutlinedButton(
-                                onPressed: isUploading
-                                    ? null
-                                    : () => Navigator.pop(context),
-                                style: OutlinedButton.styleFrom(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                              child: SizedBox(
+                                height: 48, // Fixed height
+                                child: OutlinedButton(
+                                  onPressed: isUploading ? null : () => Navigator.pop(context),
+                                  style: OutlinedButton.styleFrom(
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
                                   ),
+                                  child: Text('Cancel'),
                                 ),
-                                child: Text('Cancel'),
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: ElevatedButton(
-                                onPressed: isUploading ? null : submitReport,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red.shade700,
-                                  foregroundColor: Colors.white,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                              child: SizedBox(
+                                height: 48, // Fixed height
+                                child: ElevatedButton(
+                                  onPressed: isUploading ? null : submitReport,
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red.shade700,
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
                                   ),
-                                ),
-                                child: isUploading
-                                    ? SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          color: Colors.white,
-                                        ),
-                                      )
-                                    : Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          Icon(Icons.send, size: 18),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            'Submit Report',
-                                            style: GoogleFonts.poppins(
-                                              fontWeight: FontWeight.w600,
-                                            ),
+                                  child: isUploading
+                                      ? SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
                                           ),
-                                        ],
-                                      ),
+                                        )
+                                      : Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.send, size: 18),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'Submit Report',
+                                              style: GoogleFonts.poppins(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                ),
                               ),
                             ),
                           ],
@@ -1219,6 +1420,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                 const SizedBox(height: 12),
                 Container(
                   width: 300,
+                  height: 70, // Fixed height for dropdown
                   child: DropdownButtonFormField<String>(
                     decoration: InputDecoration(
                       labelText: 'Filter by Plumber',
@@ -1374,231 +1576,238 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                 final displayStatus = isIllegalTapping
                                     ? 'Illegal Tapping'
                                     : status;
-                                return FadeInUp(
-                                  duration: const Duration(milliseconds: 300),
-                                  child: Card(
-                                    margin:
-                                        const EdgeInsets.symmetric(vertical: 6),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    elevation: 2,
-                                    shadowColor: Colors.black12,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12, vertical: 8),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 4,
-                                            height: 60,
-                                            color:
-                                                _getStatusColor(displayStatus),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Row(
-                                                  children: [
-                                                    Icon(
-                                                      Icons.circle,
-                                                      size: 10,
-                                                      color: _getStatusColor(
-                                                          displayStatus),
-                                                    ),
-                                                    const SizedBox(width: 6),
-                                                    Expanded(
-                                                      child: Row(
-                                                        children: [
-                                                          Text(
-                                                            fullName,
-                                                            style: GoogleFonts
-                                                                .poppins(
-                                                              fontSize: 16,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .w700,
-                                                              color: Colors.grey
-                                                                  .shade800,
-                                                            ),
-                                                            overflow:
-                                                                TextOverflow
-                                                                    .ellipsis,
-                                                          ),
-                                                          if (isIllegalTapping)
-                                                            Container(
-                                                              margin: EdgeInsets
-                                                                  .only(
-                                                                      left: 8),
-                                                              padding: EdgeInsets
-                                                                  .symmetric(
-                                                                      horizontal:
-                                                                          6,
-                                                                      vertical:
-                                                                          2),
-                                                              decoration:
-                                                                  BoxDecoration(
-                                                                color:
-                                                                    Colors.red,
-                                                                borderRadius:
-                                                                    BorderRadius
-                                                                        .circular(
-                                                                            4),
+                                return Container(
+                                  margin: const EdgeInsets.symmetric(vertical: 6),
+                                  child: FadeInUp(
+                                    duration: const Duration(milliseconds: 300),
+                                    child: Card(
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      elevation: 2,
+                                      shadowColor: Colors.black12,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 12, vertical: 8),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 4,
+                                              height: 60,
+                                              color:
+                                                  _getStatusColor(displayStatus),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      Icon(
+                                                        Icons.circle,
+                                                        size: 10,
+                                                        color: _getStatusColor(
+                                                            displayStatus),
+                                                      ),
+                                                      const SizedBox(width: 6),
+                                                      Expanded(
+                                                        child: Row(
+                                                          children: [
+                                                            Text(
+                                                              fullName,
+                                                              style: GoogleFonts
+                                                                  .poppins(
+                                                                fontSize: 16,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w700,
+                                                                color: Colors.grey
+                                                                    .shade800,
                                                               ),
-                                                              child: Text(
-                                                                'ILLEGAL',
-                                                                style:
-                                                                    GoogleFonts
-                                                                        .poppins(
-                                                                  fontSize: 10,
-                                                                  color: Colors
-                                                                      .white,
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
+                                                            ),
+                                                            if (isIllegalTapping)
+                                                              Container(
+                                                                margin: EdgeInsets
+                                                                    .only(
+                                                                        left: 8),
+                                                                padding: EdgeInsets
+                                                                    .symmetric(
+                                                                        horizontal:
+                                                                            6,
+                                                                        vertical:
+                                                                            2),
+                                                                decoration:
+                                                                    BoxDecoration(
+                                                                  color:
+                                                                      Colors.red,
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              4),
                                                                 ),
-                                                              ),
-                                                            ),
-                                                          if (hasEvidence)
-                                                            Container(
-                                                              margin: EdgeInsets
-                                                                  .only(
-                                                                      left: 4),
-                                                              padding: EdgeInsets
-                                                                  .symmetric(
-                                                                      horizontal:
-                                                                          4,
-                                                                      vertical:
-                                                                          2),
-                                                              decoration:
-                                                                  BoxDecoration(
-                                                                color: Colors
-                                                                    .green,
-                                                                borderRadius:
-                                                                    BorderRadius
-                                                                        .circular(
-                                                                            4),
-                                                              ),
-                                                              child: Row(
-                                                                mainAxisSize:
-                                                                    MainAxisSize
-                                                                        .min,
-                                                                children: [
-                                                                  Icon(
-                                                                    Icons
-                                                                        .photo_camera,
-                                                                    size: 10,
+                                                                child: Text(
+                                                                  'ILLEGAL',
+                                                                  style:
+                                                                      GoogleFonts
+                                                                          .poppins(
+                                                                    fontSize: 10,
                                                                     color: Colors
                                                                         .white,
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold,
                                                                   ),
-                                                                  SizedBox(
-                                                                      width: 2),
-                                                                  Text(
-                                                                    '${evidenceImages.length}',
-                                                                    style:
-                                                                        TextStyle(
-                                                                      fontSize:
-                                                                          8,
+                                                                ),
+                                                              ),
+                                                            if (hasEvidence)
+                                                              Container(
+                                                                margin: EdgeInsets
+                                                                    .only(
+                                                                        left: 4),
+                                                                padding: EdgeInsets
+                                                                    .symmetric(
+                                                                        horizontal:
+                                                                            4,
+                                                                        vertical:
+                                                                            2),
+                                                                decoration:
+                                                                    BoxDecoration(
+                                                                  color: Colors
+                                                                      .green,
+                                                                  borderRadius:
+                                                                      BorderRadius
+                                                                          .circular(
+                                                                              4),
+                                                                ),
+                                                                child: Row(
+                                                                  mainAxisSize:
+                                                                      MainAxisSize
+                                                                          .min,
+                                                                  children: [
+                                                                    Icon(
+                                                                      Icons
+                                                                          .photo_camera,
+                                                                      size: 10,
                                                                       color: Colors
                                                                           .white,
-                                                                      fontWeight:
-                                                                          FontWeight
-                                                                              .bold,
                                                                     ),
-                                                                  ),
-                                                                ],
+                                                                    SizedBox(
+                                                                        width: 2),
+                                                                    Text(
+                                                                      '${evidenceImages.length}',
+                                                                      style:
+                                                                          TextStyle(
+                                                                        fontSize:
+                                                                            8,
+                                                                        color: Colors
+                                                                            .white,
+                                                                        fontWeight:
+                                                                            FontWeight.bold,
+                                                                      ),
+                                                                    ),
+                                                                  ],
+                                                                ),
                                                               ),
-                                                            ),
-                                                        ],
+                                                          ],
+                                                        ),
                                                       ),
-                                                    ),
-                                                  ],
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  issueDescription,
-                                                  maxLines: 2,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 13,
-                                                    color: Colors.grey.shade600,
+                                                    ],
                                                   ),
-                                                ),
-                                                Row(
-                                                  children: [
-                                                    Text(
-                                                      '$displayStatus • $formattedDate',
-                                                      style:
-                                                          GoogleFonts.poppins(
-                                                        fontSize: 12,
-                                                        color: Colors
-                                                            .grey.shade600,
-                                                      ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    issueDescription,
+                                                    maxLines: 2,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 13,
+                                                      color: Colors.grey.shade600,
                                                     ),
-                                                    if (isIllegalTapping &&
-                                                        data['priority'] ==
-                                                            'high')
-                                                      Container(
-                                                        margin: EdgeInsets.only(
-                                                            left: 8),
-                                                        padding: EdgeInsets
-                                                            .symmetric(
-                                                                horizontal: 6,
-                                                                vertical: 2),
-                                                        decoration:
-                                                            BoxDecoration(
+                                                  ),
+                                                  Row(
+                                                    children: [
+                                                      Text(
+                                                        '$displayStatus • $formattedDate',
+                                                        style:
+                                                            GoogleFonts.poppins(
+                                                          fontSize: 12,
                                                           color: Colors
-                                                              .orange.shade100,
-                                                          borderRadius:
-                                                              BorderRadius
-                                                                  .circular(4),
-                                                          border: Border.all(
-                                                            color: Colors.orange
-                                                                .shade300,
-                                                          ),
-                                                        ),
-                                                        child: Text(
-                                                          'HIGH PRIORITY',
-                                                          style: GoogleFonts
-                                                              .poppins(
-                                                            fontSize: 10,
-                                                            color: Colors.orange
-                                                                .shade800,
-                                                            fontWeight:
-                                                                FontWeight.bold,
-                                                          ),
+                                                              .grey.shade600,
                                                         ),
                                                       ),
-                                                  ],
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          TextButton(
-                                            onPressed: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      MonitorPage(
-                                                    reportId: report.id,
+                                                      if (isIllegalTapping &&
+                                                          data['priority'] ==
+                                                              'high')
+                                                        Container(
+                                                          margin: EdgeInsets.only(
+                                                              left: 8),
+                                                          padding: EdgeInsets
+                                                              .symmetric(
+                                                                  horizontal: 6,
+                                                                  vertical: 2),
+                                                          decoration:
+                                                              BoxDecoration(
+                                                            color: Colors
+                                                                .orange.shade100,
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(4),
+                                                            border: Border.all(
+                                                              color: Colors
+                                                                  .orange
+                                                                  .shade300,
+                                                            ),
+                                                          ),
+                                                          child: Text(
+                                                            'HIGH PRIORITY',
+                                                            style: GoogleFonts
+                                                                .poppins(
+                                                              fontSize: 10,
+                                                              color: Colors
+                                                                  .orange
+                                                                  .shade800,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                    ],
                                                   ),
-                                                ),
-                                              );
-                                            },
-                                            child: Text(
-                                              'View',
-                                              style: GoogleFonts.poppins(
-                                                fontSize: 12,
-                                                color: const Color(0xFF4FC3F7),
+                                                ],
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                            SizedBox(
+                                              width: 60,
+                                              height: 36,
+                                              child: TextButton(
+                                                onPressed: () {
+                                                  Navigator.push(
+                                                    context,
+                                                    MaterialPageRoute(
+                                                      builder: (context) =>
+                                                          MonitorPage(
+                                                        reportId: report.id,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                                child: Text(
+                                                  'View',
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 12,
+                                                    color: const Color(0xFF4FC3F7),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -1606,7 +1815,10 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                               },
                             ),
                           ),
-                          _buildPaginationButtons(),
+                          Container(
+                            height: 60, // Fixed height for pagination
+                            child: _buildPaginationButtons(),
+                          ),
                         ],
                       );
                     },
