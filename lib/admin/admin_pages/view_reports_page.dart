@@ -535,6 +535,23 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
     );
   }
 
+  // Convert XFile to base64
+  Future<List<String>> _convertImagesToBase64(List<File> imageFiles) async {
+    final List<String> base64Images = [];
+
+    for (final imageFile in imageFiles) {
+      try {
+        final bytes = await imageFile.readAsBytes();
+        final base64Image = base64Encode(bytes);
+        base64Images.add(base64Image);
+      } catch (e) {
+        print('Error encoding image: $e');
+      }
+    }
+
+    return base64Images;
+  }
+
   // Updated minimalist illegal tapping report dialog
   void _showCreateIllegalTappingDialog(BuildContext context) {
     String locationName = '';
@@ -542,10 +559,12 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
     String description = '';
     String evidenceNotes = '';
     LatLng? selectedLocation;
-    List<String> base64Images = [];
+    List<File> _imageFiles = [];
     bool isUploading = false;
+    String? _errorMessage;
 
     final formKey = GlobalKey<FormState>();
+    final _picker = ImagePicker();
 
     showDialog(
       context: context,
@@ -553,41 +572,204 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setState) {
-            Future<void> pickImage() async {
-              final picker = ImagePicker();
-              final pickedFile = await picker.pickImage(
-                source: ImageSource.gallery,
-                imageQuality: 70,
-                maxWidth: 1200,
-              );
-              if (pickedFile != null) {
-                final bytes = await File(pickedFile.path).readAsBytes();
-                final base64String = base64Encode(bytes);
+            Future<void> _pickImages() async {
+              try {
+                // Pick multiple images
+                final List<XFile>? images = await _picker.pickMultiImage(
+                  maxWidth: 1920,
+                  maxHeight: 1080,
+                  imageQuality: 85,
+                );
+
+                if (images != null && images.isNotEmpty) {
+                  // Limit to 10 images maximum
+                  final newImages =
+                      images.take(10 - _imageFiles.length).toList();
+                  final newFiles = <File>[];
+                  for (var image in newImages) {
+                    newFiles.add(File(image.path));
+                  }
+                  setState(() {
+                    _imageFiles.addAll(newFiles);
+                    _errorMessage = null;
+                  });
+                }
+              } catch (e) {
                 setState(() {
-                  base64Images.add(base64String);
+                  _errorMessage = 'Error picking images: $e';
+                });
+              }
+            }
+
+            Future<void> _takePhoto() async {
+              try {
+                final XFile? image = await _picker.pickImage(
+                  source: ImageSource.camera,
+                  maxWidth: 1920,
+                  maxHeight: 1080,
+                  imageQuality: 85,
+                );
+
+                if (image != null) {
+                  setState(() {
+                    if (_imageFiles.length < 10) {
+                      _imageFiles.add(File(image.path));
+                    } else {
+                      _errorMessage = 'Maximum 10 images allowed';
+                    }
+                  });
+                }
+              } catch (e) {
+                setState(() {
+                  _errorMessage = 'Error taking photo: $e';
                 });
               }
             }
 
             void removeImage(int index) {
               setState(() {
-                base64Images.removeAt(index);
+                _imageFiles.removeAt(index);
               });
             }
 
-            Widget _buildImagePreview(String base64Image) {
-              return Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.memory(
-                    base64Decode(base64Image),
-                    fit: BoxFit.cover,
+            void _clearAllImages() {
+              setState(() {
+                _imageFiles.clear();
+              });
+            }
+
+            Widget _selectedImagesPreview() {
+              if (_imageFiles.isEmpty) return const SizedBox.shrink();
+
+              return FadeInUp(
+                duration: const Duration(milliseconds: 400),
+                delay: const Duration(milliseconds: 450),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Selected Images (${_imageFiles.length}/10):',
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const Spacer(),
+                          if (_imageFiles.isNotEmpty)
+                            TextButton.icon(
+                              onPressed: _clearAllImages,
+                              icon: const Icon(Icons.delete,
+                                  size: 16, color: Colors.red),
+                              label: Text(
+                                'Clear All',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              style: TextButton.styleFrom(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        height: 120,
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _imageFiles.length,
+                          itemBuilder: (context, index) {
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                right: index < _imageFiles.length - 1 ? 8 : 0,
+                              ),
+                              child: Stack(
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Image.file(
+                                      _imageFiles[index],
+                                      height: 120,
+                                      width: 120,
+                                      fit: BoxFit.cover,
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
+                                        return Container(
+                                          height: 120,
+                                          width: 120,
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey.shade200,
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                          ),
+                                          child: const Icon(
+                                            Icons.broken_image,
+                                            color: Colors.grey,
+                                            size: 40,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 4,
+                                    right: 4,
+                                    child: GestureDetector(
+                                      onTap: () => removeImage(index),
+                                      child: Container(
+                                        padding: const EdgeInsets.all(4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.9),
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color:
+                                                  Colors.black.withOpacity(0.2),
+                                              blurRadius: 4,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(Icons.close,
+                                            size: 16, color: Colors.red),
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    bottom: 4,
+                                    left: 4,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.6),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        '${index + 1}',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 10,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               );
@@ -600,6 +782,10 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                 setState(() => isUploading = true);
 
                 try {
+                  // Convert images to base64
+                  final base64Images =
+                      await _convertImagesToBase64(_imageFiles);
+
                   final reportData = {
                     'fullName': 'Staff Report',
                     'issueDescription': 'ILLEGAL TAPPING: $description',
@@ -619,6 +805,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                     'reportedByStaff': true,
                     'assignedPlumber': null,
                     'hasEvidence': base64Images.isNotEmpty,
+                    'imageCount': base64Images.length,
                   };
 
                   await FirebaseFirestore.instance
@@ -650,6 +837,9 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                   );
                   _fetchTotalPages(_selectedStatus);
                 } catch (e) {
+                  setState(() {
+                    _errorMessage = 'Error: ${e.toString()}';
+                  });
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Row(
@@ -751,6 +941,24 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              // Error Message
+                              if (_errorMessage != null)
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  margin: const EdgeInsets.only(bottom: 16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade100,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    _errorMessage!,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      color: Colors.red.shade800,
+                                    ),
+                                  ),
+                                ),
+
                               // Location Field
                               Text(
                                 'Location',
@@ -788,6 +996,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                               if (selectedLocation != null)
                                 Container(
                                   padding: const EdgeInsets.all(12),
+                                  margin: const EdgeInsets.only(bottom: 16),
                                   decoration: BoxDecoration(
                                     color: Colors.green.shade50,
                                     borderRadius: BorderRadius.circular(10),
@@ -964,57 +1173,43 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                               ),
                               const SizedBox(height: 12),
 
-                              OutlinedButton.icon(
-                                onPressed:
-                                    base64Images.length < 10 ? pickImage : null,
-                                icon: Icon(Icons.photo_camera, size: 18),
-                                label: Text('Upload Photos'),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: Size(double.infinity, 48),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: _imageFiles.length < 10
+                                          ? _pickImages
+                                          : null,
+                                      icon: Icon(Icons.photo_library, size: 18),
+                                      label: Text('Gallery'),
+                                      style: OutlinedButton.styleFrom(
+                                        minimumSize: Size(double.infinity, 48),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  const SizedBox(width: 8),
+                                  OutlinedButton.icon(
+                                    onPressed: _imageFiles.length < 10
+                                        ? _takePhoto
+                                        : null,
+                                    icon: Icon(Icons.camera_alt, size: 18),
+                                    label: Text('Camera'),
+                                    style: OutlinedButton.styleFrom(
+                                      minimumSize: Size(double.infinity, 48),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
 
-                              if (base64Images.isNotEmpty) ...[
-                                const SizedBox(height: 16),
-                                Text(
-                                  'Uploaded Photos (${base64Images.length}/10):',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: List.generate(base64Images.length,
-                                      (index) {
-                                    return Stack(
-                                      children: [
-                                        _buildImagePreview(base64Images[index]),
-                                        Positioned(
-                                          top: -6,
-                                          right: -6,
-                                          child: IconButton(
-                                            icon: CircleAvatar(
-                                              backgroundColor: Colors.red,
-                                              radius: 10,
-                                              child: Icon(Icons.close,
-                                                  size: 12,
-                                                  color: Colors.white),
-                                            ),
-                                            onPressed: () => removeImage(index),
-                                            padding: EdgeInsets.zero,
-                                          ),
-                                        ),
-                                      ],
-                                    );
-                                  }),
-                                ),
-                              ],
+                              // Display selected images
+                              _selectedImagesPreview(),
 
                               const SizedBox(height: 20),
 
