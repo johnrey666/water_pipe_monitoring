@@ -835,6 +835,19 @@ class _WaterBillFormState extends State<WaterBillForm> {
         _submitting = true;
         _error = null;
       });
+
+      // Get meter reader's name
+      User? user = FirebaseAuth.instance.currentUser;
+      String recordedByName = 'Unknown';
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+        final userData = userDoc.data();
+        recordedByName = userData?['fullName'] ?? 'Unknown';
+      }
+
       final billData = {
         'residentId': widget.resident['id'],
         'fullName': widget.resident['fullName'],
@@ -850,8 +863,10 @@ class _WaterBillFormState extends State<WaterBillForm> {
         'issueDate': Timestamp.now(),
         'purok': _selectedPurok,
         'recordedBy': FirebaseAuth.instance.currentUser?.email,
+        'recordedByName': recordedByName, // ADDED: Meter reader's name
         'recordedAt': Timestamp.now(),
       };
+
       // Save to Firestore
       await FirebaseFirestore.instance.runTransaction((transaction) async {
         // Add bill
@@ -861,6 +876,7 @@ class _WaterBillFormState extends State<WaterBillForm> {
             .collection('bills')
             .doc();
         transaction.set(billRef, billData);
+
         // Update meter number
         final userRef = FirebaseFirestore.instance
             .collection('users')
@@ -871,6 +887,7 @@ class _WaterBillFormState extends State<WaterBillForm> {
               'meterNumber': _meterNumberController.text.trim(),
             },
             SetOptions(merge: true));
+
         // Update latest reading
         final meterRef = FirebaseFirestore.instance
             .collection('users')
@@ -882,6 +899,7 @@ class _WaterBillFormState extends State<WaterBillForm> {
           'updatedAt': Timestamp.now(),
         });
       });
+
       if (mounted) {
         Navigator.pop(context);
         widget.onBillCreated();

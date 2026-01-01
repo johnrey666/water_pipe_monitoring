@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 class ViewBillingPage extends StatefulWidget {
   const ViewBillingPage({super.key});
@@ -28,10 +29,21 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   double? _previousReading;
   Map<String, dynamic>? _userData;
 
+  // Report feature variables
+  TextEditingController _reportReasonController = TextEditingController();
+  bool _submittingReport = false;
+  String _recordedByName = '';
+
   @override
   void initState() {
     super.initState();
     _loadLatestBill();
+  }
+
+  @override
+  void dispose() {
+    _reportReasonController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadLatestBill() async {
@@ -59,9 +71,6 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
           .limit(1)
           .get();
 
-      print(
-          'Found ${snapshot.docs.length} unpaid bills for resident: $_residentId');
-
       if (snapshot.docs.isNotEmpty) {
         final bill = snapshot.docs.first.data();
         bill['billId'] = snapshot.docs.first.id;
@@ -70,6 +79,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
           _currentBill = bill;
           _selectedBillId = bill['billId'];
           selectedPurok = bill['purok'] ?? 'PUROK 1';
+          _recordedByName = bill['recordedByName'] ?? 'Meter Reader';
           _hasNoBill = false;
           _loading = false;
         });
@@ -133,16 +143,14 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
       if (paymentSnapshot.docs.isNotEmpty) {
         final payment = paymentSnapshot.docs.first.data();
         final status = payment['status'] ?? 'pending';
-        
+
         setState(() {
           _paymentSubmitted = true;
           _paymentStatus = status;
-          
-          // Allow resubmission only if payment was rejected
-          // For approved payments, keep the status displayed
+
           if (status == 'rejected') {
-            _paymentSubmitted = false; // Allow new submission
-            _paymentStatus = 'rejected'; // Still show rejection status
+            _paymentSubmitted = false;
+            _paymentStatus = 'rejected';
           }
         });
       } else {
@@ -247,6 +255,163 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
     }
   }
 
+  void _showReportBillDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Report Bill Issue',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Please describe the issue with your bill:',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _reportReasonController,
+              maxLines: 4,
+              decoration: InputDecoration(
+                hintText: 'Example: Incorrect reading, wrong calculation, etc.',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                filled: true,
+                fillColor: Colors.grey.shade50,
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please describe the issue';
+                }
+                return null;
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(
+              'Cancel',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                color: Colors.blue.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: _submitReport,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: _submittingReport
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(
+                    'Submit Report',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitReport() async {
+    if (_reportReasonController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please describe the issue'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedBillId == null || _currentBill == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('No bill selected to report'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    try {
+      setState(() => _submittingReport = true);
+
+      final reportData = {
+        'billId': _selectedBillId,
+        'residentId': _residentId,
+        'residentName': _currentBill!['fullName'],
+        'residentAddress': _currentBill!['address'],
+        'billAmount': _currentBill!['currentMonthBill']?.toDouble() ?? 0.0,
+        'reportReason': _reportReasonController.text.trim(),
+        'submittedAt': Timestamp.now(),
+        'status': 'pending',
+        'reviewedBy': '',
+        'reviewedAt': null,
+        'adminNotes': '',
+        'recordedByName': _recordedByName,
+        'periodStart': _currentBill!['periodStart'],
+        'periodDue': _currentBill!['periodDue'],
+      };
+
+      await FirebaseFirestore.instance
+          .collection('bill_reports')
+          .add(reportData);
+
+      setState(() => _submittingReport = false);
+      Navigator.of(context).pop();
+
+      _reportReasonController.clear();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Report submitted successfully! Admin will review it.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error submitting report: $e');
+      setState(() => _submittingReport = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error submitting report: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -287,68 +452,65 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
 
   Widget _buildErrorState() {
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Card(
-          elevation: 6,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  _error == 'No existing bill. Your account is up to date!'
-                      ? Icons.check_circle
-                      : Icons.error_outline,
-                  size: 40,
-                  color:
-                      _error == 'No existing bill. Your account is up to date!'
-                          ? Colors.green
-                          : Colors.red[400],
+        child: Padding(
+      padding: const EdgeInsets.all(12.0),
+      child: Card(
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _error == 'No existing bill. Your account is up to date!'
+                    ? Icons.check_circle
+                    : Icons.error_outline,
+                size: 40,
+                color: _error == 'No existing bill. Your account is up to date!'
+                    ? Colors.green
+                    : Colors.red[400],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _error == 'No existing bill. Your account is up to date!'
+                    ? 'No Existing Bill'
+                    : 'Error Loading Bill',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF4A90E2),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  _error == 'No existing bill. Your account is up to date!'
-                      ? 'No Existing Bill'
-                      : 'Error Loading Bill',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF4A90E2),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 10,
+                  color: Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: _loadLatestBill,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Refresh', style: TextStyle(fontSize: 12)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4A90E2),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  onPressed: _loadLatestBill,
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Refresh', style: TextStyle(fontSize: 12)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4A90E2),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-      )
-    );
+      ),
+    ));
   }
 
   Widget _buildNoBillsState() {
@@ -475,7 +637,19 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     children: [
                       Row(
                         children: [
-                          Image.asset('assets/images/icon.png', height: 36),
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.blue[50],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.water_drop,
+                              color: Colors.blue[700],
+                              size: 20,
+                            ),
+                          ),
                           const SizedBox(width: 8),
                           const Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -485,7 +659,6 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF4A90E2),
                                 ),
                               ),
                               Text(
@@ -799,7 +972,19 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     children: [
                       Row(
                         children: [
-                          Image.asset('assets/images/icon.png', height: 36),
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: Colors.blue[50],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.water_drop,
+                              color: Colors.blue[700],
+                              size: 20,
+                            ),
+                          ),
                           const SizedBox(width: 8),
                           const Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -865,6 +1050,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   _receiptRow('Address', bill['address'] ?? 'N/A'),
                   _receiptRow('Contact', bill['contactNumber'] ?? 'N/A'),
                   _receiptRow('Meter No.', bill['meterNumber'] ?? 'N/A'),
+                  _receiptRow('Recorded By', _recordedByName),
                   _receiptRow('Billing Period Start', formattedPeriodStart),
                   _receiptRow('Billing Period Due', formattedPeriodDue),
                   _receiptRow('Issue Date', formattedIssueDate),
@@ -1016,17 +1202,17 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  
-                  // Show payment status only if payment is approved or pending (not rejected)
-                  if (_paymentStatus != null && _paymentStatus != 'rejected') ...[
+                  if (_paymentStatus != null &&
+                      _paymentStatus != 'rejected') ...[
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: _getStatusColor(_paymentStatus!).withOpacity(0.1),
+                        color:
+                            _getStatusColor(_paymentStatus!).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                          color: _getStatusColor(_paymentStatus!).withOpacity(0.3)
-                        ),
+                            color: _getStatusColor(_paymentStatus!)
+                                .withOpacity(0.3)),
                       ),
                       child: Row(
                         children: [
@@ -1063,17 +1249,13 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  
-                  // Show rejected status separately with option to resubmit
                   if (_paymentStatus == 'rejected') ...[
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: Colors.red.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: Colors.red.withOpacity(0.3)
-                        ),
+                        border: Border.all(color: Colors.red.withOpacity(0.3)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1109,15 +1291,16 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                           const SizedBox(height: 8),
                           TextButton.icon(
                             onPressed: () {
-                              // Optionally, you could show a message or navigate
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
-                                  content: Text('Please upload a new receipt below.'),
+                                  content: Text(
+                                      'Please upload a new receipt below.'),
                                   duration: Duration(seconds: 2),
                                 ),
                               );
                             },
-                            icon: Icon(Icons.info_outline, size: 14, color: Colors.red),
+                            icon: Icon(Icons.info_outline,
+                                size: 14, color: Colors.red),
                             label: Text(
                               'View notification for details',
                               style: TextStyle(
@@ -1131,15 +1314,14 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     ),
                     const SizedBox(height: 12),
                   ],
-                  
-                  // Show payment form if no payment submitted or payment was rejected
                   if (!_paymentSubmitted || _paymentStatus == 'rejected') ...[
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: Colors.green.withOpacity(0.05),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.green.withOpacity(0.3)),
+                        border:
+                            Border.all(color: Colors.green.withOpacity(0.3)),
                       ),
                       child: Row(
                         children: [
@@ -1260,6 +1442,73 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
               ),
             ),
           ),
+          const SizedBox(height: 12),
+          Card(
+            elevation: 6,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12.withOpacity(0.05),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'REPORT ISSUE',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF4A90E2),
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Found an issue with your bill?',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _showReportBillDialog,
+                    icon: const Icon(Icons.report_problem, size: 16),
+                    label: const Text('Report Bill Issue',
+                        style: TextStyle(fontSize: 12)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.orange.shade700,
+                      side: BorderSide(color: Colors.orange.shade300),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 12, horizontal: 16),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Report for issues like: incorrect readings, wrong calculations, etc.',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.grey.shade500,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -1283,37 +1532,36 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   Widget _receiptRow(String label, String value,
       {Color? valueColor, bool isBold = false, double fontSize = 11}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-                color: Colors.black,
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                  color: Colors.black,
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-                fontSize: fontSize,
-                color: valueColor ?? Colors.grey[700],
+            Expanded(
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                  fontSize: fontSize,
+                  color: valueColor ?? Colors.grey[700],
+                ),
+                textAlign: TextAlign.right,
+                overflow: label == 'Address' ? TextOverflow.ellipsis : null,
+                maxLines: label == 'Address' ? 2 : null,
               ),
-              textAlign: TextAlign.right, 
-              overflow: label == 'Address' ? TextOverflow.ellipsis : null,
-              maxLines: label == 'Address' ? 2 : null,
             ),
-          ),
-        ],
-      )
-    );
+          ],
+        ));
   }
 
   Widget _rateRow(String category, String details) => Row(

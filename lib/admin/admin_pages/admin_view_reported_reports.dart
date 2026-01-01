@@ -1,4 +1,4 @@
-// admin_view_reported_reports.dart
+// lib/admin/admin_pages/admin_view_reported_reports.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';

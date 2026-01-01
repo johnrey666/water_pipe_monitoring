@@ -11,12 +11,12 @@ import 'admin/admin_pages/admin_home_page.dart';
 import 'admin/admin_pages/monitor_page.dart';
 import 'admin/admin_pages/users_page.dart';
 import 'admin/admin_pages/bills_page.dart';
-import 'admin/admin_pages/view_reports_page.dart';
+import 'admin/admin_pages/admin_view_reported_reports.dart';
 import 'admin/admin_pages/logs_page.dart';
 import 'resident/resident_home.dart';
 import 'plumber/plumber_home.dart';
 import 'plumber/view_schedule_page.dart';
-import 'plumber/view_reports_page.dart' as plumber;
+import 'plumber/view_reports_page.dart' as plumber_reports;
 import 'plumber/geographic_mapping_page.dart';
 
 void main() async {
@@ -57,7 +57,8 @@ class MyApp extends StatelessWidget {
         '/admin-login': (context) => const AdminLoginPage(),
         '/dashboard': (context) => const AdminHomePage(),
         '/monitor': (context) => const MonitorPage(reportId: ''),
-        '/reports': (context) => const ViewReportsPage(),
+        '/reports': (context) => const ViewReportedReportsPage(),
+        '/reported-reports': (context) => const ViewReportedReportsPage(),
         '/users': (context) => const UsersPage(),
         '/bills': (context) => const BillsPage(),
         '/logs': (context) => const LogsPage(),
@@ -68,7 +69,8 @@ class MyApp extends StatelessWidget {
         // Plumber routes
         '/plumber-home': (context) => const PlumberHomePage(),
         '/plumber-schedule': (context) => const ViewSchedulePage(),
-        '/plumber-reports': (context) => const plumber.ViewReportsPage(),
+        '/plumber-reports': (context) =>
+            const plumber_reports.ViewReportsPage(),
         '/plumber-mapping': (context) => const GeographicMappingPage(),
       },
       onUnknownRoute: (settings) {

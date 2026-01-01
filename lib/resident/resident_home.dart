@@ -1,4 +1,5 @@
 // ignore_for_file: unused_import
+import 'dart:async';
 import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -45,17 +46,109 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   // PageStorage bucket to preserve state
   final PageStorageBucket _bucket = PageStorageBucket();
 
+  // Stream subscription for new bills
+  StreamSubscription<QuerySnapshot>? _billsSubscription;
+
   @override
   void initState() {
     super.initState();
     _fetchResidentName();
     _fetchUnreadNotifCount();
+    _setupBillNotificationListener();
 
     // Initialize pages that don't need residentId
     if (!_pagesInitialized) {
       _reportPage = const ReportProblemPage();
       _billingPage = const ViewBillingPage();
       _pagesInitialized = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    _billsSubscription?.cancel();
+    _removeNotificationOverlay();
+    super.dispose();
+  }
+
+  Future<void> _setupBillNotificationListener() async {
+    User? user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    setState(() {
+      _residentId = user.uid;
+    });
+
+    // Listen for new bills
+    _billsSubscription = FirebaseFirestore.instance
+        .collection('users')
+        .doc(_residentId)
+        .collection('bills')
+        .orderBy('issueDate', descending: true)
+        .limit(1)
+        .snapshots()
+        .listen((snapshot) async {
+      if (snapshot.docs.isNotEmpty) {
+        final bill = snapshot.docs.first;
+        final billData = bill.data();
+        final billTimestamp = billData['issueDate'] as Timestamp?;
+
+        if (billTimestamp != null) {
+          final billTime = billTimestamp.toDate();
+          final now = DateTime.now();
+
+          // Check if bill was created within the last 5 minutes (to avoid duplicate notifications)
+          if (now.difference(billTime).inMinutes < 5) {
+            // Check if notification already exists for this bill
+            final existingNotif = await FirebaseFirestore.instance
+                .collection('notifications')
+                .where('userId', isEqualTo: _residentId)
+                .where('billId', isEqualTo: bill.id)
+                .where('type', isEqualTo: 'new_bill')
+                .limit(1)
+                .get();
+
+            if (existingNotif.docs.isEmpty) {
+              // Create notification for new bill
+              await _createNewBillNotification(bill.id, billData);
+            }
+          }
+        }
+      }
+    });
+  }
+
+  Future<void> _createNewBillNotification(
+      String billId, Map<String, dynamic> billData) async {
+    try {
+      final periodStart = (billData['periodStart'] as Timestamp?)?.toDate();
+      final month = periodStart != null
+          ? DateFormat('MMM yyyy').format(periodStart)
+          : 'Current Month';
+      final amount = billData['currentMonthBill']?.toDouble() ?? 0.0;
+
+      final notificationData = {
+        'userId': _residentId!,
+        'type': 'new_bill',
+        'title': 'New Water Bill Generated',
+        'message':
+            'A new water bill of ₱${amount.toStringAsFixed(2)} has been generated for $month.',
+        'billId': billId,
+        'month': month,
+        'amount': amount,
+        'status': 'unread',
+        'read': false,
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .add(notificationData);
+
+      // Update notification count
+      _fetchUnreadNotifCount();
+    } catch (e) {
+      print('Error creating new bill notification: $e');
     }
   }
 
@@ -381,11 +474,40 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     }
     // Remove overlay
     _removeNotificationOverlay();
+
     // Handle different notification types
-    if (notification['type'] == 'report_fixed' &&
-        notification['reportId'] != null) {
-      // For report_fixed notifications, we should navigate to a page that shows the fixed report
-      // For now, just show a snackbar with the message
+    final type = notification['type'];
+
+    if (type == 'new_bill') {
+      // For new bill notifications, navigate to billing page
+      _onSelectPage(ResidentPage.billing);
+
+      // Show a snackbar to inform user
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(notification['message'] ?? 'New bill available'),
+            backgroundColor: Colors.blue,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } else if (type == 'bill_updated') {
+      // For bill updated notifications
+      _onSelectPage(ResidentPage.billing);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text(notification['message'] ?? 'Your bill has been updated'),
+            backgroundColor: Colors.blue,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } else if (type == 'report_fixed' && notification['reportId'] != null) {
+      // For report_fixed notifications
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -399,8 +521,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           ),
         );
       }
-    } else if (notification['type'] == 'payment' &&
-        notification['billId'] != null) {
+    } else if (type == 'payment' && notification['billId'] != null) {
       // Handle payment notifications
       if (notification['status'] == 'approved') {
         _showPaidBillModal(notification);
@@ -697,12 +818,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       _notificationOverlay!.remove();
       _notificationOverlay = null;
     }
-  }
-
-  @override
-  void dispose() {
-    _removeNotificationOverlay();
-    super.dispose();
   }
 
   @override
@@ -1619,172 +1734,173 @@ class _NotificationDropdownState extends State<NotificationDropdown>
             .take(_itemsPerPage)
             .toList();
         return Container(
-            width: 350,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Header
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF87CEEB),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      topRight: Radius.circular(12),
-                    ),
+          width: 350,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Header
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF87CEEB),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(12),
+                    topRight: Radius.circular(12),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Notifications',
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.white,
-                        ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Notifications',
+                      style: GoogleFonts.poppins(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
                       ),
-                      Row(
-                        children: [
-                          if (unread.isNotEmpty)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                '${unread.length} new',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF87CEEB),
-                                ),
+                    ),
+                    Row(
+                      children: [
+                        if (unread.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              '${unread.length} new',
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF87CEEB),
                               ),
                             ),
-                          const SizedBox(width: 4),
+                          ),
+                        const SizedBox(width: 4),
+                        IconButton(
+                          icon: const Icon(Icons.close,
+                              size: 18, color: Colors.white),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: widget.onClose,
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              // Notifications list
+              Container(
+                constraints: const BoxConstraints(maxHeight: 300),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: currentItems.length,
+                  itemBuilder: (context, index) {
+                    final notification = currentItems[index];
+                    return _buildNotificationItem(notification);
+                  },
+                ),
+              ),
+              // Footer
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade50,
+                  border: Border(
+                    top: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  borderRadius: const BorderRadius.only(
+                    bottomLeft: Radius.circular(12),
+                    bottomRight: Radius.circular(12),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Mark all as read button
+                    if (unread.isNotEmpty)
+                      TextButton.icon(
+                        onPressed: () {
+                          for (final notification in unread) {
+                            if (notification['id'] != null) {
+                              widget.onMarkAsRead(notification['id']);
+                            }
+                          }
+                        },
+                        icon: Icon(Icons.mark_chat_read,
+                            size: 14, color: Colors.blue.shade700),
+                        label: Text(
+                          'Mark all read',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.blue.shade700,
+                          ),
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                        ),
+                      ),
+                    // Pagination
+                    if (totalPages > 1)
+                      Row(
+                        children: [
                           IconButton(
-                            icon: const Icon(Icons.close,
-                                size: 18, color: Colors.white),
+                            icon: Icon(Icons.chevron_left,
+                                color: _page > 0
+                                    ? Colors.blue.shade700
+                                    : Colors.grey,
+                                size: 20),
+                            onPressed: _page > 0
+                                ? () => setState(() => _page--)
+                                : null,
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
-                            onPressed: widget.onClose,
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Text(
+                              '${_page + 1} / $totalPages',
+                              style: GoogleFonts.poppins(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.chevron_right,
+                                color: _page < totalPages - 1
+                                    ? Colors.blue.shade700
+                                    : Colors.grey,
+                                size: 20),
+                            onPressed: _page < totalPages - 1
+                                ? () => setState(() => _page++)
+                                : null,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
                           ),
                         ],
                       ),
-                    ],
-                  ),
+                  ],
                 ),
-                // Notifications list
-                Container(
-                  constraints: const BoxConstraints(maxHeight: 300),
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: currentItems.length,
-                    itemBuilder: (context, index) {
-                      final notification = currentItems[index];
-                      return _buildNotificationItem(notification);
-                    },
-                  ),
-                ),
-                // Footer
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
-                    border: Border(
-                      top: BorderSide(color: Colors.grey.shade300),
-                    ),
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(12),
-                      bottomRight: Radius.circular(12),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Mark all as read button
-                      if (unread.isNotEmpty)
-                        TextButton.icon(
-                          onPressed: () {
-                            for (final notification in unread) {
-                              if (notification['id'] != null) {
-                                widget.onMarkAsRead(notification['id']);
-                              }
-                            }
-                          },
-                          icon: Icon(Icons.mark_chat_read,
-                              size: 14, color: Colors.blue.shade700),
-                          label: Text(
-                            'Mark all read',
-                            style: GoogleFonts.poppins(
-                              fontSize: 11,
-                              color: Colors.blue.shade700,
-                            ),
-                          ),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                          ),
-                        ),
-                      // Pagination
-                      if (totalPages > 1)
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: Icon(Icons.chevron_left,
-                                  color: _page > 0
-                                      ? Colors.blue.shade700
-                                      : Colors.grey,
-                                  size: 20),
-                              onPressed: _page > 0
-                                  ? () => setState(() => _page--)
-                                  : null,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: Colors.grey.shade300),
-                              ),
-                              child: Text(
-                                '${_page + 1} / $totalPages',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.grey.shade700,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.chevron_right,
-                                  color: _page < totalPages - 1
-                                      ? Colors.blue.shade700
-                                      : Colors.grey,
-                                  size: 20),
-                              onPressed: _page < totalPages - 1
-                                  ? () => setState(() => _page++)
-                                  : null,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            ));
+              ),
+            ],
+          ),
+        );
       },
     );
   }
@@ -1807,6 +1923,20 @@ class _NotificationDropdownState extends State<NotificationDropdown>
     Color backgroundColor = isRead ? Colors.white : Colors.blue.shade50;
 
     switch (type) {
+      case 'new_bill':
+        icon = Icons.receipt;
+        iconColor = Colors.blue;
+        backgroundColor = isRead
+            ? Colors.blue.shade50
+            : Colors.blue.shade100.withOpacity(0.5);
+        break;
+      case 'bill_updated':
+        icon = Icons.edit_note;
+        iconColor = Colors.purple;
+        backgroundColor = isRead
+            ? Colors.purple.shade50
+            : Colors.purple.shade100.withOpacity(0.5);
+        break;
       case 'report_fixed':
         icon = Icons.check_circle_outline;
         iconColor = Colors.green;
@@ -1910,6 +2040,100 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    // New bill details (if applicable)
+                    if (type == 'new_bill' &&
+                        month != null &&
+                        amount != null) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: Colors.blue.shade200,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.attach_money,
+                              size: 12,
+                              color: Colors.blue.shade700,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '₱${amount.toStringAsFixed(2)} for $month',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.blue.shade900,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Tap to view bill',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 10,
+                                      color: Colors.blue.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    // Bill updated details (if applicable)
+                    if (type == 'bill_updated' && month != null) ...[
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.purple.shade50,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(
+                            color: Colors.purple.shade200,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.edit_note,
+                              size: 12,
+                              color: Colors.purple.shade700,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Bill updated for $month',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.purple.shade900,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Tap to view updated bill',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 10,
+                                      color: Colors.purple.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                     // Payment details (if applicable)

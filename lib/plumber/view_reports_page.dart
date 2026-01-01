@@ -1,3 +1,4 @@
+// plumber view reports.dart (updated)
 import 'dart:convert';
 // ignore: unused_import
 import 'dart:typed_data';
@@ -31,6 +32,11 @@ class _ViewReportsPageState extends State<ViewReportsPage>
   int _fixedPage = 1;
   final int _pageSize = 10;
 
+  // For reporting public reports
+  final TextEditingController _reportReasonController = TextEditingController();
+  // ignore: unused_field
+  String? _reportingReportId;
+
   @override
   void initState() {
     super.initState();
@@ -45,6 +51,7 @@ class _ViewReportsPageState extends State<ViewReportsPage>
   @override
   void dispose() {
     _tabController.dispose();
+    _reportReasonController.dispose();
     super.dispose();
   }
 
@@ -62,7 +69,10 @@ class _ViewReportsPageState extends State<ViewReportsPage>
               borderRadius: BorderRadius.circular(12),
             ),
             backgroundColor: Colors.white,
-            child: ReportDetailsModal(report: doc),
+            child: ReportDetailsModal(
+              report: doc,
+              onReportPressed: () => _showReportReasonDialog(reportId),
+            ),
           ),
         );
       } else if (mounted) {
@@ -74,6 +84,153 @@ class _ViewReportsPageState extends State<ViewReportsPage>
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error loading report: $e')),
+        );
+      }
+    }
+  }
+
+  void _showReportReasonDialog(String reportId) {
+    setState(() {
+      _reportingReportId = reportId;
+    });
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            title: Text(
+              'Report this Public Report',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Please provide a reason for reporting this public report:',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _reportReasonController,
+                  maxLines: 5,
+                  decoration: InputDecoration(
+                    hintText:
+                        'e.g., Report is inaccurate, already fixed, duplicate, etc.',
+                    hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: const BorderSide(color: Color(0xFF87CEEB)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  _reportReasonController.clear();
+                  Navigator.pop(context);
+                },
+                child: Text(
+                  'Cancel',
+                  style: GoogleFonts.poppins(
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final reason = _reportReasonController.text.trim();
+                  if (reason.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please provide a reason')),
+                    );
+                    return;
+                  }
+
+                  await _submitReport(reportId, reason);
+                  _reportReasonController.clear();
+                  if (mounted) Navigator.pop(context);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                ),
+                child: Text(
+                  'Submit Report',
+                  style: GoogleFonts.poppins(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _submitReport(String reportId, String reason) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // Get plumber info
+      final plumberDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final plumberName = plumberDoc.data()?['fullName'] ?? 'Unknown Plumber';
+
+      // Get report data
+      final reportDoc = await FirebaseFirestore.instance
+          .collection('reports')
+          .doc(reportId)
+          .get();
+      final reportData = reportDoc.data() as Map<String, dynamic>;
+
+      // Create reported report document
+      await FirebaseFirestore.instance.collection('reported_reports').add({
+        'reportId': reportId,
+        'plumberId': user.uid,
+        'plumberName': plumberName,
+        'reason': reason,
+        'reportData': reportData,
+        'createdAt': FieldValue.serverTimestamp(),
+        'status': 'pending', // pending, reviewed, dismissed
+      });
+
+      // Log the action
+      await FirebaseFirestore.instance.collection('logs').add({
+        'action': 'Reported Public Report',
+        'userId': user.uid,
+        'details':
+            'Plumber $plumberName reported public report #$reportId. Reason: ${reason.length > 50 ? reason.substring(0, 50) + '...' : reason}',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Report submitted successfully')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error submitting report: $e')),
         );
       }
     }
@@ -294,29 +451,74 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                             ),
                           ],
                         ),
-                        trailing: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFE3F2FD),
-                            foregroundColor: const Color(0xFF87CEEB),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: const BorderSide(color: Color(0xFFBBDEFB)),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                            minimumSize: const Size(90, 40),
-                            elevation: 0,
-                          ),
-                          onPressed: () => _showReportModal(report.id),
-                          child: Text(
-                            'View',
-                            style: GoogleFonts.poppins(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF87CEEB),
-                            ),
-                          ),
-                        ),
+                        trailing: isPublic
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Report button for public reports
+                                  IconButton(
+                                    onPressed: () =>
+                                        _showReportReasonDialog(report.id),
+                                    icon: const Icon(
+                                      Icons.report_problem,
+                                      color: Colors.red,
+                                      size: 24,
+                                    ),
+                                    tooltip: 'Report this public report',
+                                  ),
+                                  const SizedBox(width: 8),
+                                  // View button
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFE3F2FD),
+                                      foregroundColor: const Color(0xFF87CEEB),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                        side: const BorderSide(
+                                            color: Color(0xFFBBDEFB)),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 8),
+                                      minimumSize: const Size(90, 40),
+                                      elevation: 0,
+                                    ),
+                                    onPressed: () =>
+                                        _showReportModal(report.id),
+                                    child: Text(
+                                      'View',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: const Color(0xFF87CEEB),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFFE3F2FD),
+                                  foregroundColor: const Color(0xFF87CEEB),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    side: const BorderSide(
+                                        color: Color(0xFFBBDEFB)),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 8),
+                                  minimumSize: const Size(90, 40),
+                                  elevation: 0,
+                                ),
+                                onPressed: () => _showReportModal(report.id),
+                                child: Text(
+                                  'View',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF87CEEB),
+                                  ),
+                                ),
+                              ),
                       ),
                     ),
                   );
@@ -391,8 +593,13 @@ class _ViewReportsPageState extends State<ViewReportsPage>
 
 class ReportDetailsModal extends StatefulWidget {
   final DocumentSnapshot report;
+  final VoidCallback? onReportPressed;
 
-  const ReportDetailsModal({super.key, required this.report});
+  const ReportDetailsModal({
+    super.key,
+    required this.report,
+    this.onReportPressed,
+  });
 
   @override
   State<ReportDetailsModal> createState() => _ReportDetailsModalState();
@@ -991,6 +1198,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
     final location = reportData['location'] as GeoPoint?;
     final currentStatus = reportData['status']?.toString() ?? 'Unfixed Reports';
     final assessment = reportData['assessment']?.toString();
+    final isPublic = reportData['isPublic'] == true;
 
     // Get images data
     final imageCount = reportData['imageCount'] ?? 0;
@@ -1041,10 +1249,25 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                       color: Colors.black87,
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close,
-                        color: Colors.black54, size: 24),
-                    onPressed: () => Navigator.pop(context),
+                  Row(
+                    children: [
+                      // Report button for public reports
+                      if (isPublic && currentStatus != 'Fixed')
+                        IconButton(
+                          onPressed: widget.onReportPressed,
+                          icon: const Icon(
+                            Icons.report_problem,
+                            color: Colors.red,
+                            size: 24,
+                          ),
+                          tooltip: 'Report this public report',
+                        ),
+                      IconButton(
+                        icon: const Icon(Icons.close,
+                            color: Colors.black54, size: 24),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1111,9 +1334,8 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                                   color: Colors.black54,
                                 ),
                               ),
-                              if (reportData['isPublic'] == true)
-                                const SizedBox(height: 4),
-                              if (reportData['isPublic'] == true)
+                              if (isPublic) const SizedBox(height: 4),
+                              if (isPublic)
                                 Text(
                                   'Public Report',
                                   style: GoogleFonts.poppins(
@@ -1250,11 +1472,11 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                       ),
                     ),
 
-                    if (reportData['isPublic'] == true &&
+                    if (isPublic &&
                         additionalLocationInfo != null &&
                         additionalLocationInfo.isNotEmpty)
                       const SizedBox(height: 12),
-                    if (reportData['isPublic'] == true &&
+                    if (isPublic &&
                         additionalLocationInfo != null &&
                         additionalLocationInfo.isNotEmpty)
                       Text(
@@ -1507,8 +1729,8 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
 
                     const SizedBox(height: 20),
 
-                    // Action buttons for non-fixed reports
-                    if (currentStatus != 'Fixed')
+                    // Action buttons for non-fixed reports (only for assigned plumber or monitoring)
+                    if (currentStatus != 'Fixed' && !isPublic)
                       Column(
                         children: [
                           // Add Assessment button

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -24,7 +26,6 @@ class _BillsPageState extends State<BillsPage> {
     Query query = FirebaseFirestore.instance
         .collection('users')
         .where('role', isEqualTo: 'Resident');
-
     if (_searchQuery.isNotEmpty) {
       query = query
           .where('fullName', isGreaterThanOrEqualTo: _searchQuery)
@@ -34,11 +35,9 @@ class _BillsPageState extends State<BillsPage> {
     } else {
       query = query.orderBy('fullName').limit(_pageSize);
     }
-
     if (_currentPage > 0 && _lastDocuments[_currentPage - 1] != null) {
       query = query.startAfterDocument(_lastDocuments[_currentPage - 1]!);
     }
-
     return query.snapshots();
   }
 
@@ -46,13 +45,11 @@ class _BillsPageState extends State<BillsPage> {
     Query query = FirebaseFirestore.instance
         .collection('users')
         .where('role', isEqualTo: 'Resident');
-
     if (_searchQuery.isNotEmpty) {
       query = query
           .where('fullName', isGreaterThanOrEqualTo: _searchQuery)
           .where('fullName', isLessThanOrEqualTo: '$_searchQuery\uf8ff');
     }
-
     try {
       final snapshot = await query.get();
       final totalDocs = snapshot.docs.length;
@@ -175,40 +172,75 @@ class _BillsPageState extends State<BillsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16.0),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: 'Search residents by name...',
-                  prefixIcon:
-                      const Icon(Icons.search, color: Color(0xFF718096)),
-                  filled: true,
-                  fillColor: Colors.grey.shade50,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide:
-                        const BorderSide(color: Color(0xFFEDF2F7), width: 1),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide:
-                        const BorderSide(color: Color(0xFF1E88E5), width: 1.5),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide:
-                        const BorderSide(color: Color(0xFFEDF2F7), width: 1),
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  hintStyle: GoogleFonts.inter(
-                    fontSize: 14,
-                    color: const Color(0xFF718096),
+            // Search Bar and Reported Bills Button in one row
+            Row(
+              children: [
+                // Search Bar - takes most of the space
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(bottom: 16.0, right: 8.0),
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search residents by name...',
+                        prefixIcon:
+                            const Icon(Icons.search, color: Color(0xFF718096)),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                              color: Color(0xFFEDF2F7), width: 1),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                              color: Color(0xFF1E88E5), width: 1.5),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(
+                              color: Color(0xFFEDF2F7), width: 1),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        hintStyle: GoogleFonts.inter(
+                          fontSize: 14,
+                          color: const Color(0xFF718096),
+                        ),
+                      ),
+                      style: GoogleFonts.inter(fontSize: 14),
+                    ),
                   ),
                 ),
-                style: GoogleFonts.inter(fontSize: 14),
-              ),
+                // Reported Bills Button
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0),
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      _showReportedBillsModal(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange.shade700,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      elevation: 2,
+                    ),
+                    icon: const Icon(Icons.report_problem, size: 18),
+                    label: Text(
+                      'Reported Bills',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
@@ -291,6 +323,1197 @@ class _BillsPageState extends State<BillsPage> {
       ),
     );
   }
+
+  // NEW: Show Reported Bills Modal
+  void _showReportedBillsModal(BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    final sideLength =
+        (min(screenSize.width, screenSize.height) * 0.85).clamp(400.0, 800.0);
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        insetPadding: EdgeInsets.symmetric(
+            horizontal: screenSize.width * 0.05,
+            vertical: screenSize.height * 0.05),
+        child: SizedBox(
+          width: sideLength,
+          height: sideLength,
+          child: ReportedBillsModal(),
+        ),
+      ),
+    );
+  }
+}
+
+// Replace the entire ReportedBillsModal class with this improved version:
+class ReportedBillsModal extends StatefulWidget {
+  @override
+  State<ReportedBillsModal> createState() => _ReportedBillsModalState();
+}
+
+class _ReportedBillsModalState extends State<ReportedBillsModal> {
+  List<Map<String, dynamic>> _reportedBills = [];
+  bool _loading = true;
+  String? _error;
+  Map<String, Map<String, dynamic>> _residentDetails = {};
+  Map<String, Map<String, dynamic>> _billDetails = {};
+  Map<String, bool> _expandedReports = {};
+  // ignore: unused_field
+  int _currentPage = 0;
+  final int _itemsPerPage = 5;
+  bool _hasMoreReports = true;
+  DocumentSnapshot? _lastReportDoc;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReportedBills();
+  }
+
+  Future<void> _loadReportedBills({bool loadMore = false}) async {
+    try {
+      if (!loadMore) {
+        setState(() {
+          _loading = true;
+          _error = null;
+          _currentPage = 0;
+          _lastReportDoc = null;
+          _reportedBills.clear();
+          _residentDetails.clear();
+          _billDetails.clear();
+        });
+      }
+      // Load reported bills with status 'pending' with pagination
+      Query query = FirebaseFirestore.instance
+          .collection('bill_reports')
+          .where('status', isEqualTo: 'pending')
+          .orderBy('submittedAt', descending: true)
+          .limit(_itemsPerPage);
+      if (_lastReportDoc != null) {
+        query = query.startAfterDocument(_lastReportDoc!);
+      }
+      final reportsSnapshot = await query.get();
+      if (reportsSnapshot.docs.isEmpty) {
+        setState(() {
+          _hasMoreReports = false;
+          _loading = false;
+        });
+        return;
+      }
+      // Update last document for pagination
+      _lastReportDoc = reportsSnapshot.docs.last;
+      final newReports = reportsSnapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        data['reportId'] = doc.id;
+        return data;
+      }).toList();
+      // Load resident details and bill details for each new report
+      for (var report in newReports) {
+        final residentId = report['residentId'] as String?;
+        final billId = report['billId'] as String?;
+        if (residentId != null && !_residentDetails.containsKey(residentId)) {
+          final residentDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(residentId)
+              .get();
+          if (residentDoc.exists) {
+            _residentDetails[residentId] =
+                residentDoc.data() as Map<String, dynamic>;
+          }
+        }
+        if (billId != null &&
+            residentId != null &&
+            !_billDetails.containsKey(billId)) {
+          final billDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(residentId)
+              .collection('bills')
+              .doc(billId)
+              .get();
+          if (billDoc.exists) {
+            _billDetails[billId] = billDoc.data() as Map<String, dynamic>;
+          }
+        }
+      }
+      setState(() {
+        if (loadMore) {
+          _reportedBills.addAll(newReports);
+        } else {
+          _reportedBills = newReports;
+        }
+        _loading = false;
+        _hasMoreReports = newReports.length == _itemsPerPage;
+      });
+    } catch (e) {
+      print('Error loading reported bills: $e');
+      setState(() {
+        _error = 'Error loading reported bills: $e';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<void> _updateReportStatus(
+      String reportId, String status, String adminNotes) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('bill_reports')
+          .doc(reportId)
+          .update({
+        'status': status,
+        'reviewedBy': 'Admin',
+        'reviewedAt': Timestamp.now(),
+        'adminNotes': adminNotes,
+      });
+      // Send notification to resident WITH ADMIN NOTES
+      final report =
+          _reportedBills.firstWhere((r) => r['reportId'] == reportId);
+      String message;
+      if (status == 'resolved') {
+        message = 'Your bill report has been resolved.';
+        if (adminNotes.isNotEmpty) {
+          message += '\n\nAdmin Notes: $adminNotes';
+        }
+      } else {
+        message = 'Your bill report has been marked as reviewed.';
+        if (adminNotes.isNotEmpty) {
+          message += '\n\nAdmin Notes: $adminNotes';
+        }
+      }
+      final notificationData = {
+        'userId': report['residentId'],
+        'type': 'report',
+        'title': 'Report ${status[0].toUpperCase()}${status.substring(1)}',
+        'message': message, // INCLUDES ADMIN NOTES
+        'reportId': reportId,
+        'billId': report['billId'],
+        'status': status,
+        'adminNotes': adminNotes, // Store admin notes separately too
+        'read': false,
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .add(notificationData);
+      // Refresh the list
+      await _loadReportedBills();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Report $status successfully!'),
+          backgroundColor: status == 'resolved' ? Colors.green : Colors.orange,
+        ),
+      );
+    } catch (e) {
+      print('Error updating report status: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error updating report: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteReport(String reportId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('bill_reports')
+          .doc(reportId)
+          .delete();
+      // Remove from local list
+      setState(() {
+        _reportedBills.removeWhere((report) => report['reportId'] == reportId);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Report deleted successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error deleting report: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error deleting report: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _showUpdateBillDialog(
+      String reportId, Map<String, dynamic> report) async {
+    final TextEditingController notesController = TextEditingController();
+    final TextEditingController newReadingController = TextEditingController();
+    final billId = report['billId'] as String?;
+    final residentId = report['residentId'] as String?;
+    bool _updating = false;
+    // Get current bill details
+    Map<String, dynamic>? currentBill;
+    if (billId != null && residentId != null) {
+      final billDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(residentId)
+          .collection('bills')
+          .doc(billId)
+          .get();
+      if (billDoc.exists) {
+        currentBill = billDoc.data()!;
+      }
+    }
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(
+              'Update Resident Bill',
+              style: GoogleFonts.poppins(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Resident: ${report['residentName']}',
+                    style: GoogleFonts.poppins(fontSize: 14),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Report Reason: ${report['reportReason']}',
+                    style:
+                        GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 16),
+                  // Current Bill Info
+                  if (currentBill != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Current Bill Details',
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blue.shade800,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _infoRow('Previous Reading',
+                              '${currentBill['previousConsumedWaterMeter']?.toStringAsFixed(2) ?? '0.00'} m³'),
+                          _infoRow('Current Reading',
+                              '${currentBill['currentConsumedWaterMeter']?.toStringAsFixed(2) ?? '0.00'} m³'),
+                          _infoRow('Cubic Meter Used',
+                              '${currentBill['cubicMeterUsed']?.toStringAsFixed(2) ?? '0.00'} m³'),
+                          _infoRow('Current Bill',
+                              '₱${currentBill['currentMonthBill']?.toStringAsFixed(2) ?? '0.00'}'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  // New Reading Input
+                  TextFormField(
+                    controller: newReadingController,
+                    decoration: InputDecoration(
+                      labelText: 'New Current Reading (m³)',
+                      hintText: currentBill?['currentConsumedWaterMeter']
+                              ?.toString() ??
+                          '0.00',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    keyboardType:
+                        TextInputType.numberWithOptions(decimal: true),
+                  ),
+                  const SizedBox(height: 12),
+                  // Admin Notes
+                  TextFormField(
+                    controller: notesController,
+                    maxLines: 3,
+                    decoration: InputDecoration(
+                      labelText: 'Update Notes (Will be sent to resident)',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: _updating
+                    ? null
+                    : () async {
+                        final newReading =
+                            double.tryParse(newReadingController.text);
+                        final currentReading =
+                            currentBill?['currentConsumedWaterMeter']
+                                    ?.toDouble() ??
+                                0.0;
+                        if (newReading == null ||
+                            newReading == currentReading) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                                content: Text(
+                                    'Please enter a new valid reading different from current')),
+                          );
+                          return;
+                        }
+                        setState(() => _updating = true);
+                        try {
+                          // Update the bill in Firestore
+                          await FirebaseFirestore.instance
+                              .runTransaction((transaction) async {
+                            // Get the current bill
+                            final billRef = FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(residentId!)
+                                .collection('bills')
+                                .doc(billId!);
+                            final billDoc = await transaction.get(billRef);
+                            if (billDoc.exists) {
+                              final billData = billDoc.data()!;
+                              final previousReading =
+                                  billData['previousConsumedWaterMeter']
+                                          ?.toDouble() ??
+                                      0.0;
+                              final cubicMeterUsed =
+                                  newReading > previousReading
+                                      ? newReading - previousReading
+                                      : 0.0;
+                              // Recalculate bill based on purok
+                              final purok = billData['purok'] ?? 'PUROK 1';
+                              double baseRate = 30.00;
+                              double ratePerCubicMeter = 5.00;
+                              switch (purok) {
+                                case 'COMMERCIAL':
+                                  baseRate = 75.00;
+                                  ratePerCubicMeter = 10.00;
+                                  break;
+                                case 'NON-RESIDENCE':
+                                  baseRate = 100.00;
+                                  ratePerCubicMeter = 10.00;
+                                  break;
+                                case 'INDUSTRIAL':
+                                  baseRate = 100.00;
+                                  ratePerCubicMeter = 15.00;
+                                  break;
+                              }
+                              final excess =
+                                  cubicMeterUsed > 10 ? cubicMeterUsed - 10 : 0;
+                              final newBillAmount =
+                                  baseRate + (excess * ratePerCubicMeter);
+                              // Update bill
+                              transaction.update(billRef, {
+                                'currentConsumedWaterMeter': newReading,
+                                'cubicMeterUsed': cubicMeterUsed,
+                                'currentMonthBill': newBillAmount,
+                                'updatedAt': Timestamp.now(),
+                              });
+                              // Update meter readings
+                              final meterRef = FirebaseFirestore.instance
+                                  .collection('users')
+                                  .doc(residentId)
+                                  .collection('meter_readings')
+                                  .doc('latest');
+                              transaction.set(
+                                  meterRef,
+                                  {
+                                    'currentConsumedWaterMeter': newReading,
+                                    'updatedAt': Timestamp.now(),
+                                  },
+                                  SetOptions(merge: true));
+                              // Mark report as resolved
+                              final reportRef = FirebaseFirestore.instance
+                                  .collection('bill_reports')
+                                  .doc(reportId);
+                              transaction.update(reportRef, {
+                                'status': 'resolved',
+                                'reviewedBy': 'Admin',
+                                'reviewedAt': Timestamp.now(),
+                                'adminNotes':
+                                    'Bill updated. ${notesController.text}',
+                              });
+                            }
+                          });
+                          // Send notification to resident about updated bill
+                          final periodStart =
+                              currentBill?['periodStart'] as Timestamp?;
+                          final month = periodStart != null
+                              ? DateFormat('MMM yyyy')
+                                  .format(periodStart.toDate())
+                              : 'Current Month';
+                          final notificationData = {
+                            'userId': residentId,
+                            'type': 'bill_updated',
+                            'title': 'Bill Updated',
+                            'message':
+                                'Your bill for $month has been updated by the admin.',
+                            'billId': billId,
+                            'month': month,
+                            'status': 'updated',
+                            'read': false,
+                            'timestamp': FieldValue.serverTimestamp(),
+                          };
+                          await FirebaseFirestore.instance
+                              .collection('notifications')
+                              .add(notificationData);
+                          Navigator.pop(context);
+                          await _loadReportedBills();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Bill updated successfully!'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        } catch (e) {
+                          print('Error updating bill: $e');
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error updating bill: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        } finally {
+                          setState(() => _updating = false);
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                ),
+                child: _updating
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text('Update Bill & Resolve'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _showActionDialog(String reportId, Map<String, dynamic> report) {
+    final TextEditingController notesController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Manage Report',
+          style: GoogleFonts.poppins(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Resident: ${report['residentName']}',
+                style: GoogleFonts.poppins(fontSize: 14),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Report Reason:',
+                style: GoogleFonts.poppins(
+                    fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+              Text(
+                report['reportReason'] as String? ?? 'No reason provided',
+                style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: notesController,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: 'Admin Notes (Will be sent to resident)',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => _showUpdateBillDialog(reportId, report),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Update Bill'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _deleteReport(reportId);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('Delete Report'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _toggleExpand(String reportId) {
+    setState(() {
+      _expandedReports[reportId] = !(_expandedReports[reportId] ?? false);
+    });
+  }
+
+  Widget _buildBillReceipt(Map<String, dynamic> billData) {
+    final fullName = billData['fullName'] ?? 'N/A';
+    final address = billData['address'] ?? 'N/A';
+    final contactNumber = billData['contactNumber'] ?? 'N/A';
+    final meterNumber = billData['meterNumber'] ?? 'N/A';
+    final purok = billData['purok'] ?? 'PUROK 1';
+    final periodStart = billData['periodStart'] as Timestamp?;
+    final periodDue = billData['periodDue'] as Timestamp?;
+    final issueDate = billData['issueDate'] as Timestamp?;
+    final previousReading =
+        billData['previousConsumedWaterMeter']?.toDouble() ?? 0.0;
+    final currentReading =
+        billData['currentConsumedWaterMeter']?.toDouble() ?? 0.0;
+    final cubicMeterUsed = billData['cubicMeterUsed']?.toDouble() ?? 0.0;
+    final currentMonthBill = billData['currentMonthBill']?.toDouble() ?? 0.0;
+    final recordedByName = billData['recordedByName'] ?? 'Meter Reader';
+    final formattedPeriodStart = periodStart != null
+        ? DateFormat('MM-dd-yyyy').format(periodStart.toDate())
+        : 'N/A';
+    final formattedPeriodDue = periodDue != null
+        ? DateFormat('MM-dd-yyyy').format(periodDue.toDate())
+        : 'N/A';
+    final formattedIssueDate = issueDate != null
+        ? DateFormat('MMM dd, yyyy').format(issueDate.toDate())
+        : 'N/A';
+    final isOverdue =
+        periodDue != null && DateTime.now().isAfter(periodDue.toDate());
+    final dueColor = isOverdue ? Colors.red : Colors.black;
+    return Container(
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade300),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Receipt Header
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.water_drop,
+                      color: Colors.blue.shade700,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'San Jose Water Services',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'Sajowasa',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4A90E2),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  purok,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Bill Content
+          Column(
+            children: [
+              _receiptRow('Name', fullName),
+              _receiptRow('Address', address),
+              _receiptRow('Contact', contactNumber),
+              _receiptRow('Meter No.', meterNumber),
+              _receiptRow('Recorded By', recordedByName),
+              _receiptRow('Billing Period Start', formattedPeriodStart),
+              _receiptRow('Billing Period Due', formattedPeriodDue),
+              _receiptRow('Issue Date', formattedIssueDate),
+              const SizedBox(height: 8),
+              _dashedDivider(),
+              _receiptRow('Previous Reading',
+                  '${previousReading.toStringAsFixed(2)} m³'),
+              _receiptRow(
+                  'Current Reading', '${currentReading.toStringAsFixed(2)} m³'),
+              _receiptRow(
+                  'Cubic Meter Used', '${cubicMeterUsed.toStringAsFixed(2)} m³',
+                  isBold: true),
+              const SizedBox(height: 8),
+              _dashedDivider(),
+              _receiptRow(
+                  'Current Bill', '₱${currentMonthBill.toStringAsFixed(2)}',
+                  valueColor: Colors.red, isBold: true, fontSize: 13),
+              _receiptRow('Due Date', formattedPeriodDue, valueColor: dueColor),
+              if (isOverdue)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber, color: Colors.red, size: 14),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Overdue: Pay immediately to avoid penalties.',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.red,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Column(
+        children: [
+          // Compact Header
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.report_problem,
+                      color: Colors.orange.shade700, size: 20),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Reported Bills',
+                        style: GoogleFonts.poppins(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        '${_reportedBills.length} pending reports',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(Icons.close, size: 20),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ],
+            ),
+          ),
+          // Content
+          Expanded(
+            child: _loading && _reportedBills.isEmpty
+                ? Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(child: Text(_error!))
+                    : _reportedBills.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.check_circle,
+                                    size: 48, color: Colors.green),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No pending reports',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: Colors.grey,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : NotificationListener<ScrollNotification>(
+                            onNotification: (ScrollNotification scrollInfo) {
+                              if (_hasMoreReports &&
+                                  !_loading &&
+                                  scrollInfo.metrics.pixels ==
+                                      scrollInfo.metrics.maxScrollExtent) {
+                                _loadReportedBills(loadMore: true);
+                                return true;
+                              }
+                              return false;
+                            },
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(12),
+                              itemCount: _reportedBills.length +
+                                  (_hasMoreReports ? 1 : 0),
+                              itemBuilder: (context, index) {
+                                if (index >= _reportedBills.length) {
+                                  return Padding(
+                                    padding: const EdgeInsets.all(16.0),
+                                    child: Center(
+                                      child: _loading
+                                          ? CircularProgressIndicator()
+                                          : Container(),
+                                    ),
+                                  );
+                                }
+                                final report = _reportedBills[index];
+                                final reportId =
+                                    report['reportId'] as String? ?? '';
+                                final residentId =
+                                    report['residentId'] as String?;
+                                final billId = report['billId'] as String?;
+                                final residentDetails =
+                                    _residentDetails[residentId] ?? {};
+                                final billDetails = _billDetails[billId ?? ''];
+                                final submittedAt =
+                                    report['submittedAt'] as Timestamp?;
+                                final isExpanded =
+                                    _expandedReports[reportId] ?? false;
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 12),
+                                  child: Card(
+                                    elevation: 1,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          // Header
+                                          Row(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              CircleAvatar(
+                                                backgroundColor:
+                                                    Colors.orange.shade100,
+                                                child: Icon(Icons.person,
+                                                    color: Colors.orange,
+                                                    size: 18),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      report['residentName']
+                                                              as String? ??
+                                                          'Unknown',
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        fontSize: 14,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                    Text(
+                                                      residentDetails['address']
+                                                              as String? ??
+                                                          'No address',
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        fontSize: 11,
+                                                        color: Colors.grey,
+                                                      ),
+                                                    ),
+                                                    if (submittedAt != null)
+                                                      Padding(
+                                                        padding:
+                                                            const EdgeInsets
+                                                                .only(top: 2),
+                                                        child: Text(
+                                                          'Reported: ${DateFormat('MMM d, h:mm a').format(submittedAt.toDate())}',
+                                                          style: GoogleFonts
+                                                              .poppins(
+                                                            fontSize: 10,
+                                                            color: Colors
+                                                                .grey.shade600,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                              ),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.orange.shade100,
+                                                  borderRadius:
+                                                      BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  'REPORTED',
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 9,
+                                                    fontWeight: FontWeight.w600,
+                                                    color:
+                                                        Colors.orange.shade800,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 12),
+                                          // Report reason
+                                          Container(
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: Colors.red.shade50,
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                              border: Border.all(
+                                                  color: Colors.red.shade100),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Icon(Icons.report_problem,
+                                                        size: 14,
+                                                        color: Colors
+                                                            .red.shade700),
+                                                    const SizedBox(width: 6),
+                                                    Text(
+                                                      'Report Reason',
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                        color:
+                                                            Colors.red.shade700,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                const SizedBox(height: 6),
+                                                Text(
+                                                  report['reportReason']
+                                                          as String? ??
+                                                      'No reason provided',
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 11,
+                                                    color: Colors.grey.shade800,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          // Expand/Collapse button for bill details
+                                          if (billDetails != null) ...[
+                                            const SizedBox(height: 12),
+                                            GestureDetector(
+                                              onTap: () =>
+                                                  _toggleExpand(reportId),
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.all(10),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.blue.shade50,
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                  border: Border.all(
+                                                      color:
+                                                          Colors.blue.shade200),
+                                                ),
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        Icon(Icons.receipt_long,
+                                                            size: 16,
+                                                            color: Colors
+                                                                .blue.shade700),
+                                                        const SizedBox(
+                                                            width: 8),
+                                                        Text(
+                                                          'View Bill Details',
+                                                          style: GoogleFonts
+                                                              .poppins(
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: Colors
+                                                                .blue.shade700,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    Icon(
+                                                      isExpanded
+                                                          ? Icons.expand_less
+                                                          : Icons.expand_more,
+                                                      size: 18,
+                                                      color:
+                                                          Colors.blue.shade700,
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                            // Collapsible bill details
+                                            if (isExpanded) ...[
+                                              const SizedBox(height: 12),
+                                              _buildBillReceipt(billDetails),
+                                            ],
+                                          ],
+                                          // Action buttons
+                                          const SizedBox(height: 16),
+                                          Row(
+                                            children: [
+                                              Expanded(
+                                                child: OutlinedButton.icon(
+                                                  onPressed: () =>
+                                                      _showActionDialog(
+                                                          reportId, report),
+                                                  icon: Icon(Icons.more_vert,
+                                                      size: 16),
+                                                  label: Text('Actions'),
+                                                  style:
+                                                      OutlinedButton.styleFrom(
+                                                    foregroundColor:
+                                                        Colors.blue,
+                                                    side: BorderSide(
+                                                        color: Colors.blue),
+                                                    padding: const EdgeInsets
+                                                        .symmetric(vertical: 8),
+                                                  ),
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: ElevatedButton.icon(
+                                                  onPressed: () =>
+                                                      _showUpdateBillDialog(
+                                                          reportId, report),
+                                                  icon: Icon(Icons.edit,
+                                                      size: 16),
+                                                  label: Text('Update Bill'),
+                                                  style:
+                                                      ElevatedButton.styleFrom(
+                                                    backgroundColor:
+                                                        Colors.blue,
+                                                    foregroundColor:
+                                                        Colors.white,
+                                                    padding: const EdgeInsets
+                                                        .symmetric(vertical: 8),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            Text(
+              '$label:',
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Expanded(
+              child: Text(
+                value,
+                style: GoogleFonts.poppins(
+                  fontSize: 11,
+                  color: Colors.grey.shade800,
+                ),
+                textAlign: TextAlign.right,
+              ),
+            ),
+          ],
+        ));
+  }
+
+  Widget _receiptRow(String label, String value,
+      {Color? valueColor, bool isBold = false, double fontSize = 11}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                fontSize: fontSize,
+                color: valueColor ?? Colors.grey.shade800,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dashedDivider() => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          children: List.generate(
+            30,
+            (i) => Expanded(
+              child: Container(
+                height: 1,
+                color: i.isEven ? Colors.grey.shade300 : Colors.transparent,
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _ResidentCard extends StatefulWidget {
@@ -328,7 +1551,6 @@ class _ResidentCardState extends State<_ResidentCard> {
           .collection('bills')
           .limit(1)
           .get();
-
       if (mounted) {
         setState(() {
           _hasBills = billSnapshot.docs.isNotEmpty;
@@ -552,11 +1774,9 @@ class _PaymentSectionState extends State<_PaymentSection> {
         'processedBy': 'Admin',
         'createdAt': FieldValue.serverTimestamp(),
       };
-
       await FirebaseFirestore.instance
           .collection('transaction_history')
           .add(transactionData);
-
       print('Transaction history recorded: $transactionData');
     } catch (e) {
       print('Error recording transaction history: $e');
@@ -575,25 +1795,22 @@ class _PaymentSectionState extends State<_PaymentSection> {
           .where('residentId', isEqualTo: widget.residentId)
           .orderBy('submissionDate', descending: true)
           .get();
-
       final payments = paymentSnapshot.docs.map((doc) {
-        final data = doc.data();
+        final data = doc.data() as Map<String, dynamic>;
         data['paymentId'] = doc.id;
         return data;
       }).toList();
-
       final billData = <String, String>{};
       final billIds = payments
           .map((payment) => payment['billId'] as String?)
           .where((billId) => billId != null)
           .toSet();
-
       if (billIds.isNotEmpty) {
         final billFutures = billIds.map((billId) => FirebaseFirestore.instance
             .collection('users')
             .doc(widget.residentId)
             .collection('bills')
-            .doc(billId)
+            .doc(billId!)
             .get());
         final billDocs = await Future.wait(billFutures);
         for (var i = 0; i < billIds.length; i++) {
@@ -610,14 +1827,12 @@ class _PaymentSectionState extends State<_PaymentSection> {
           }
         }
       }
-
       final combinedData = payments.map((payment) {
         return {
           ...payment,
-          'billingDate': billData[payment['billId']] ?? 'N/A',
+          'billingDate': billData[payment['billId'] as String] ?? 'N/A',
         };
       }).toList();
-
       if (mounted) {
         setState(() {
           _paymentData = combinedData;
@@ -650,13 +1865,11 @@ class _PaymentSectionState extends State<_PaymentSection> {
       }
       final paymentData = paymentDoc.data()!;
       print('Payment data: $paymentData');
-
       String month = 'Unknown';
       double currentReading = 0.0;
       double cubicMeterUsed = 0.0;
       DateTime? periodStart;
       double amount = paymentData['billAmount']?.toDouble() ?? 0.0;
-
       if (billId != null) {
         final billDoc = await FirebaseFirestore.instance
             .collection('users')
@@ -681,7 +1894,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
       } else {
         print('No billId provided');
       }
-
       // Create notification for resident with rejection reason
       String message;
       if (status == 'approved') {
@@ -694,7 +1906,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
           message += '\n\nReason: $rejectionReason';
         }
       }
-
       final notificationData = {
         'userId': widget.residentId,
         'type': 'payment',
@@ -708,13 +1919,11 @@ class _PaymentSectionState extends State<_PaymentSection> {
         'read': false,
         'timestamp': FieldValue.serverTimestamp(),
       };
-
       print('Saving notification: $notificationData');
       await FirebaseFirestore.instance
           .collection('notifications')
           .add(notificationData);
       print('Notification saved successfully');
-
       // Record transaction history
       await _recordTransactionHistory(
         residentId: widget.residentId,
@@ -727,7 +1936,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
         billId: billId,
         month: month,
       );
-
       if (status == 'approved') {
         await FirebaseFirestore.instance
             .collection('payments')
@@ -738,7 +1946,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
           'processedBy': 'Admin',
         });
         print('Payment updated to approved');
-
         // Add to logs
         await FirebaseFirestore.instance.collection('logs').add({
           'action': 'Payment Accepted',
@@ -747,7 +1954,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
               'Payment for $month by ${widget.fullName} accepted. Amount: ₱${amount.toStringAsFixed(2)}',
           'timestamp': FieldValue.serverTimestamp(),
         });
-
         // Add consumption history if bill exists
         if (billId != null && periodStart != null) {
           await _addConsumptionHistory(
@@ -756,7 +1962,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
             cubicMeterUsed: cubicMeterUsed,
           );
         }
-
         // Update meter readings
         if (billId != null) {
           await FirebaseFirestore.instance
@@ -770,7 +1975,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
           });
           print('Stored current reading: $currentReading');
         }
-
         // Delete unpaid bills after payment approval
         final unpaidBillsSnapshot = await FirebaseFirestore.instance
             .collection('users')
@@ -781,7 +1985,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
           await billDoc.reference.delete();
           print('Bill deleted: ${billDoc.id}');
         }
-
         // Update the local state immediately
         if (mounted) {
           setState(() {
@@ -794,7 +1997,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
             }
           });
         }
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -822,7 +2024,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
           'processedBy': 'Admin',
         });
         print('Payment marked as rejected');
-
         // Update the local state immediately
         if (mounted) {
           setState(() {
@@ -836,7 +2037,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
             }
           });
         }
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -853,7 +2053,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
           );
         }
       }
-
       // Refresh data from server to ensure consistency
       await _fetchPaymentsAndBills();
     } catch (e) {
@@ -879,7 +2078,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
   void _showRejectDialog(
       BuildContext context, String paymentId, String? billId) {
     final TextEditingController reasonController = TextEditingController();
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1028,7 +2226,6 @@ class _PaymentSectionState extends State<_PaymentSection> {
                 final submissionDate = payment['submissionDate'] as Timestamp?;
                 final processedDate = payment['processedDate'] as Timestamp?;
                 final rejectionReason = payment['rejectionReason'] as String?;
-
                 return Container(
                   margin: const EdgeInsets.symmetric(vertical: 4),
                   padding: const EdgeInsets.all(12),
@@ -1344,7 +2541,7 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
       print(
           'Added consumption history for $userId: $docId, $cubicMeterUsed m³');
     } catch (e) {
-      print('Error adding consumption history: $e');
+      print('Error saving consumption history: $e');
       if (mounted) {
         setState(() {
           _error = 'Error saving consumption history: $e';
@@ -1516,11 +2713,9 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
         'timestamp': FieldValue.serverTimestamp(),
         'createdAt': FieldValue.serverTimestamp(),
       };
-
       await FirebaseFirestore.instance
           .collection('transaction_history')
           .add(transactionData);
-
       print('Transaction history recorded for bill creation: $transactionData');
     } catch (e) {
       print('Error recording transaction history: $e');
@@ -1885,7 +3080,6 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                     final periodStartDate = periodStart!;
                                     final month = DateFormat('MMM yyyy')
                                         .format(periodStartDate);
-
                                     final billData = {
                                       'residentId': widget.residentId,
                                       'fullName': widget.fullName,
@@ -1905,7 +3099,6 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                       'purok': selectedPurok,
                                     };
                                     print('Creating bill with data: $billData');
-
                                     // Save bill to Firestore
                                     final billRef = await FirebaseFirestore
                                         .instance
@@ -1913,7 +3106,6 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                         .doc(widget.residentId)
                                         .collection('bills')
                                         .add(billData);
-
                                     // Record transaction history for bill creation
                                     await _recordTransactionHistory(
                                       residentId: widget.residentId,
@@ -1924,7 +3116,6 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                       billId: billRef.id,
                                       month: month,
                                     );
-
                                     // Save meter number to user document
                                     await FirebaseFirestore.instance
                                         .collection('users')
@@ -1934,14 +3125,12 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                     }, SetOptions(merge: true));
                                     print(
                                         'Saved meter number ${meterNumber} to user document');
-
                                     // Add to consumption history
                                     await _addConsumptionHistory(
                                       userId: widget.residentId,
                                       periodStart: periodStartDate,
                                       cubicMeterUsed: cubicMeterUsed,
                                     );
-
                                     // Update meter readings with current as latest
                                     await FirebaseFirestore.instance
                                         .collection('users')
@@ -1954,7 +3143,6 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                                     });
                                     print(
                                         'Updated meter readings with current: $current');
-
                                     if (mounted) {
                                       Navigator.pop(context);
                                       ScaffoldMessenger.of(context)
