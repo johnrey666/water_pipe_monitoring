@@ -1,4 +1,3 @@
-// plumber view reports.dart (updated)
 import 'dart:convert';
 // ignore: unused_import
 import 'dart:typed_data';
@@ -30,6 +29,7 @@ class _ViewReportsPageState extends State<ViewReportsPage>
   int _publicPage = 1;
   int _monitoringPage = 1;
   int _fixedPage = 1;
+  int _illegalTappingPage = 1;
   final int _pageSize = 10;
 
   // For reporting public reports
@@ -40,7 +40,7 @@ class _ViewReportsPageState extends State<ViewReportsPage>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     if (widget.initialReportId != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _showReportModal(widget.initialReportId!);
@@ -69,9 +69,16 @@ class _ViewReportsPageState extends State<ViewReportsPage>
               borderRadius: BorderRadius.circular(12),
             ),
             backgroundColor: Colors.white,
-            child: ReportDetailsModal(
-              report: doc,
-              onReportPressed: () => _showReportReasonDialog(reportId),
+            insetPadding: const EdgeInsets.all(16),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.85,
+                maxWidth: 500,
+              ),
+              child: ReportDetailsModal(
+                report: doc,
+                onReportPressed: () => _showReportReasonDialog(reportId),
+              ),
             ),
           ),
         );
@@ -109,34 +116,36 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                 fontWeight: FontWeight.w600,
               ),
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Please provide a reason for reporting this public report:',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _reportReasonController,
-                  maxLines: 5,
-                  decoration: InputDecoration(
-                    hintText:
-                        'e.g., Report is inaccurate, already fixed, duplicate, etc.',
-                    hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF87CEEB)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Please provide a reason for reporting this public report:',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.grey[600],
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _reportReasonController,
+                    maxLines: 5,
+                    decoration: InputDecoration(
+                      hintText:
+                          'e.g., Report is inaccurate, already fixed, duplicate, etc.',
+                      hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFF87CEEB)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -276,6 +285,7 @@ class _ViewReportsPageState extends State<ViewReportsPage>
               tabs: const [
                 Tab(text: 'Public Reports'),
                 Tab(text: 'Monitoring'),
+                Tab(text: 'Illegal Tapping'),
                 Tab(text: 'Fixed'),
               ],
             ),
@@ -301,6 +311,12 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                 ['Unfixed Reports', 'Monitoring'],
                 _monitoringPage,
                 (page) => setState(() => _monitoringPage = page),
+                showIllegalTapping: false,
+              ),
+              _buildIllegalTappingList(
+                user.uid,
+                _illegalTappingPage,
+                (page) => setState(() => _illegalTappingPage = page),
               ),
               _buildReportList(
                 user.uid,
@@ -318,7 +334,9 @@ class _ViewReportsPageState extends State<ViewReportsPage>
 
   Widget _buildReportList(String userId, List<String>? statuses,
       int currentPage, Function(int) onPageChange,
-      {bool isPublic = false, bool includePublicFixed = false}) {
+      {bool isPublic = false,
+      bool includePublicFixed = false,
+      bool showIllegalTapping = true}) {
     return StreamBuilder<QuerySnapshot>(
       stream: isPublic
           ? FirebaseFirestore.instance
@@ -362,6 +380,15 @@ class _ViewReportsPageState extends State<ViewReportsPage>
         }
 
         List<QueryDocumentSnapshot> reports = snapshot.data!.docs;
+
+        // Filter out illegal tapping if not showing them
+        if (!showIllegalTapping) {
+          reports = reports.where((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            return data['isIllegalTapping'] != true;
+          }).toList();
+        }
+
         if (includePublicFixed) {
           reports = reports.where((doc) {
             final data = doc.data() as Map<String, dynamic>;
@@ -396,15 +423,17 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                 itemCount: paginatedReports.length,
                 itemBuilder: (context, index) {
                   final report = paginatedReports[index];
-                  final fullName = report['fullName']?.toString() ?? '';
+                  final data = report.data() as Map<String, dynamic>;
+                  final fullName = data['fullName']?.toString() ?? '';
                   final issueDescription =
-                      report['issueDescription']?.toString() ?? '';
-                  final createdAt = report['createdAt'] is Timestamp
-                      ? (report['createdAt'] as Timestamp).toDate()
+                      data['issueDescription']?.toString() ?? '';
+                  final createdAt = data['createdAt'] is Timestamp
+                      ? (data['createdAt'] as Timestamp).toDate()
                       : null;
                   final formattedDate = createdAt != null
                       ? DateFormat.yMMMd().format(createdAt)
                       : 'Unknown date';
+                  final isIllegalTapping = data['isIllegalTapping'] == true;
 
                   return FadeInUp(
                     duration: const Duration(milliseconds: 300),
@@ -419,6 +448,23 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 12),
+                        leading: isIllegalTapping
+                            ? Container(
+                                width: 40,
+                                height: 40,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.red.shade50,
+                                  border:
+                                      Border.all(color: Colors.red.shade200),
+                                ),
+                                child: Icon(
+                                  Icons.warning,
+                                  color: Colors.red.shade700,
+                                  size: 24,
+                                ),
+                              )
+                            : null,
                         title: Text(
                           fullName,
                           style: GoogleFonts.poppins(
@@ -431,15 +477,41 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(height: 6),
-                            Text(
-                              issueDescription,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                color: Colors.black54,
-                                height: 1.4,
-                              ),
+                            Row(
+                              children: [
+                                if (isIllegalTapping)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    margin: const EdgeInsets.only(right: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade100,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                          color: Colors.red.shade200),
+                                    ),
+                                    child: Text(
+                                      'ILLEGAL',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 10,
+                                        color: Colors.red.shade800,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                Expanded(
+                                  child: Text(
+                                    issueDescription,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      color: Colors.black54,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 6),
                             Text(
@@ -497,12 +569,18 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                               )
                             : ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFFE3F2FD),
-                                  foregroundColor: const Color(0xFF87CEEB),
+                                  backgroundColor: isIllegalTapping
+                                      ? Colors.red.shade50
+                                      : const Color(0xFFE3F2FD),
+                                  foregroundColor: isIllegalTapping
+                                      ? Colors.red.shade700
+                                      : const Color(0xFF87CEEB),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(8),
-                                    side: const BorderSide(
-                                        color: Color(0xFFBBDEFB)),
+                                    side: BorderSide(
+                                        color: isIllegalTapping
+                                            ? Colors.red.shade200
+                                            : const Color(0xFFBBDEFB)),
                                   ),
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 16, vertical: 8),
@@ -515,10 +593,344 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                                   style: GoogleFonts.poppins(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
-                                    color: const Color(0xFF87CEEB),
+                                    color: isIllegalTapping
+                                        ? Colors.red.shade700
+                                        : const Color(0xFF87CEEB),
                                   ),
                                 ),
                               ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            if (totalPages > 1)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildPageButton(
+                      label: 'Previous',
+                      onPressed: currentPage > 1
+                          ? () => onPageChange(currentPage - 1)
+                          : null,
+                    ),
+                    const SizedBox(width: 16),
+                    Text(
+                      '$currentPage / $totalPages',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    _buildPageButton(
+                      label: 'Next',
+                      onPressed: currentPage < totalPages
+                          ? () => onPageChange(currentPage + 1)
+                          : null,
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildIllegalTappingList(
+      String userId, int currentPage, Function(int) onPageChange) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('reports')
+          .where('isIllegalTapping', isEqualTo: true)
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return Center(
+            child: Text(
+              'Error loading illegal tapping reports: ${snapshot.error}',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                color: Colors.redAccent,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          );
+        }
+
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(
+              color: Color(0xFF87CEEB),
+            ),
+          );
+        }
+
+        List<QueryDocumentSnapshot> reports = snapshot.data!.docs;
+
+        if (reports.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.warning,
+                  size: 60,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'No illegal tapping reports',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'All reports are currently legal and authorized',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    color: Colors.grey[500],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        final totalPages = (reports.length / _pageSize).ceil();
+        final startIndex = (currentPage - 1) * _pageSize;
+        final endIndex = (startIndex + _pageSize).clamp(0, reports.length);
+        final paginatedReports = reports.sublist(startIndex, endIndex);
+
+        return Column(
+          children: [
+            // Warning banner
+            Container(
+              margin: const EdgeInsets.only(top: 12, bottom: 8),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning, color: Colors.red.shade700, size: 24),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      '🚨 HIGH PRIORITY: These reports require immediate investigation',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.red.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            Expanded(
+              child: ListView.builder(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                itemCount: paginatedReports.length,
+                itemBuilder: (context, index) {
+                  final report = paginatedReports[index];
+                  final data = report.data() as Map<String, dynamic>;
+                  final placeName =
+                      data['placeName']?.toString() ?? 'Unknown Location';
+                  final illegalTappingType =
+                      data['illegalTappingType']?.toString() ?? 'Unknown Type';
+                  final issueDescription =
+                      data['issueDescription']?.toString() ?? '';
+                  final createdAt = data['createdAt'] is Timestamp
+                      ? (data['createdAt'] as Timestamp).toDate()
+                      : null;
+                  final formattedDate = createdAt != null
+                      ? DateFormat.yMMMd().format(createdAt)
+                      : 'Unknown date';
+                  final isAssigned = data['assignedPlumber'] != null;
+                  final assignedPlumberId = data['assignedPlumber'] as String?;
+
+                  return FadeInUp(
+                    duration: const Duration(milliseconds: 300),
+                    child: Card(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        side: BorderSide(color: Colors.red.shade200, width: 1),
+                      ),
+                      elevation: 2,
+                      color: Colors.white,
+                      shadowColor: Colors.black.withOpacity(0.05),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        leading: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Colors.red.shade50,
+                            border: Border.all(color: Colors.red.shade300),
+                          ),
+                          child: Icon(
+                            Icons.warning,
+                            color: Colors.red.shade700,
+                            size: 24,
+                          ),
+                        ),
+                        title: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                placeName,
+                                style: GoogleFonts.poppins(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 16,
+                                  color: Colors.red.shade800,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isAssigned && assignedPlumberId == userId)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.shade100,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border:
+                                      Border.all(color: Colors.green.shade300),
+                                ),
+                                child: Text(
+                                  'ASSIGNED',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 10,
+                                    color: Colors.green.shade800,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  maxLines: 1,
+                                ),
+                              ),
+                          ],
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.orange.shade50,
+                                borderRadius: BorderRadius.circular(4),
+                                border:
+                                    Border.all(color: Colors.orange.shade200),
+                              ),
+                              child: Text(
+                                illegalTappingType,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: Colors.orange.shade800,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              issueDescription,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: Colors.grey.shade700,
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.calendar_today,
+                                  size: 12,
+                                  color: Colors.grey.shade500,
+                                ),
+                                const SizedBox(width: 4),
+                                Expanded(
+                                  child: Text(
+                                    formattedDate,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 12,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (!isAssigned)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.shade50,
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                          color: Colors.blue.shade200),
+                                    ),
+                                    child: Text(
+                                      'UNASSIGNED',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 10,
+                                        color: Colors.blue.shade800,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        trailing: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red.shade50,
+                            foregroundColor: Colors.red.shade700,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: BorderSide(color: Colors.red.shade200),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            minimumSize: const Size(100, 40),
+                            elevation: 0,
+                          ),
+                          onPressed: () => _showReportModal(report.id),
+                          child: Text(
+                            'Investigate',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.red.shade700,
+                            ),
+                            maxLines: 1,
+                          ),
+                        ),
                       ),
                     ),
                   );
@@ -761,34 +1173,36 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                 fontWeight: FontWeight.w600,
               ),
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Provide assessment details (estimated time to fix, required materials, etc.)',
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _assessmentController,
-                  maxLines: 5,
-                  decoration: InputDecoration(
-                    hintText:
-                        'e.g., Estimated time: 2 hours\nRequired: Pipe fittings, sealant',
-                    hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: const BorderSide(color: Color(0xFF87CEEB)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Provide assessment details (estimated time to fix, required materials, etc.)',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      color: Colors.grey[600],
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _assessmentController,
+                    maxLines: 5,
+                    decoration: InputDecoration(
+                      hintText:
+                          'e.g., Estimated time: 2 hours\nRequired: Pipe fittings, sealant',
+                      hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Color(0xFF87CEEB)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -1199,12 +1613,20 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
     final currentStatus = reportData['status']?.toString() ?? 'Unfixed Reports';
     final assessment = reportData['assessment']?.toString();
     final isPublic = reportData['isPublic'] == true;
+    final isIllegalTapping = reportData['isIllegalTapping'] == true;
+    final illegalTappingType =
+        reportData['illegalTappingType']?.toString() ?? 'Unknown Type';
+    final evidenceNotes = reportData['evidenceNotes']?.toString();
 
     // Get images data
     final imageCount = reportData['imageCount'] ?? 0;
     final images =
         (reportData['images'] as List<dynamic>?)?.cast<String>() ?? [];
-    final hasImages = images.isNotEmpty;
+    final evidenceImages = reportData['evidenceImages'] != null
+        ? List<String>.from(reportData['evidenceImages'])
+        : <String>[];
+
+    final hasImages = images.isNotEmpty || evidenceImages.isNotEmpty;
 
     final formattedDate = dateTime != null
         ? DateFormat.yMMMd().add_jm().format(dateTime)
@@ -1217,39 +1639,65 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
 
     return FadeIn(
       duration: const Duration(milliseconds: 300),
-      child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.85,
-          maxWidth: 500,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-        ),
+      child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              decoration: const BoxDecoration(
-                color: Colors.white,
+              decoration: BoxDecoration(
+                color: isIllegalTapping ? Colors.red.shade50 : Colors.white,
                 border: Border(
-                  bottom: BorderSide(color: Color(0xFFE3F2FD), width: 1),
+                  bottom: BorderSide(
+                      color: isIllegalTapping
+                          ? Colors.red.shade200
+                          : const Color(0xFFE3F2FD),
+                      width: 1),
                 ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'Report Details',
-                    style: GoogleFonts.poppins(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                  Flexible(
+                    child: Row(
+                      children: [
+                        if (isIllegalTapping)
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            margin: const EdgeInsets.only(right: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade100,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.red.shade300),
+                            ),
+                            child: Icon(
+                              Icons.warning,
+                              color: Colors.red.shade700,
+                              size: 24,
+                            ),
+                          ),
+                        Flexible(
+                          child: Text(
+                            isIllegalTapping
+                                ? '🚨 ILLEGAL TAPPING'
+                                : 'Report Details',
+                            style: GoogleFonts.poppins(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: isIllegalTapping
+                                  ? Colors.red.shade800
+                                  : Colors.black87,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       // Report button for public reports
                       if (isPublic && currentStatus != 'Fixed')
@@ -1263,8 +1711,11 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                           tooltip: 'Report this public report',
                         ),
                       IconButton(
-                        icon: const Icon(Icons.close,
-                            color: Colors.black54, size: 24),
+                        icon: Icon(Icons.close,
+                            color: isIllegalTapping
+                                ? Colors.red.shade600
+                                : Colors.black54,
+                            size: 24),
                         onPressed: () => Navigator.pop(context),
                       ),
                     ],
@@ -1272,531 +1723,713 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                 ],
               ),
             ),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+
+            // Illegal tapping warning
+            if (isIllegalTapping)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  border: Border(
+                    bottom: BorderSide(color: Colors.red.shade200),
+                  ),
+                ),
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: const Color(0xFFE3F2FD),
-                          child: reportData['avatarUrl'] != null &&
-                                  reportData['avatarUrl'] is String
-                              ? CachedNetworkImage(
-                                  imageUrl: reportData['avatarUrl'],
-                                  placeholder: (context, url) => const Icon(
-                                    Icons.person,
-                                    color: Color(0xFF87CEEB),
-                                    size: 24,
-                                  ),
-                                  errorWidget: (context, url, error) =>
-                                      const Icon(
-                                    Icons.person,
-                                    color: Color(0xFF87CEEB),
-                                    size: 24,
-                                  ),
-                                )
-                              : const Icon(
+                    Icon(Icons.priority_high, color: Colors.red.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '🚨 HIGH PRIORITY: Requires immediate investigation',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.red.shade800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      CircleAvatar(
+                        radius: 20,
+                        backgroundColor: isIllegalTapping
+                            ? Colors.red.shade100
+                            : const Color(0xFFE3F2FD),
+                        child: reportData['avatarUrl'] != null &&
+                                reportData['avatarUrl'] is String
+                            ? CachedNetworkImage(
+                                imageUrl: reportData['avatarUrl'],
+                                placeholder: (context, url) => Icon(
                                   Icons.person,
-                                  color: Color(0xFF87CEEB),
+                                  color: isIllegalTapping
+                                      ? Colors.red.shade700
+                                      : const Color(0xFF87CEEB),
                                   size: 24,
                                 ),
+                                errorWidget: (context, url, error) => Icon(
+                                  Icons.person,
+                                  color: isIllegalTapping
+                                      ? Colors.red.shade700
+                                      : const Color(0xFF87CEEB),
+                                  size: 24,
+                                ),
+                              )
+                            : Icon(
+                                Icons.person,
+                                color: isIllegalTapping
+                                    ? Colors.red.shade700
+                                    : const Color(0xFF87CEEB),
+                                size: 24,
+                              ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              fullName,
+                              style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.black87,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              contactNumber,
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: Colors.black54,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              formattedDate,
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: Colors.black54,
+                              ),
+                            ),
+                            if (isPublic) const SizedBox(height: 4),
+                            if (isPublic)
+                              Text(
+                                'Public Report',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: Colors.red.shade600,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            if (isIllegalTapping) const SizedBox(height: 4),
+                            if (isIllegalTapping)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.shade100,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border:
+                                      Border.all(color: Colors.red.shade300),
+                                ),
+                                child: Text(
+                                  'ILLEGAL TAPPING',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    color: Colors.red.shade800,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Location information
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isIllegalTapping
+                          ? Colors.red.shade50
+                          : const Color(0xFFE3F2FD),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                          color: isIllegalTapping
+                              ? Colors.red.shade200
+                              : const Color(0xFFBBDEFB)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 18,
+                          color: isIllegalTapping
+                              ? Colors.red.shade700
+                              : Colors.blue.shade700,
+                        ),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                fullName,
+                                'Location',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 16,
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
+                                  color: isIllegalTapping
+                                      ? Colors.red.shade800
+                                      : Colors.blue.shade800,
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                contactNumber,
+                                placeName,
                                 style: GoogleFonts.poppins(
                                   fontSize: 13,
-                                  color: Colors.black54,
+                                  color: isIllegalTapping
+                                      ? Colors.red.shade700
+                                      : Colors.blue.shade700,
                                 ),
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                formattedDate,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 13,
-                                  color: Colors.black54,
-                                ),
-                              ),
-                              if (isPublic) const SizedBox(height: 4),
-                              if (isPublic)
-                                Text(
-                                  'Public Report',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 13,
-                                    color: Colors.red.shade600,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              if (additionalLocationInfo != null &&
+                                  additionalLocationInfo.isNotEmpty)
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Additional Info: $additionalLocationInfo',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 12,
+                                        color: isIllegalTapping
+                                            ? Colors.red.shade600
+                                            : Colors.blue.shade600,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
                                 ),
                             ],
                           ),
                         ),
                       ],
                     ),
+                  ),
 
-                    const SizedBox(height: 16),
-
-                    // Location information
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE3F2FD),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFBBDEFB)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.location_on_outlined,
-                            size: 18,
-                            color: Colors.blue.shade700,
+                  // Illegal tapping type
+                  if (isIllegalTapping)
+                    Column(
+                      children: [
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.shade200),
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Location',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.blue.shade800,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  placeName,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 13,
-                                    color: Colors.blue.shade700,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Images section
-                    if (hasImages)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Icon(
-                                Icons.image_outlined,
+                                Icons.category_outlined,
                                 size: 18,
-                                color: Colors.green.shade700,
+                                color: Colors.orange.shade700,
                               ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Attached Images ($imageCount)',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade800,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          images.length == 1
-                              ? _buildSingleImage(images[0], issueDescription)
-                              : _buildImageCarousel(images, issueDescription),
-                          const SizedBox(height: 16),
-                        ],
-                      ),
-
-                    const SizedBox(height: 16),
-
-                    // Issue description
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.report_problem_outlined,
-                                size: 16,
-                                color: Colors.red.shade700,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Issue Description',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey.shade800,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            issueDescription,
-                            style: GoogleFonts.poppins(
-                              fontSize: 14,
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    if (isPublic &&
-                        additionalLocationInfo != null &&
-                        additionalLocationInfo.isNotEmpty)
-                      const SizedBox(height: 12),
-                    if (isPublic &&
-                        additionalLocationInfo != null &&
-                        additionalLocationInfo.isNotEmpty)
-                      Text(
-                        'Additional Location Info: $additionalLocationInfo',
-                        style: GoogleFonts.poppins(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                          height: 1.5,
-                        ),
-                      ),
-
-                    // Assessment section
-                    if (assessment != null && assessment.isNotEmpty)
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 16),
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.amber.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.amber.shade200),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Icon(
-                                      Icons.assessment_outlined,
-                                      size: 18,
-                                      color: Colors.amber.shade700,
-                                    ),
-                                    const SizedBox(width: 8),
                                     Text(
-                                      'Plumber Assessment',
+                                      'Type of Illegal Activity',
                                       style: GoogleFonts.poppins(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w600,
-                                        color: Colors.amber.shade800,
+                                        color: Colors.orange.shade800,
                                       ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      illegalTappingType,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        color: Colors.orange.shade700,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  assessment,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    color: Colors.amber.shade900,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-
-                    const SizedBox(height: 16),
-
-                    // Map location toggle
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _showLocation = !_showLocation;
-                        });
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade300),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      ],
+                    ),
+
+                  const SizedBox(height: 16),
+
+                  // Images section
+                  if (hasImages)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
                           children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  _showLocation
-                                      ? Icons.location_on
-                                      : Icons.location_off,
-                                  size: 18,
-                                  color: const Color(0xFF87CEEB),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _showLocation ? 'Hide Map' : 'Show Map',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    color: const Color(0xFF87CEEB),
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
                             Icon(
-                              _showLocation
-                                  ? Icons.expand_less
-                                  : Icons.expand_more,
-                              color: const Color(0xFF87CEEB),
-                              size: 20,
+                              Icons.image_outlined,
+                              size: 18,
+                              color: Colors.green.shade700,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isIllegalTapping
+                                  ? 'Evidence Photos (${evidenceImages.length})'
+                                  : 'Attached Images ($imageCount)',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade800,
+                              ),
                             ),
                           ],
                         ),
-                      ),
+                        const SizedBox(height: 12),
+                        (isIllegalTapping ? evidenceImages : images).length == 1
+                            ? _buildSingleImage(
+                                (isIllegalTapping ? evidenceImages : images)[0],
+                                issueDescription)
+                            : _buildImageCarousel(
+                                isIllegalTapping ? evidenceImages : images,
+                                issueDescription),
+                        const SizedBox(height: 16),
+                      ],
                     ),
 
-                    const SizedBox(height: 12),
+                  const SizedBox(height: 16),
 
-                    // Map display
-                    if (_showLocation && mapLocation != null)
-                      FadeIn(
-                        duration: const Duration(milliseconds: 200),
-                        child: Container(
-                          height: 140,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFFE3F2FD)),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: FlutterMap(
-                              options: MapOptions(
-                                initialCenter: mapLocation,
-                                initialZoom: 14,
-                                minZoom: 13,
-                                maxZoom: 16,
+                  // Issue description
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              isIllegalTapping
+                                  ? Icons.warning_amber
+                                  : Icons.report_problem_outlined,
+                              size: 16,
+                              color: isIllegalTapping
+                                  ? Colors.red.shade700
+                                  : Colors.red.shade700,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              isIllegalTapping
+                                  ? 'Report Details'
+                                  : 'Issue Description',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.grey.shade800,
                               ),
-                              children: [
-                                TileLayer(
-                                  urlTemplate:
-                                      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                  subdomains: const ['a', 'b', 'c'],
-                                  userAgentPackageName:
-                                      'WaterPipeMonitoring/1.0',
-                                  tileProvider: CachedTileProvider(),
-                                  errorTileCallback: (tile, error, stackTrace) {
-                                    if (error.toString().contains('403')) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                              'Access blocked by OpenStreetMap. Please contact support or check your internet.'),
-                                        ),
-                                      );
-                                    }
-                                  },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          issueDescription,
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: Colors.grey.shade700,
+                          ),
+                          maxLines: 6,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+
+                        // Evidence notes for illegal tapping
+                        if (isIllegalTapping &&
+                            evidenceNotes != null &&
+                            evidenceNotes.isNotEmpty)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const SizedBox(height: 12),
+                              Text(
+                                'Evidence Notes:',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade800,
                                 ),
-                                MarkerLayer(
-                                  markers: [
-                                    Marker(
-                                      point: mapLocation,
-                                      width: 32,
-                                      height: 32,
-                                      child: const Icon(
-                                        Icons.location_pin,
-                                        color: Color(0xFF87CEEB),
-                                        size: 32,
-                                      ),
-                                    ),
-                                  ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                evidenceNotes,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  color: Colors.grey.shade700,
                                 ),
-                                const Positioned(
-                                  bottom: 4,
-                                  right: 4,
-                                  child: Text(
-                                    '© OpenStreetMap contributors',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Colors.black54,
-                                      fontWeight: FontWeight.w500,
+                                maxLines: 4,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+
+                  // Assessment section
+                  if (assessment != null && assessment.isNotEmpty)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.amber.shade200),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.assessment_outlined,
+                                    size: 18,
+                                    color: Colors.amber.shade700,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Plumber Assessment',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.amber.shade800,
                                     ),
                                   ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                assessment,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: Colors.amber.shade900,
                                 ),
-                              ],
-                            ),
+                                maxLines: 6,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
                         ),
-                      ),
+                      ],
+                    ),
 
-                    if (_showLocation && mapLocation == null)
-                      Text(
-                        'No location data available',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          color: Colors.grey[600],
-                        ),
-                      ),
+                  const SizedBox(height: 16),
 
-                    const SizedBox(height: 20),
-
-                    // Status section
-                    Container(
-                      padding: const EdgeInsets.all(12),
+                  // Map location toggle
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _showLocation = !_showLocation;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade50,
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.grey.shade300),
                       ),
                       child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Container(
-                            width: 12,
-                            height: 12,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: currentStatus == 'Fixed'
-                                  ? Colors.green.shade600
-                                  : (currentStatus == 'Monitoring'
-                                      ? Colors.orange.shade600
-                                      : Colors.red.shade600),
-                            ),
+                          Row(
+                            children: [
+                              Icon(
+                                _showLocation
+                                    ? Icons.location_on
+                                    : Icons.location_off,
+                                size: 18,
+                                color: const Color(0xFF87CEEB),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                _showLocation ? 'Hide Map' : 'Show Map',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  color: const Color(0xFF87CEEB),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Current Status',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.grey.shade700,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  currentStatus,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: currentStatus == 'Fixed'
-                                        ? Colors.green.shade800
-                                        : (currentStatus == 'Monitoring'
-                                            ? Colors.orange.shade800
-                                            : Colors.red.shade800),
-                                  ),
-                                ),
-                              ],
-                            ),
+                          Icon(
+                            _showLocation
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                            color: const Color(0xFF87CEEB),
+                            size: 20,
                           ),
                         ],
                       ),
                     ),
+                  ),
 
-                    const SizedBox(height: 20),
+                  const SizedBox(height: 12),
 
-                    // Action buttons for non-fixed reports (only for assigned plumber or monitoring)
-                    if (currentStatus != 'Fixed' && !isPublic)
-                      Column(
-                        children: [
-                          // Add Assessment button
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed: _showAssessmentInputDialog,
-                              icon: const Icon(Icons.assessment_outlined,
-                                  size: 20),
-                              label: Text(
-                                assessment != null && assessment.isNotEmpty
-                                    ? 'Edit Assessment'
-                                    : 'Add Assessment',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF4CAF50),
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                elevation: 2,
-                                shadowColor: Colors.black.withOpacity(0.1),
-                              ),
+                  // Map display
+                  if (_showLocation && mapLocation != null)
+                    FadeIn(
+                      duration: const Duration(milliseconds: 200),
+                      child: Container(
+                        height: 140,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: const Color(0xFFE3F2FD)),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: FlutterMap(
+                            options: MapOptions(
+                              initialCenter: mapLocation,
+                              initialZoom: 14,
+                              minZoom: 13,
+                              maxZoom: 16,
                             ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Mark as Fixed button
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              onPressed:
-                                  _isUpdating ? null : _showMarkFixedDialog,
-                              icon: const Icon(Icons.check_circle_outline,
-                                  size: 20),
-                              label: Text(
-                                'Mark as Fixed',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
+                            children: [
+                              TileLayer(
+                                urlTemplate:
+                                    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                subdomains: const ['a', 'b', 'c'],
+                                userAgentPackageName: 'WaterPipeMonitoring/1.0',
+                                tileProvider: CachedTileProvider(),
+                                errorTileCallback: (tile, error, stackTrace) {
+                                  if (error.toString().contains('403')) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                            'Access blocked by OpenStreetMap. Please contact support or check your internet.'),
+                                      ),
+                                    );
+                                  }
+                                },
+                              ),
+                              MarkerLayer(
+                                markers: [
+                                  Marker(
+                                    point: mapLocation,
+                                    width: 32,
+                                    height: 32,
+                                    child: Icon(
+                                      Icons.location_pin,
+                                      color: isIllegalTapping
+                                          ? Colors.red
+                                          : const Color(0xFF87CEEB),
+                                      size: 32,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Positioned(
+                                bottom: 4,
+                                right: 4,
+                                child: Text(
+                                  '© OpenStreetMap contributors',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.black54,
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF87CEEB),
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                elevation: 2,
-                                shadowColor: Colors.black.withOpacity(0.1),
-                              ),
-                            ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
+                    ),
+
+                  if (_showLocation && mapLocation == null)
+                    Text(
+                      'No location data available',
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+
+                  const SizedBox(height: 20),
+
+                  // Status section
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: currentStatus == 'Fixed'
+                                ? Colors.green.shade600
+                                : (currentStatus == 'Monitoring'
+                                    ? Colors.orange.shade600
+                                    : (currentStatus == 'Illegal Tapping'
+                                        ? Colors.red.shade600
+                                        : Colors.red.shade600)),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'Current Status',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                currentStatus,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: currentStatus == 'Fixed'
+                                      ? Colors.green.shade800
+                                      : (currentStatus == 'Monitoring'
+                                          ? Colors.orange.shade800
+                                          : (currentStatus == 'Illegal Tapping'
+                                              ? Colors.red.shade800
+                                              : Colors.red.shade800)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Action buttons for non-fixed reports (only for assigned plumber or monitoring)
+                  if (currentStatus != 'Fixed' && !isPublic)
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Add Assessment button
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _showAssessmentInputDialog,
+                            icon: Icon(Icons.assessment_outlined, size: 20),
+                            label: Text(
+                              assessment != null && assessment.isNotEmpty
+                                  ? 'Edit Assessment'
+                                  : 'Add Assessment',
+                              style: GoogleFonts.poppins(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF4CAF50),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              elevation: 2,
+                              shadowColor: Colors.black.withOpacity(0.1),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Mark as Fixed button
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed:
+                                _isUpdating ? null : _showMarkFixedDialog,
+                            icon: Icon(Icons.check_circle_outline, size: 20),
+                            label: Text(
+                              'Mark as Fixed',
+                              style: GoogleFonts.poppins(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: isIllegalTapping
+                                  ? Colors.red.shade700
+                                  : const Color(0xFF87CEEB),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              elevation: 2,
+                              shadowColor: Colors.black.withOpacity(0.1),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 8),
+                ],
               ),
             ),
           ],

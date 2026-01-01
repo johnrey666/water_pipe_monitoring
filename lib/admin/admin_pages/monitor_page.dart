@@ -41,8 +41,39 @@ class _MonitorPageState extends State<MonitorPage> {
         return Colors.redAccent;
       case 'Fixed':
         return const Color(0xFFC18B00);
+      case 'Illegal Tapping':
+        return Colors.red;
       default:
         return Colors.grey;
+    }
+  }
+
+  // Get marker icon based on report type - SAFE null checks
+  IconData _getMarkerIcon(Map<String, dynamic> data) {
+    final isIllegalTapping = data['isIllegalTapping'] == true;
+    final isPublic = data['isPublic'] == true;
+
+    if (isIllegalTapping) {
+      return Icons.warning; // Illegal tapping icon
+    } else if (isPublic) {
+      return Icons.public; // Public report icon
+    } else {
+      return Icons.water_damage; // Regular report icon
+    }
+  }
+
+  // Get marker color based on report type - SAFE null checks
+  Color _getMarkerColor(Map<String, dynamic> data) {
+    final isIllegalTapping = data['isIllegalTapping'] == true;
+    final isPublic = data['isPublic'] == true;
+    final status = data['status']?.toString() ?? 'Unknown';
+
+    if (isIllegalTapping) {
+      return Colors.red; // Red for illegal tapping
+    } else if (isPublic) {
+      return Colors.redAccent; // Red accent for public reports
+    } else {
+      return _getStatusColor(status); // Status-based color for regular reports
     }
   }
 
@@ -120,38 +151,52 @@ class _MonitorPageState extends State<MonitorPage> {
     });
   }
 
-  // Fetch and show report modal - fixed to handle direct report ID
+  // FIXED: Fetch and show report modal - now handles all report types properly
   Future<void> _fetchAndShowReportModal(String id, bool isPublic) async {
     try {
-      if (isPublic) {
-        // For public reports, fetch the specific report by ID
-        final doc = await FirebaseFirestore.instance
-            .collection('reports')
-            .doc(id)
-            .get();
-        if (doc.exists) {
+      print('Opening report modal for ID: $id, isPublic: $isPublic');
+
+      // Always try to fetch the report by ID first (for public reports, illegal tapping, or direct ID)
+      final doc =
+          await FirebaseFirestore.instance.collection('reports').doc(id).get();
+
+      if (doc.exists) {
+        print('Report found by ID: ${doc.id}');
+        final data = doc.data() as Map<String, dynamic>;
+        final isIllegalTapping = data['isIllegalTapping'] == true;
+        final hasUserId = data['userId'] != null;
+
+        // Check what type of report this is
+        if (isIllegalTapping || isPublic || !hasUserId) {
+          // For illegal tapping, public reports, or reports without userId, show directly
           setState(() {
             _userReports = [
               {
                 'id': doc.id,
-                ...doc.data() as Map<String, dynamic>,
+                ...data,
               }
             ];
             _currentReportIndex = 0;
           });
           _showReportModal(context, _userReports[0], _userReports[0]['id']);
-        } else {
-          _showErrorOverlay('Report not found.');
+          return;
         }
       } else {
-        // For private reports, fetch all reports for this user
+        print('Report not found by ID: $id');
+      }
+
+      // If not found by ID and isPublic is false, try to find by userId
+      if (!isPublic) {
+        print('Trying to find reports by userId: $id');
         final querySnapshot = await FirebaseFirestore.instance
             .collection('reports')
             .where('userId', isEqualTo: id)
             .where('isPublic', isEqualTo: false)
             .where('status', isNotEqualTo: 'Fixed')
             .get();
+
         if (querySnapshot.docs.isNotEmpty) {
+          print('Found ${querySnapshot.docs.length} reports for userId: $id');
           setState(() {
             _userReports = querySnapshot.docs
                 .map((doc) => {
@@ -162,10 +207,14 @@ class _MonitorPageState extends State<MonitorPage> {
             _currentReportIndex = 0;
           });
           _showReportModal(context, _userReports[0], _userReports[0]['id']);
+          return;
         } else {
-          _showErrorOverlay('No reports found.');
+          print('No reports found for userId: $id');
         }
       }
+
+      // If we get here, no reports were found
+      _showErrorOverlay('Report not found.');
     } catch (e) {
       print('Error fetching reports: $e');
       _showErrorOverlay('Error loading reports: $e');
@@ -339,17 +388,30 @@ class _MonitorPageState extends State<MonitorPage> {
   // Show report modal with modern design
   void _showReportModal(
       BuildContext context, Map<String, dynamic> data, String reportId) async {
+    // FIXED: Safe null check for boolean
+    final isIllegalTapping = (data['isIllegalTapping'] == true);
+
+    // For regular reports: plumber assignment variables
     String? selectedPlumberUid = data['assignedPlumber'] as String?;
     DateTime? selectedDate = data['monitoringDate'] is Timestamp
         ? (data['monitoringDate'] as Timestamp).toDate()
         : null;
     bool isButtonDisabled = data['assignedPlumber'] != null;
-    List<Map<String, dynamic>> plumbers = await _fetchPlumbers();
+    List<Map<String, dynamic>> plumbers =
+        isIllegalTapping ? [] : await _fetchPlumbers();
 
     // Get images data
     final imageCount = data['imageCount'] ?? 0;
     final images = (data['images'] as List<dynamic>?)?.cast<String>() ?? [];
     final hasImages = images.isNotEmpty;
+
+    // Get illegal tapping specific data
+    final illegalTappingType =
+        data['illegalTappingType']?.toString() ?? 'Unknown Type';
+    final evidenceNotes = data['evidenceNotes']?.toString() ?? '';
+    final evidenceImages = data['evidenceImages'] != null
+        ? List<String>.from(data['evidenceImages'])
+        : <String>[];
 
     Future<void> _assignPlumber(StateSetter setDialogState) async {
       if (selectedPlumberUid == null) {
@@ -367,6 +429,8 @@ class _MonitorPageState extends State<MonitorPage> {
         if (!doc.exists) {
           throw Exception('Report document does not exist');
         }
+
+        // Update for regular reports
         await docRef.update({
           'assignedPlumber': selectedPlumberUid,
           'monitoringDate': Timestamp.fromDate(selectedDate!),
@@ -382,7 +446,7 @@ class _MonitorPageState extends State<MonitorPage> {
           'type': 'assignment',
           'title': 'New Assignment',
           'message':
-              'You have been assigned to monitor the report: ${data['issueDescription'] ?? 'No description'} by ${data['fullName'] ?? 'Unknown'}',
+              'You have been assigned to monitor the report: ${data['issueDescription']?.toString() ?? 'No description'} by ${data['fullName']?.toString() ?? 'Unknown'}',
           'timestamp': Timestamp.now(),
           'read': false,
         });
@@ -396,6 +460,39 @@ class _MonitorPageState extends State<MonitorPage> {
       } catch (e) {
         print('Error assigning plumber or adding notification: $e');
         _showErrorOverlay('Failed to assign plumber: $e');
+      }
+    }
+
+    Future<void> _markAsFixed() async {
+      try {
+        final docRef =
+            FirebaseFirestore.instance.collection('reports').doc(reportId);
+        final doc = await docRef.get();
+        if (!doc.exists) {
+          throw Exception('Report document does not exist');
+        }
+
+        // Update status to Fixed
+        await docRef.update({
+          'status': 'Fixed',
+          'fixedAt': Timestamp.now(),
+        });
+
+        // Add notification
+        await FirebaseFirestore.instance.collection('notifications').add({
+          'type': 'report_fixed',
+          'title': 'Report Fixed',
+          'message':
+              'Report "${data['issueDescription']?.toString() ?? 'Unknown'}" has been marked as Fixed.',
+          'timestamp': Timestamp.now(),
+          'read': false,
+        });
+
+        _showErrorOverlay('Report marked as Fixed.');
+        Navigator.of(context).pop();
+      } catch (e) {
+        print('Error marking report as fixed: $e');
+        _showErrorOverlay('Failed to mark as fixed: $e');
       }
     }
 
@@ -426,13 +523,37 @@ class _MonitorPageState extends State<MonitorPage> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Report Details',
-                              style: GoogleFonts.poppins(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.black87,
-                              ),
+                            Row(
+                              children: [
+                                if (isIllegalTapping)
+                                  Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(
+                                          color: Colors.red.shade200),
+                                    ),
+                                    child: Icon(
+                                      Icons.warning,
+                                      color: Colors.red.shade700,
+                                      size: 20,
+                                    ),
+                                  ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  isIllegalTapping
+                                      ? 'Illegal Tapping Report'
+                                      : 'Report Details',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                    color: isIllegalTapping
+                                        ? Colors.red.shade800
+                                        : Colors.black87,
+                                  ),
+                                ),
+                              ],
                             ),
                             IconButton(
                               icon: const Icon(Icons.close,
@@ -442,12 +563,44 @@ class _MonitorPageState extends State<MonitorPage> {
                           ],
                         ),
                         const SizedBox(height: 12),
+
+                        // Illegal tapping warning banner
+                        if (isIllegalTapping)
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.priority_high,
+                                    color: Colors.red.shade700),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '🚨 HIGH PRIORITY: Requires immediate investigation',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.red.shade800,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             CircleAvatar(
                               radius: 28,
-                              backgroundColor: primaryBlue,
+                              backgroundColor: isIllegalTapping
+                                  ? Colors.red.shade100
+                                  : primaryBlue,
                               backgroundImage: data['avatarUrl'] != null &&
                                       data['avatarUrl'] is String
                                   ? NetworkImage(data['avatarUrl'] as String)
@@ -455,11 +608,14 @@ class _MonitorPageState extends State<MonitorPage> {
                               child: data['avatarUrl'] == null ||
                                       data['avatarUrl'] is! String
                                   ? Text(
-                                      (data['fullName'] ?? 'Unknown')[0],
+                                      (data['fullName']?.toString() ??
+                                          'Unknown')[0],
                                       style: GoogleFonts.poppins(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w600,
-                                        color: Colors.white,
+                                        color: isIllegalTapping
+                                            ? Colors.red.shade800
+                                            : Colors.white,
                                       ),
                                     )
                                   : null,
@@ -470,7 +626,7 @@ class _MonitorPageState extends State<MonitorPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    data['fullName'] ?? 'Unknown',
+                                    data['fullName']?.toString() ?? 'Unknown',
                                     style: GoogleFonts.poppins(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w600,
@@ -479,7 +635,8 @@ class _MonitorPageState extends State<MonitorPage> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    data['contactNumber'] ?? 'No contact',
+                                    data['contactNumber']?.toString() ??
+                                        'No contact',
                                     style: GoogleFonts.poppins(
                                       fontSize: 14,
                                       color: Colors.grey[600],
@@ -493,9 +650,10 @@ class _MonitorPageState extends State<MonitorPage> {
                                       color: Colors.grey[500],
                                     ),
                                   ),
-                                  if (data['isPublic'])
+                                  // FIXED: Safe null check for isPublic
+                                  if (data['isPublic'] == true)
                                     const SizedBox(height: 4),
-                                  if (data['isPublic'])
+                                  if (data['isPublic'] == true)
                                     Container(
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 8, vertical: 2),
@@ -551,7 +709,8 @@ class _MonitorPageState extends State<MonitorPage> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      data['placeName'] ?? 'Unknown location',
+                                      data['placeName']?.toString() ??
+                                          'Unknown location',
                                       style: GoogleFonts.poppins(
                                         fontSize: 13,
                                         color: Colors.blue.shade700,
@@ -568,8 +727,54 @@ class _MonitorPageState extends State<MonitorPage> {
 
                         const SizedBox(height: 16),
 
+                        // Illegal tapping type
+                        if (isIllegalTapping)
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.orange.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.category_outlined,
+                                  size: 18,
+                                  color: Colors.orange.shade700,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Type of Illegal Activity',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.orange.shade800,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        illegalTappingType,
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 13,
+                                          color: Colors.orange.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+
                         // Images section
-                        if (hasImages)
+                        if (hasImages || evidenceImages.isNotEmpty)
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
@@ -582,7 +787,9 @@ class _MonitorPageState extends State<MonitorPage> {
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    'Attached Images ($imageCount)',
+                                    isIllegalTapping
+                                        ? 'Evidence Photos (${evidenceImages.length})'
+                                        : 'Attached Images ($imageCount)',
                                     style: GoogleFonts.poppins(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -592,11 +799,21 @@ class _MonitorPageState extends State<MonitorPage> {
                                 ],
                               ),
                               const SizedBox(height: 12),
-                              images.length == 1
+                              (isIllegalTapping ? evidenceImages : images)
+                                          .length ==
+                                      1
                                   ? _buildSingleImage(
-                                      images[0], data['issueDescription'] ?? '')
+                                      (isIllegalTapping
+                                          ? evidenceImages
+                                          : images)[0],
+                                      data['issueDescription']?.toString() ??
+                                          '')
                                   : _buildImageCarousel(
-                                      images, data['issueDescription'] ?? ''),
+                                      isIllegalTapping
+                                          ? evidenceImages
+                                          : images,
+                                      data['issueDescription']?.toString() ??
+                                          ''),
                               const SizedBox(height: 16),
                             ],
                           ),
@@ -616,13 +833,19 @@ class _MonitorPageState extends State<MonitorPage> {
                               Row(
                                 children: [
                                   Icon(
-                                    Icons.report_problem_outlined,
+                                    isIllegalTapping
+                                        ? Icons.warning_amber
+                                        : Icons.report_problem_outlined,
                                     size: 16,
-                                    color: Colors.red.shade700,
+                                    color: isIllegalTapping
+                                        ? Colors.red.shade700
+                                        : Colors.red.shade700,
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    'Issue Description',
+                                    isIllegalTapping
+                                        ? 'Report Details'
+                                        : 'Issue Description',
                                     style: GoogleFonts.poppins(
                                       fontSize: 14,
                                       fontWeight: FontWeight.w600,
@@ -633,21 +856,47 @@ class _MonitorPageState extends State<MonitorPage> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                data['issueDescription'] ??
+                                data['issueDescription']?.toString() ??
                                     'No issue description',
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
                                   color: Colors.grey.shade700,
                                 ),
                               ),
+
+                              // Evidence notes for illegal tapping
+                              if (isIllegalTapping && evidenceNotes.isNotEmpty)
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'Evidence Notes:',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.grey.shade800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      evidenceNotes,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                             ],
                           ),
                         ),
 
-                        if (data['isPublic'] &&
+                        // FIXED: Safe null check for additionalLocationInfo
+                        if (data['isPublic'] == true &&
                             data['additionalLocationInfo'] != null)
                           const SizedBox(height: 12),
-                        if (data['isPublic'] &&
+                        if (data['isPublic'] == true &&
                             data['additionalLocationInfo'] != null)
                           Text(
                             'Additional Location Info: ${data['additionalLocationInfo']}',
@@ -668,7 +917,7 @@ class _MonitorPageState extends State<MonitorPage> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: _getStatusColor(
-                                    data['status'] ?? 'Unknown'),
+                                    data['status']?.toString() ?? 'Unknown'),
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -682,15 +931,15 @@ class _MonitorPageState extends State<MonitorPage> {
                             ),
                             Chip(
                               label: Text(
-                                data['status'] ?? 'Unknown',
+                                data['status']?.toString() ?? 'Unknown',
                                 style: GoogleFonts.poppins(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: Colors.white,
                                 ),
                               ),
-                              backgroundColor:
-                                  _getStatusColor(data['status'] ?? 'Unknown'),
+                              backgroundColor: _getStatusColor(
+                                  data['status']?.toString() ?? 'Unknown'),
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 4),
                               shape: RoundedRectangleBorder(
@@ -700,10 +949,11 @@ class _MonitorPageState extends State<MonitorPage> {
                           ],
                         ),
 
-                        if (!data['isPublic'] &&
+                        // FIXED: Safe null checks for assignedPlumber (only show for regular reports)
+                        if (!isIllegalTapping &&
                             data['assignedPlumber'] != null)
                           const SizedBox(height: 16),
-                        if (!data['isPublic'] &&
+                        if (!isIllegalTapping &&
                             data['assignedPlumber'] != null)
                           Container(
                             padding: const EdgeInsets.all(12),
@@ -715,36 +965,55 @@ class _MonitorPageState extends State<MonitorPage> {
                             child: Row(
                               children: [
                                 Icon(
-                                  Icons.check_circle,
+                                  Icons.person_outline,
                                   size: 18,
                                   color: Colors.green.shade700,
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
-                                  child: Text(
-                                    'Assigned to: ${plumbers.firstWhere(
-                                      (p) =>
-                                          p['uid'] == data['assignedPlumber'],
-                                      orElse: () => {'fullName': 'Unknown'},
-                                    )['fullName']}',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 14,
-                                      color: Colors.green.shade800,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                  child: FutureBuilder<DocumentSnapshot>(
+                                    future: FirebaseFirestore.instance
+                                        .collection('users')
+                                        .doc(data['assignedPlumber'])
+                                        .get(),
+                                    builder: (context, snapshot) {
+                                      if (snapshot.hasData &&
+                                          snapshot.data!.exists) {
+                                        final plumberData = snapshot.data!
+                                            .data() as Map<String, dynamic>;
+                                        final plumberName =
+                                            plumberData['fullName'] ??
+                                                'Unknown Plumber';
+                                        return Text(
+                                          'Assigned to: $plumberName',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 14,
+                                            color: Colors.green.shade800,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        );
+                                      }
+                                      return Text(
+                                        'Assigned to plumber',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 14,
+                                          color: Colors.green.shade800,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ),
                               ],
                             ),
                           ),
 
-                        if (!data['isPublic']) const SizedBox(height: 20),
-                        if (!data['isPublic'])
+                        // DIFFERENT SECTIONS FOR REGULAR VS ILLEGAL TAPPING REPORTS
+                        if (!isIllegalTapping && data['isPublic'] != true) ...[
+                          // REGULAR REPORTS: Plumber assignment section
+                          const SizedBox(height: 20),
                           const Divider(height: 1, color: Colors.grey),
-                        if (!data['isPublic']) const SizedBox(height: 20),
-
-                        // Assignment section for non-public reports
-                        if (!data['isPublic'])
+                          const SizedBox(height: 20),
                           Column(
                             children: [
                               Row(
@@ -948,11 +1217,61 @@ class _MonitorPageState extends State<MonitorPage> {
                               ),
                             ],
                           ),
+                        ] else if (isIllegalTapping) ...[
+                          // ILLEGAL TAPPING REPORTS: Mark as Fixed button only
+                          const SizedBox(height: 20),
+                          const Divider(height: 1, color: Colors.grey),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton(
+                              onPressed: data['status'] == 'Fixed'
+                                  ? null
+                                  : () => _markAsFixed(),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: data['status'] == 'Fixed'
+                                    ? Colors.grey[400]
+                                    : Colors.green,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: data['status'] == 'Fixed' ? 0 : 4,
+                                shadowColor: Colors.black26,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    data['status'] == 'Fixed'
+                                        ? Icons.check_circle
+                                        : Icons.check,
+                                    size: 20,
+                                    color: Colors.white,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    data['status'] == 'Fixed'
+                                        ? 'Already Fixed'
+                                        : 'Mark as Fixed',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
 
                         // Navigation for multiple reports
-                        if (!data['isPublic'] && _userReports.length > 1)
+                        // FIXED: Safe null check for isPublic
+                        if (data['isPublic'] != true && _userReports.length > 1)
                           const SizedBox(height: 20),
-                        if (!data['isPublic'] && _userReports.length > 1)
+                        if (data['isPublic'] != true && _userReports.length > 1)
                           Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 12),
@@ -979,18 +1298,22 @@ class _MonitorPageState extends State<MonitorPage> {
                                                 _currentReportIndex];
                                             reportId = _userReports[
                                                 _currentReportIndex]['id'];
-                                            selectedPlumberUid =
-                                                data['assignedPlumber']
-                                                    as String?;
-                                            selectedDate =
-                                                data['monitoringDate']
-                                                        is Timestamp
-                                                    ? (data['monitoringDate']
-                                                            as Timestamp)
-                                                        .toDate()
-                                                    : null;
-                                            isButtonDisabled =
-                                                data['assignedPlumber'] != null;
+                                            // Only update assignment variables for regular reports
+                                            if (!isIllegalTapping) {
+                                              selectedPlumberUid =
+                                                  data['assignedPlumber']
+                                                      as String?;
+                                              selectedDate =
+                                                  data['monitoringDate']
+                                                          is Timestamp
+                                                      ? (data['monitoringDate']
+                                                              as Timestamp)
+                                                          .toDate()
+                                                      : null;
+                                              isButtonDisabled =
+                                                  data['assignedPlumber'] !=
+                                                      null;
+                                            }
                                           });
                                         }
                                       : null,
@@ -1018,18 +1341,22 @@ class _MonitorPageState extends State<MonitorPage> {
                                                 _currentReportIndex];
                                             reportId = _userReports[
                                                 _currentReportIndex]['id'];
-                                            selectedPlumberUid =
-                                                data['assignedPlumber']
-                                                    as String?;
-                                            selectedDate =
-                                                data['monitoringDate']
-                                                        is Timestamp
-                                                    ? (data['monitoringDate']
-                                                            as Timestamp)
-                                                        .toDate()
-                                                    : null;
-                                            isButtonDisabled =
-                                                data['assignedPlumber'] != null;
+                                            // Only update assignment variables for regular reports
+                                            if (!isIllegalTapping) {
+                                              selectedPlumberUid =
+                                                  data['assignedPlumber']
+                                                      as String?;
+                                              selectedDate =
+                                                  data['monitoringDate']
+                                                          is Timestamp
+                                                      ? (data['monitoringDate']
+                                                              as Timestamp)
+                                                          .toDate()
+                                                      : null;
+                                              isButtonDisabled =
+                                                  data['assignedPlumber'] !=
+                                                      null;
+                                            }
                                           });
                                         }
                                       : null,
@@ -1156,91 +1483,95 @@ class _MonitorPageState extends State<MonitorPage> {
                                 CircularProgressIndicator(color: primaryBlue));
                       }
 
-                      // Group reports by userId for private reports
-                      final userReports =
-                          <String, List<Map<String, dynamic>>>{};
+                      // FIXED: Simplified grouping logic
+                      final markers = <Marker>[];
+
                       for (var doc in snapshot.data!.docs) {
                         final data = doc.data() as Map<String, dynamic>;
-                        final userId = data['userId'] as String?;
-                        final isPublic = data['isPublic'] ?? false;
-                        if (userId != null) {
-                          if (!isPublic) {
-                            userReports.putIfAbsent(userId, () => []).add({
-                              'id': doc.id,
-                              ...data,
-                            });
-                          } else {
-                            userReports[doc.id] = [
-                              {'id': doc.id, ...data}
-                            ]; // Treat public reports individually
-                          }
+                        final location = data['location'];
+
+                        // FIXED: Safe null checks for boolean fields
+                        // ignore: unused_local_variable
+                        final isPublic = data['isPublic'] == true;
+                        // ignore: unused_local_variable
+                        final isIllegalTapping =
+                            data['isIllegalTapping'] == true;
+
+                        if (location == null || location is! GeoPoint) {
+                          continue;
                         }
-                      }
 
-                      final markers = userReports.entries
-                          .map((entry) {
-                            final reports = entry.value;
-                            final data = reports[0];
-                            final location = data['location'];
-                            final isPublic = data['isPublic'] ?? false;
-                            final status = data['status'] ?? 'Unknown';
-                            if (location == null || location is! GeoPoint) {
-                              return null;
-                            }
+                        final marker = Marker(
+                          point: LatLng(location.latitude, location.longitude),
+                          width: 40,
+                          height: 40,
+                          child: GestureDetector(
+                            onTap: () async {
+                              print('Tapped on marker for report: ${doc.id}');
+                              print('Report data: ${doc.data()}');
 
-                            return Marker(
-                              point:
-                                  LatLng(location.latitude, location.longitude),
+                              // Always try to open the specific report by its ID
+                              // This will work for illegal tapping, public reports, and regular reports
+                              try {
+                                final reportDoc = await FirebaseFirestore
+                                    .instance
+                                    .collection('reports')
+                                    .doc(doc.id)
+                                    .get();
+
+                                if (reportDoc.exists) {
+                                  final reportData =
+                                      reportDoc.data() as Map<String, dynamic>;
+                                  setState(() {
+                                    _userReports = [
+                                      {
+                                        'id': reportDoc.id,
+                                        ...reportData,
+                                      }
+                                    ];
+                                    _currentReportIndex = 0;
+                                  });
+                                  _showReportModal(
+                                      context, _userReports[0], reportDoc.id);
+                                } else {
+                                  _showErrorOverlay('Report not found.');
+                                }
+                              } catch (e) {
+                                print('Error opening report: $e');
+                                _showErrorOverlay('Error loading report: $e');
+                              }
+                            },
+                            child: Container(
                               width: 40,
                               height: 40,
-                              child: GestureDetector(
-                                onTap: () => _fetchAndShowReportModal(
-                                    entry.key, isPublic),
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    Container(
-                                      width: 36,
-                                      height: 36,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
-                                        color: isPublic
-                                            ? Colors.red
-                                            : _getStatusColor(status),
-                                        border: Border.all(
-                                            color: Colors.white, width: 2),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color:
-                                                Colors.black.withOpacity(0.2),
-                                            blurRadius: 4,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    isPublic
-                                        ? const Icon(
-                                            Icons.warning,
-                                            color: Colors.white,
-                                            size: 20,
-                                          )
-                                        : Text(
-                                            (data['fullName'] ?? 'Unknown')[0],
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: Colors.white,
-                                            ),
-                                          ),
-                                  ],
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: _getMarkerColor(data),
+                                border:
+                                    Border.all(color: Colors.white, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.2),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Center(
+                                child: Icon(
+                                  _getMarkerIcon(data),
+                                  color: Colors.white,
+                                  size: 22,
                                 ),
                               ),
-                            );
-                          })
-                          .whereType<Marker>()
-                          .toList();
+                            ),
+                          ),
+                        );
 
+                        markers.add(marker);
+                      }
+
+                      // Add San Jose label marker
                       markers.add(
                         Marker(
                           point: const LatLng(

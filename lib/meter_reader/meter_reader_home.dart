@@ -1018,23 +1018,32 @@ class _WaterBillFormState extends State<WaterBillForm> {
         ],
       );
 
-  Widget _highlightField(String label, Widget child) {
+  // UPDATED: New minimal underline-style field
+  Widget _minimalInputField(String label, Widget child) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.blue.shade100, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.blue.shade100.withOpacity(0.2),
-            blurRadius: 3,
-            offset: const Offset(0, 1),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+              color: Colors.black,
+            ),
+          ),
+          const SizedBox(height: 4),
+          child,
+          const Divider(
+            height: 1,
+            thickness: 1,
+            color: Colors.black,
           ),
         ],
       ),
-      child: child,
     );
   }
 
@@ -1174,7 +1183,7 @@ class _WaterBillFormState extends State<WaterBillForm> {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
                             gradient: const LinearGradient(
-                              colors: [Color(0xFFFFFFFF), Color(0xFFEDF7FF)],
+                              colors: [Color(0xFFFFFFFF), Color(0xFFF5F5F5)],
                               begin: Alignment.topLeft,
                               end: Alignment.bottomRight,
                             ),
@@ -1279,234 +1288,179 @@ class _WaterBillFormState extends State<WaterBillForm> {
                               _receiptRow('Contact',
                                   widget.resident['contactNumber'] ?? 'N/A'),
 
-                              // Highlighted: Meter Number Input
-                              _highlightField(
+                              // UPDATED: Minimal Meter Number Input
+                              _minimalInputField(
                                 'Meter No.',
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 3),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          'Meter No.',
-                                          style: const TextStyle(
+                                TextFormField(
+                                  controller: _meterNumberController,
+                                  style: const TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 11,
+                                    color: Colors.black,
+                                  ),
+                                  decoration: InputDecoration(
+                                    hintText: 'Enter meter number',
+                                    hintStyle: TextStyle(
+                                      color: Colors.grey.shade400,
+                                      fontFamily: 'monospace',
+                                      fontSize: 11,
+                                    ),
+                                    border: InputBorder.none,
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(vertical: 4),
+                                    errorStyle: TextStyle(
+                                      fontSize: 9,
+                                      fontFamily: 'monospace',
+                                      color: Colors.red,
+                                    ),
+                                  ),
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return 'Required';
+                                    }
+                                    return null;
+                                  },
+                                ),
+                              ),
+
+                              // UPDATED: Minimal Billing Period Start
+                              _minimalInputField(
+                                'Billing Period Start',
+                                InkWell(
+                                  onTap: () => _selectDate(context, true),
+                                  child: Container(
+                                    padding:
+                                        const EdgeInsets.symmetric(vertical: 4),
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.calendar_today,
+                                            size: 14,
+                                            color: Colors.grey.shade600),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          DateFormat('MM-dd-yyyy')
+                                              .format(_periodStart),
+                                          style: TextStyle(
                                             fontFamily: 'monospace',
                                             fontWeight: FontWeight.w600,
                                             fontSize: 11,
-                                            color: Color(0xFF4A90E2),
-                                          ),
-                                        ),
-                                      ),
-                                      Expanded(
-                                        child: TextFormField(
-                                          controller: _meterNumberController,
-                                          style: const TextStyle(
-                                            fontFamily: 'monospace',
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 11,
                                             color: Colors.black,
                                           ),
-                                          decoration: InputDecoration(
-                                            hintText: 'Enter meter number',
-                                            hintStyle: TextStyle(
-                                              color: Colors.grey.shade400,
-                                              fontFamily: 'monospace',
-                                              fontSize: 11,
-                                            ),
-                                            border: InputBorder.none,
-                                            contentPadding: EdgeInsets.zero,
-                                            errorStyle: TextStyle(
-                                              fontSize: 9,
-                                              fontFamily: 'monospace',
-                                              color: Colors.red,
-                                            ),
-                                          ),
-                                          validator: (value) {
-                                            if (value == null ||
-                                                value.trim().isEmpty) {
-                                              return 'Required';
-                                            }
-                                            return null;
-                                          },
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
 
-                              // Highlighted: Billing Period Start
-                              _highlightField(
-                                'Billing Period Start',
-                                Column(
+                              // Billing Period Due (minimal style)
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 3),
+                                child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Billing Period Start',
+                                      'Billing Period Due',
                                       style: const TextStyle(
                                         fontFamily: 'monospace',
                                         fontWeight: FontWeight.w600,
                                         fontSize: 11,
-                                        color: Color(0xFF4A90E2),
+                                        color: Colors.black,
                                       ),
                                     ),
                                     const SizedBox(height: 4),
                                     InkWell(
-                                      onTap: () => _selectDate(context, true),
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            vertical: 6, horizontal: 8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.white,
-                                          borderRadius:
-                                              BorderRadius.circular(4),
-                                          border: Border.all(
-                                              color: Colors.grey.shade300),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(Icons.calendar_today,
-                                                size: 14,
-                                                color: Colors.grey.shade600),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              DateFormat('MM-dd-yyyy')
-                                                  .format(_periodStart),
-                                              style: TextStyle(
-                                                fontFamily: 'monospace',
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 11,
-                                                color: Colors.grey.shade700,
-                                              ),
-                                            ),
-                                          ],
+                                      onTap: () => _selectDate(context, false),
+                                      child: Text(
+                                        DateFormat('MM-dd-yyyy')
+                                            .format(_periodDue),
+                                        style: TextStyle(
+                                          fontFamily: 'monospace',
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 11,
+                                          color: dueColor,
                                         ),
                                       ),
+                                    ),
+                                    const Divider(
+                                      height: 1,
+                                      thickness: 1,
+                                      color: Colors.black,
                                     ),
                                   ],
                                 ),
                               ),
 
-                              // Billing Period Due (not highlighted, just for display)
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 3),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            'Billing Period Due',
-                                            style: const TextStyle(
-                                              fontFamily: 'monospace',
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 11,
-                                              color: Colors.black,
-                                            ),
-                                          ),
-                                          InkWell(
-                                            onTap: () =>
-                                                _selectDate(context, false),
-                                            child: Text(
-                                              DateFormat('MM-dd-yyyy')
-                                                  .format(_periodDue),
-                                              style: TextStyle(
-                                                fontFamily: 'monospace',
-                                                fontWeight: FontWeight.w600,
-                                                fontSize: 11,
-                                                color: dueColor,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
                               _receiptRow('Issue Date',
                                   DateFormat.yMMMd().format(DateTime.now())),
                               _dashedDivider(),
                               _receiptRow('Previous Reading',
                                   '${_previousReading.toStringAsFixed(2)} m³'),
 
-                              // Highlighted: Current Reading Input
-                              _highlightField(
+                              // UPDATED: Minimal Current Reading Input
+                              _minimalInputField(
                                 'Current Reading',
-                                Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 3),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          'Current Reading',
-                                          style: const TextStyle(
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: _currentReadingController,
+                                        style: const TextStyle(
+                                          fontFamily: 'monospace',
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 11,
+                                          color: Colors.black,
+                                        ),
+                                        decoration: InputDecoration(
+                                          hintText: '0.00',
+                                          hintStyle: TextStyle(
+                                            color: Colors.grey.shade400,
                                             fontFamily: 'monospace',
-                                            fontWeight: FontWeight.w600,
                                             fontSize: 11,
-                                            color: Color(0xFF4A90E2),
+                                          ),
+                                          border: InputBorder.none,
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                  vertical: 4),
+                                          errorStyle: TextStyle(
+                                            fontSize: 9,
+                                            fontFamily: 'monospace',
+                                            color: Colors.red,
                                           ),
                                         ),
+                                        keyboardType: const TextInputType
+                                            .numberWithOptions(decimal: true),
+                                        onChanged: (value) {
+                                          setState(() {});
+                                        },
+                                        validator: (value) {
+                                          if (value == null || value.isEmpty) {
+                                            return 'Required';
+                                          }
+                                          final reading =
+                                              double.tryParse(value);
+                                          if (reading == null) {
+                                            return 'Invalid number';
+                                          }
+                                          if (reading < _previousReading) {
+                                            return 'Must be ≥ previous';
+                                          }
+                                          return null;
+                                        },
                                       ),
-                                      Expanded(
-                                        child: TextFormField(
-                                          controller: _currentReadingController,
-                                          style: const TextStyle(
-                                            fontFamily: 'monospace',
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 11,
-                                            color: Colors.black,
-                                          ),
-                                          decoration: InputDecoration(
-                                            hintText: '0.00',
-                                            hintStyle: TextStyle(
-                                              color: Colors.grey.shade400,
-                                              fontFamily: 'monospace',
-                                              fontSize: 11,
-                                            ),
-                                            border: InputBorder.none,
-                                            contentPadding: EdgeInsets.zero,
-                                            errorStyle: TextStyle(
-                                              fontSize: 9,
-                                              fontFamily: 'monospace',
-                                              color: Colors.red,
-                                            ),
-                                            suffixText: 'm³',
-                                            suffixStyle: TextStyle(
-                                              fontFamily: 'monospace',
-                                              fontSize: 11,
-                                              color: Colors.grey.shade700,
-                                            ),
-                                          ),
-                                          keyboardType: const TextInputType
-                                              .numberWithOptions(decimal: true),
-                                          onChanged: (value) {
-                                            setState(() {});
-                                          },
-                                          validator: (value) {
-                                            if (value == null ||
-                                                value.isEmpty) {
-                                              return 'Required';
-                                            }
-                                            final reading =
-                                                double.tryParse(value);
-                                            if (reading == null) {
-                                              return 'Invalid number';
-                                            }
-                                            if (reading < _previousReading) {
-                                              return 'Must be ≥ previous';
-                                            }
-                                            return null;
-                                          },
-                                        ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'm³',
+                                      style: TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 11,
+                                        color: Colors.grey.shade700,
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
                               ),
 

@@ -37,6 +37,13 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   String _residentName = 'Resident';
   String? _residentId;
   int _unreadNotifCount = 0;
+  // ignore: unused_field
+  double _currentBillAmount = 0.0;
+  // ignore: unused_field
+  bool _hasPendingPayment = false;
+  String _meterNumber = 'N/A';
+  String _purok = 'N/A';
+  String _address = 'N/A';
 
   // Create page instances once and reuse them
   late final ReportProblemPage _reportPage;
@@ -52,9 +59,11 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   @override
   void initState() {
     super.initState();
-    _fetchResidentName();
+    _fetchResidentData();
     _fetchUnreadNotifCount();
     _setupBillNotificationListener();
+    _fetchCurrentBill();
+    _fetchUserProfile();
 
     // Initialize pages that don't need residentId
     if (!_pagesInitialized) {
@@ -69,6 +78,63 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     _billsSubscription?.cancel();
     _removeNotificationOverlay();
     super.dispose();
+  }
+
+  Future<void> _fetchUserProfile() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+      final data = doc.data();
+
+      if (data != null && mounted) {
+        setState(() {
+          _meterNumber = data['meterNumber']?.toString() ?? 'N/A';
+          _purok = data['purok']?.toString() ?? 'N/A';
+          _address = data['address']?.toString() ?? 'N/A';
+        });
+      }
+    } catch (e) {
+      print('DEBUG: Error fetching user profile: $e');
+    }
+  }
+
+  Future<void> _fetchCurrentBill() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final currentYear = DateTime.now().year;
+      final currentMonth = DateTime.now().month;
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('bills')
+          .where('year', isEqualTo: currentYear)
+          .where('month', isEqualTo: currentMonth)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final bill = snapshot.docs.first.data();
+        final amount = bill['currentMonthBill']?.toDouble() ?? 0.0;
+        final status = bill['status']?.toString() ?? 'unpaid';
+
+        if (mounted) {
+          setState(() {
+            _currentBillAmount = amount;
+            _hasPendingPayment = status == 'unpaid';
+          });
+        }
+      }
+    } catch (e) {
+      print('DEBUG: Error fetching current bill: $e');
+    }
   }
 
   Future<void> _setupBillNotificationListener() async {
@@ -152,7 +218,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     }
   }
 
-  Future<void> _fetchResidentName() async {
+  Future<void> _fetchResidentData() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) {
@@ -269,6 +335,28 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     }
   }
 
+  Future<double> _fetchAverageMonthlyConsumption() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return 0.0;
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('consumption_history')
+          .limit(12)
+          .get();
+      if (snapshot.docs.isEmpty) return 0.0;
+      final totalConsumption = snapshot.docs.fold<double>(
+        0.0,
+        (sum, doc) => sum + (doc['cubicMeterUsed']?.toDouble() ?? 0.0),
+      );
+      return totalConsumption / snapshot.docs.length;
+    } catch (e) {
+      print('DEBUG: Error fetching average consumption: $e');
+      return 0.0;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _fetchLastSixMonthsConsumption() async {
     try {
       User? user = FirebaseAuth.instance.currentUser;
@@ -314,6 +402,38 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     } catch (e) {
       print('DEBUG: Error fetching last six months consumption: $e');
       return [];
+    }
+  }
+
+  Future<Map<String, dynamic>> _fetchCurrentMonthBillDetails() async {
+    try {
+      User? user = FirebaseAuth.instance.currentUser;
+      if (user == null) return {'amount': 0.0, 'status': 'No bill'};
+
+      final currentYear = DateTime.now().year;
+      final currentMonth = DateTime.now().month;
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('bills')
+          .where('year', isEqualTo: currentYear)
+          .where('month', isEqualTo: currentMonth)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        final bill = snapshot.docs.first.data();
+        return {
+          'amount': bill['currentMonthBill']?.toDouble() ?? 0.0,
+          'status': bill['status']?.toString() ?? 'unpaid',
+          'dueDate': (bill['dueDate'] as Timestamp?)?.toDate(),
+        };
+      }
+      return {'amount': 0.0, 'status': 'No bill'};
+    } catch (e) {
+      print('DEBUG: Error fetching current month bill: $e');
+      return {'amount': 0.0, 'status': 'Error'};
     }
   }
 
@@ -372,8 +492,10 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   Future<void> _refreshDashboard() async {
     await Future.delayed(const Duration(seconds: 1));
     if (mounted) {
-      _fetchResidentName();
+      _fetchResidentData();
       _fetchUnreadNotifCount();
+      _fetchCurrentBill();
+      _fetchUserProfile();
       setState(() {});
     }
   }
@@ -1132,7 +1254,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   String _getAppBarTitle() {
     switch (_selectedPage) {
       case ResidentPage.home:
-        return 'Resident';
+        return 'Resident Dashboard';
       case ResidentPage.report:
         return 'Report Problem';
       case ResidentPage.billing:
@@ -1188,208 +1310,351 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       onRefresh: _refreshDashboard,
       color: Colors.blue.shade700,
       backgroundColor: Colors.white,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            FadeInDown(
-              duration: const Duration(milliseconds: 300),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 24,
-                      backgroundColor: Colors.blue.shade100,
-                      child: Icon(
-                        Icons.person,
-                        color: Colors.blue.shade700,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Welcome, $_residentName!',
-                            style: GoogleFonts.poppins(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: EdgeInsets.all(16.0),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: constraints.maxHeight,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Welcome Card with User Info
+                  FadeInDown(
+                    duration: const Duration(milliseconds: 300),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
                           ),
-                          Text(
-                            'Manage your water usage and reports.',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: Colors.blue.shade100,
+                            child: Icon(
+                              Icons.person,
+                              color: Colors.blue.shade700,
+                              size: 28,
                             ),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Welcome, $_residentName!',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                                Text(
+                                  _address,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                  maxLines: 1,
+                                ),
+                              ],
+                            ),
+                          ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  _purok,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.blue.shade700,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Meter: $_meterNumber',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 10,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Quick Stats Row - Made responsive
+                  SizedBox(
+                    height: constraints.maxWidth < 600 ? 140 : 130,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: ElasticIn(
+                            duration: const Duration(milliseconds: 300),
+                            child: FutureBuilder<double>(
+                              future: _fetchTotalWaterConsumption(),
+                              builder: (context, snapshot) {
+                                String value = 'Loading...';
+                                if (snapshot.hasData) {
+                                  value =
+                                      '${snapshot.data!.toStringAsFixed(1)} m³';
+                                } else if (snapshot.hasError) {
+                                  value = 'Error';
+                                }
+                                return _buildStatCard(
+                                  title: 'Total Consumption',
+                                  value: value,
+                                  subtitle: 'All-time usage',
+                                  icon: Icons.water_drop,
+                                  color: Colors.blue.shade700,
+                                  constraints: constraints,
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElasticIn(
+                            duration: const Duration(milliseconds: 300),
+                            delay: const Duration(milliseconds: 100),
+                            child: FutureBuilder<double>(
+                              future: _fetchThisMonthConsumption(),
+                              builder: (context, snapshot) {
+                                String value = 'Loading...';
+                                if (snapshot.hasData) {
+                                  value =
+                                      '${snapshot.data!.toStringAsFixed(1)} m³';
+                                } else if (snapshot.hasError) {
+                                  value = 'Error';
+                                }
+                                return _buildStatCard(
+                                  title: 'This Month',
+                                  value: value,
+                                  subtitle: 'Current usage',
+                                  icon: Icons.calendar_today,
+                                  color: Colors.green.shade700,
+                                  constraints: constraints,
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                        if (constraints.maxWidth > 400) ...[
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElasticIn(
+                              duration: const Duration(milliseconds: 300),
+                              delay: const Duration(milliseconds: 200),
+                              child: FutureBuilder<double>(
+                                future: _fetchAverageMonthlyConsumption(),
+                                builder: (context, snapshot) {
+                                  String value = 'Loading...';
+                                  if (snapshot.hasData) {
+                                    value =
+                                        '${snapshot.data!.toStringAsFixed(1)} m³';
+                                  } else if (snapshot.hasError) {
+                                    value = 'Error';
+                                  }
+                                  return _buildStatCard(
+                                    title: 'Monthly Avg',
+                                    value: value,
+                                    subtitle: 'Average usage',
+                                    icon: Icons.trending_up,
+                                    color: Colors.purple.shade700,
+                                    constraints: constraints,
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  // Show average consumption as separate card on small screens
+                  if (constraints.maxWidth <= 400) ...[
+                    const SizedBox(height: 12),
+                    ElasticIn(
+                      duration: const Duration(milliseconds: 300),
+                      delay: const Duration(milliseconds: 200),
+                      child: FutureBuilder<double>(
+                        future: _fetchAverageMonthlyConsumption(),
+                        builder: (context, snapshot) {
+                          String value = 'Loading...';
+                          if (snapshot.hasData) {
+                            value = '${snapshot.data!.toStringAsFixed(1)} m³';
+                          } else if (snapshot.hasError) {
+                            value = 'Error';
+                          }
+                          return _buildStatCard(
+                            title: 'Monthly Average',
+                            value: value,
+                            subtitle: 'Average monthly usage',
+                            icon: Icons.trending_up,
+                            color: Colors.purple.shade700,
+                            constraints: constraints,
+                            isFullWidth: true,
+                          );
+                        },
+                      ),
+                    ),
                   ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 160,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElasticIn(
-                      duration: const Duration(milliseconds: 300),
-                      child: FutureBuilder<double>(
-                        future: _fetchTotalWaterConsumption(),
-                        builder: (context, snapshot) {
-                          String value = 'Loading...';
-                          if (snapshot.hasData) {
-                            value = '${snapshot.data!.toStringAsFixed(2)} m³';
-                          } else if (snapshot.hasError) {
-                            value = 'Error';
-                          }
-                          return _buildStatCard(
-                            title: 'Total Water Consumption',
-                            value: value,
-                            description: 'All-time usage',
-                            icon: Icons.water_drop,
-                            color: Colors.blue.shade700,
-                          );
-                        },
+
+                  const SizedBox(height: 16),
+
+                  // Monthly Usage Chart
+                  FadeInUp(
+                    duration: const Duration(milliseconds: 300),
+                    child: _buildMonthlyUsageChart(constraints),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Water Conservation Tips
+                  FadeInUp(
+                    duration: const Duration(milliseconds: 300),
+                    delay: const Duration(milliseconds: 200),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.eco, color: Colors.green.shade700),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Water Conservation Tips',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.green.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '• Fix leaky faucets promptly\n'
+                            '• Take shorter showers\n'
+                            '• Turn off tap while brushing teeth\n'
+                            '• Use washing machine with full loads\n'
+                            '• Collect rainwater for plants',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.grey.shade700,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElasticIn(
-                      duration: const Duration(milliseconds: 300),
-                      delay: const Duration(milliseconds: 100),
-                      child: FutureBuilder<double>(
-                        future: _fetchThisMonthConsumption(),
-                        builder: (context, snapshot) {
-                          String value = 'Loading...';
-                          if (snapshot.hasData) {
-                            value = '${snapshot.data!.toStringAsFixed(2)} m³';
-                          } else if (snapshot.hasError) {
-                            value = 'Error';
-                          }
-                          return _buildStatCard(
-                            title: 'This Month Consumption',
-                            value: value,
-                            description: 'This month\'s usage',
-                            icon: Icons.calendar_today,
-                            color: Colors.blue.shade700,
-                          );
-                        },
+                  const SizedBox(height: 16),
+
+                  // Important Contacts
+                  FadeInUp(
+                    duration: const Duration(milliseconds: 300),
+                    delay: const Duration(milliseconds: 300),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 6,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Important Contacts',
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black87,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildContactItem(
+                            icon: Icons.phone,
+                            title: 'Emergency Line',
+                            subtitle: '(0912) 345-6789',
+                            color: Colors.red.shade600,
+                          ),
+                          const SizedBox(height: 8),
+                          _buildContactItem(
+                            icon: Icons.support_agent,
+                            title: 'Customer Service',
+                            subtitle: '(0912) 987-6543',
+                            color: Colors.blue.shade600,
+                          ),
+                          const SizedBox(height: 8),
+                          _buildContactItem(
+                            icon: Icons.email,
+                            title: 'Email Support',
+                            subtitle: 'support@waterbilling.com',
+                            color: Colors.green.shade600,
+                          ),
+                        ],
                       ),
                     ),
                   ),
+                  const SizedBox(height: 32),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            FadeInUp(
-              duration: const Duration(milliseconds: 300),
-              child: _buildMonthlyUsageChart(),
-            ),
-            const SizedBox(height: 16),
-            FadeInUp(
-              duration: const Duration(milliseconds: 300),
-              delay: const Duration(milliseconds: 100),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Quick Actions',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            _onSelectPage(ResidentPage.report);
-                          },
-                          icon: const Icon(Icons.report_problem_outlined),
-                          label: Text(
-                            'Report Issue',
-                            style: GoogleFonts.poppins(fontSize: 12),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue.shade700,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
-                          ),
-                        ),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            _onSelectPage(ResidentPage.billing);
-                          },
-                          icon: const Icon(Icons.receipt_long_outlined),
-                          label: Text(
-                            'View Bills',
-                            style: GoogleFonts.poppins(fontSize: 12),
-                          ),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue.shade700,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 12),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -1397,11 +1662,14 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   Widget _buildStatCard({
     required String title,
     required String value,
-    required String description,
+    required String subtitle,
     required IconData icon,
     required Color color,
+    required BoxConstraints constraints,
+    bool isFullWidth = false,
   }) {
     return Container(
+      width: isFullWidth ? double.infinity : null,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -1415,48 +1683,59 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       ),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
-        child: Row(
-          mainAxisSize: MainAxisSize.max,
-          crossAxisAlignment: CrossAxisAlignment.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: color.withOpacity(0.1),
-              child: Icon(icon, color: color, size: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon,
+                      color: color, size: constraints.maxWidth < 400 ? 18 : 20),
+                ),
+                Expanded(
+                  child: Text(
+                    value,
+                    style: GoogleFonts.poppins(
+                      fontSize: constraints.maxWidth < 400 ? 16 : 18,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                    textAlign: TextAlign.right,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 12),
-            Flexible(
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
                     style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.grey.shade600,
+                      fontSize: constraints.maxWidth < 400 ? 11 : 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade800,
                     ),
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    value,
+                    subtitle,
                     style: GoogleFonts.poppins(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: color,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
-                    description,
-                    style: GoogleFonts.poppins(
-                      fontSize: 11,
+                      fontSize: constraints.maxWidth < 400 ? 9 : 10,
                       color: Colors.grey.shade600,
                     ),
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
@@ -1468,14 +1747,57 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     );
   }
 
-  Widget _buildMonthlyUsageChart() {
+  Widget _buildContactItem({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+  }) {
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 20,
+          backgroundColor: color.withOpacity(0.1),
+          child: Icon(icon, color: color, size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+              Text(
+                subtitle,
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: color,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMonthlyUsageChart(BoxConstraints constraints) {
     return FutureBuilder<List<Map<String, dynamic>>>(
       future: _fetchLastSixMonthsConsumption(),
       builder: (context, snapshot) {
         List<BarChartGroupData> barGroups = [];
         double maxY = 250.0;
+        List<String> monthNames = [];
+
         if (snapshot.hasData) {
           final months = snapshot.data!;
+          monthNames = months.map((m) => m['monthName'].toString()).toList();
           maxY = months.fold(
                   0.0,
                   (max, month) =>
@@ -1492,10 +1814,12 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           barGroups =
               List.generate(6, (index) => _buildBarGroup(index, 0.0, 'Err'));
         }
+
         return Container(
+          width: double.infinity,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.1),
@@ -1509,17 +1833,38 @@ class _ResidentHomePageState extends State<ResidentHomePage>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Monthly Water Consumption',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Monthly Water Consumption',
+                      style: GoogleFonts.poppins(
+                        fontSize: constraints.maxWidth < 400 ? 14 : 16,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Last 6 Months',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.blue.shade700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 SizedBox(
-                  height: 200,
+                  height: 180,
                   child: BarChart(
                     BarChartData(
                       alignment: BarChartAlignment.spaceAround,
@@ -1532,7 +1877,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                           getTooltipColor: (_) => Colors.white,
                           getTooltipItem: (group, groupIndex, rod, rodIndex) {
                             return BarTooltipItem(
-                              '${rod.toY.toStringAsFixed(0)} m³',
+                              '${rod.toY.toStringAsFixed(1)} m³',
                               GoogleFonts.poppins(
                                 color: Colors.black87,
                                 fontWeight: FontWeight.w600,
@@ -1553,15 +1898,15 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                                   value >= snapshot.data!.length) {
                                 return const SizedBox();
                               }
-                              final monthName =
-                                  snapshot.data![value.toInt()]['monthName'];
+                              final monthName = monthNames[value.toInt()];
                               return SideTitleWidget(
                                 axisSide: meta.axisSide,
                                 space: 4,
                                 child: Text(
                                   monthName,
                                   style: GoogleFonts.poppins(
-                                    fontSize: 12,
+                                    fontSize:
+                                        constraints.maxWidth < 400 ? 10 : 11,
                                     color: Colors.grey[800],
                                     fontWeight: FontWeight.w600,
                                   ),
@@ -1573,7 +1918,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                         leftTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
-                            reservedSize: 40,
+                            reservedSize: constraints.maxWidth < 400 ? 30 : 40,
                             interval: maxY / 5,
                             getTitlesWidget: (value, meta) {
                               return SideTitleWidget(
@@ -1582,7 +1927,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                                 child: Text(
                                   value.toInt().toString(),
                                   style: GoogleFonts.poppins(
-                                    fontSize: 12,
+                                    fontSize:
+                                        constraints.maxWidth < 400 ? 9 : 10,
                                     color: Colors.grey[600],
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -1608,9 +1954,31 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                       ),
                       borderData: FlBorderData(show: false),
                       barGroups: barGroups,
-                      groupsSpace: 8,
+                      groupsSpace: constraints.maxWidth < 400 ? 8 : 12,
                     ),
                   ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF87CEEB),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Water Consumption (m³)',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1626,7 +1994,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       barRods: [
         BarChartRodData(
           toY: y,
-          width: 16,
+          width: 14,
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(4),
           ),
@@ -2909,303 +3277,307 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
         ? DateFormat.yMMMd().format(processedDate)
         : DateFormat.yMMMd().format(DateTime.now());
     return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.all(16),
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 750),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.green,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(16),
+        child: Container(
+          constraints: const BoxConstraints(maxWidth: 500, maxHeight: 750),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 10,
+                offset: const Offset(0, 5),
               ),
-              child: const Center(
-                child: Text(
-                  'PAID',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                child: const Center(
+                  child: Text(
+                    'PAID',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
-            ),
-            Expanded(
-              child: RepaintBoundary(
-                key: _boundaryKey,
-                child: Container(
-                  color: Colors.white,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Header
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                Image.asset('assets/images/icon.png',
-                                    height: 36),
-                                const SizedBox(width: 8),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'San Jose Water Services',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: Color(0xFF4A90E2),
-                                      ),
-                                    ),
-                                    Text(
-                                      purok,
-                                      style: const TextStyle(
-                                        fontSize: 10,
-                                        color: Colors.green,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'WATER BILL STATEMENT',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF4A90E2),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        _dashedDivider(),
-                        _receiptRow('Name', fullName),
-                        _receiptRow('Address', address),
-                        _receiptRow('Contact', contactNumber),
-                        _receiptRow('Meter No.', meterNumber),
-                        _receiptRow(
-                            'Billing Period Start', formattedPeriodStart),
-                        _receiptRow('Issue Date', formattedProcessedDate),
-                        _dashedDivider(),
-                        _receiptRow('Previous Reading',
-                            '${previousReading.toStringAsFixed(2)} m³'),
-                        _receiptRow('Current Reading',
-                            '${currentReading.toStringAsFixed(2)} m³'),
-                        _receiptRow('Cubic Meter Used',
-                            '${cubicMeterUsed.toStringAsFixed(2)} m³'),
-                        _dashedDivider(),
-                        _receiptRow(
-                            'Amount Paid', '₱${amount.toStringAsFixed(2)}',
-                            valueColor: Colors.green,
-                            isBold: true,
-                            fontSize: 13),
-                        const SizedBox(height: 12),
-                        // Rate Information
-                        GestureDetector(
-                          onTap: () => setState(() => _showRates = !_showRates),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                vertical: 8, horizontal: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Rate Information',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF4A90E2),
-                                  ),
-                                ),
-                                Icon(
-                                  _showRates
-                                      ? Icons.expand_less
-                                      : Icons.expand_more,
-                                  size: 16,
-                                  color: const Color(0xFF4A90E2),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        AnimatedCrossFade(
-                          firstChild: const SizedBox.shrink(),
-                          secondChild: Container(
-                            margin: const EdgeInsets.only(top: 8),
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                  color: Colors.grey[200]!, width: 1),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 6,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _rateRow('Residential',
-                                    'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
-                                const SizedBox(height: 6),
-                                _rateRow('Commercial',
-                                    'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
-                                const SizedBox(height: 6),
-                                _rateRow('Non Residence',
-                                    'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
-                                const SizedBox(height: 6),
-                                _rateRow('Industrial',
-                                    'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
-                              ],
-                            ),
-                          ),
-                          crossFadeState: _showRates
-                              ? CrossFadeState.showSecond
-                              : CrossFadeState.showFirst,
-                          duration: const Duration(milliseconds: 400),
-                          sizeCurve: Curves.easeInOut,
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Thank you for your timely payment!',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: Colors.green,
-                            fontStyle: FontStyle.italic,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        // Payment Status
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.green.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                                color: Colors.green.withOpacity(0.3)),
-                          ),
-                          child: Row(
+              Expanded(
+                child: RepaintBoundary(
+                  key: _boundaryKey,
+                  child: Container(
+                    color: Colors.white,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Icon(
-                                Icons.check_circle,
-                                color: Colors.green,
-                                size: 18,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Payment Approved',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.green,
+                              Row(
+                                children: [
+                                  Image.asset('assets/images/icon.png',
+                                      height: 36),
+                                  const SizedBox(width: 8),
+                                  Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'San Jose Water Services',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF4A90E2),
+                                        ),
                                       ),
-                                    ),
-                                    const Text(
-                                      'Your payment has been confirmed.',
-                                      style: TextStyle(
-                                        fontSize: 9,
-                                        color: Colors.grey,
+                                      Text(
+                                        purok,
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          color: Colors.green,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    ),
-                                  ],
-                                ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 12),
+                          const Text(
+                            'WATER BILL STATEMENT',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF4A90E2),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _dashedDivider(),
+                          _receiptRow('Name', fullName),
+                          _receiptRow('Address', address),
+                          _receiptRow('Contact', contactNumber),
+                          _receiptRow('Meter No.', meterNumber),
+                          _receiptRow(
+                              'Billing Period Start', formattedPeriodStart),
+                          _receiptRow('Issue Date', formattedProcessedDate),
+                          _dashedDivider(),
+                          _receiptRow('Previous Reading',
+                              '${previousReading.toStringAsFixed(2)} m³'),
+                          _receiptRow('Current Reading',
+                              '${currentReading.toStringAsFixed(2)} m³'),
+                          _receiptRow('Cubic Meter Used',
+                              '${cubicMeterUsed.toStringAsFixed(2)} m³'),
+                          _dashedDivider(),
+                          _receiptRow(
+                              'Amount Paid', '₱${amount.toStringAsFixed(2)}',
+                              valueColor: Colors.green,
+                              isBold: true,
+                              fontSize: 13),
+                          const SizedBox(height: 12),
+                          // Rate Information
+                          GestureDetector(
+                            onTap: () =>
+                                setState(() => _showRates = !_showRates),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 8, horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  const Text(
+                                    'Rate Information',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF4A90E2),
+                                    ),
+                                  ),
+                                  Icon(
+                                    _showRates
+                                        ? Icons.expand_less
+                                        : Icons.expand_more,
+                                    size: 16,
+                                    color: const Color(0xFF4A90E2),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          AnimatedCrossFade(
+                            firstChild: const SizedBox.shrink(),
+                            secondChild: Container(
+                              margin: const EdgeInsets.only(top: 8),
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                    color: Colors.grey[200]!, width: 1),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 6,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _rateRow('Residential',
+                                      'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
+                                  const SizedBox(height: 6),
+                                  _rateRow('Commercial',
+                                      'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
+                                  const SizedBox(height: 6),
+                                  _rateRow('Non Residence',
+                                      'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
+                                  const SizedBox(height: 6),
+                                  _rateRow('Industrial',
+                                      'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
+                                ],
+                              ),
+                            ),
+                            crossFadeState: _showRates
+                                ? CrossFadeState.showSecond
+                                : CrossFadeState.showFirst,
+                            duration: const Duration(milliseconds: 400),
+                            sizeCurve: Curves.easeInOut,
+                          ),
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Thank you for your timely payment!',
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: Colors.green,
+                              fontStyle: FontStyle.italic,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          // Payment Status
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.green.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                  color: Colors.green.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.check_circle,
+                                  color: Colors.green,
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'Payment Approved',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.green,
+                                        ),
+                                      ),
+                                      const Text(
+                                        'Your payment has been confirmed.',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
-            // Action buttons
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _downloadReceipt,
-                      icon: const Icon(Icons.download, color: Colors.white),
-                      label: const Text(
-                        'Download Receipt',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
+              // Action buttons
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _downloadReceipt,
+                        icon: const Icon(Icons.download, color: Colors.white),
+                        label: const Text(
+                          'Download Receipt',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade700,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.shade700,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.check_circle, color: Colors.white),
-                      label: const Text(
-                        'Close',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => Navigator.pop(context),
+                        icon:
+                            const Icon(Icons.check_circle, color: Colors.white),
+                        label: const Text(
+                          'Close',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
+            ],
+          ),
+        ));
   }
 
   Widget _dashedDivider() => Padding(
