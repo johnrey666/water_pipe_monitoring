@@ -939,8 +939,21 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   void _removeNotificationOverlay() {
     if (_notificationOverlay != null) {
-      _notificationOverlay!.remove();
+      final overlay = _notificationOverlay!;
       _notificationOverlay = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        try {
+          overlay.remove();
+        } catch (e) {
+          print('Error removing notification overlay: $e');
+        }
+        // Ensure focus is returned to the app so text fields regain input
+        try {
+          if (mounted) FocusScope.of(context).unfocus();
+        } catch (e) {
+          // ignore
+        }
+      });
     }
   }
 
