@@ -172,6 +172,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
 
   // Update image name controller text
   void _updateImageNameController() {
+    if (!mounted) return;
     if (_imageFiles.isEmpty) {
       _imageNameController.text = '';
     } else if (_imageFiles.length == 1) {
@@ -191,6 +192,10 @@ class _ReportProblemPageState extends State<ReportProblemPage>
 
   // Clear all images
   void _clearAllImages() {
+    if (!mounted) {
+      _imageFiles.clear();
+      return;
+    }
     setState(() {
       _imageFiles.clear();
       _imageNameController.text = '';
@@ -330,8 +335,12 @@ class _ReportProblemPageState extends State<ReportProblemPage>
   Future<void> _submitReport() async {
     // Unfocus any text fields before submitting
     FocusScope.of(context).unfocus();
-
     if (!_formKey.currentState!.validate() || _isSubmitting) return;
+
+    // Capture controller values early to avoid using them after dispose
+    final String issueText = _issueController.text.trim();
+    final String additionalText = _additionalInfoController.text.trim();
+    final List imageFilesSnapshot = List.from(_imageFiles);
 
     setState(() {
       _isSubmitting = true;
@@ -351,7 +360,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
             'Failed to fetch user info. Please try logging in again.');
       }
 
-      if (_issueController.text.trim().isEmpty) {
+      if (issueText.isEmpty) {
         throw Exception('Issue description is required');
       }
 
@@ -370,7 +379,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
         'userId': userInfo['userId'],
         'fullName': userInfo['fullName'],
         'contactNumber': userInfo['contactNumber'],
-        'issueDescription': _issueController.text.trim(),
+        'issueDescription': issueText,
         'location': _isPublicReport
             ? GeoPoint(
                 _selectedLocation!.latitude, _selectedLocation!.longitude)
@@ -387,14 +396,14 @@ class _ReportProblemPageState extends State<ReportProblemPage>
         'isPublic': _isPublicReport,
       };
 
-      if (_additionalInfoController.text.trim().isNotEmpty) {
-        reportData['additionalLocationInfo'] =
-            _additionalInfoController.text.trim();
+      if (additionalText.isNotEmpty) {
+        reportData['additionalLocationInfo'] = additionalText;
       }
 
-      // Convert multiple images to base64
-      if (_imageFiles.isNotEmpty) {
-        final base64Images = await _convertImagesToBase64(_imageFiles);
+      // Convert multiple images to base64 using snapshot
+      if (imageFilesSnapshot.isNotEmpty) {
+        final base64Images = await _convertImagesToBase64(
+            imageFilesSnapshot.cast<XFile>());
         if (base64Images.isNotEmpty) {
           reportData['images'] = base64Images;
           reportData['imageCount'] = base64Images.length;
@@ -427,7 +436,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
             'type': 'public_report',
             'title': 'New Public Report',
             'message':
-                'Resident ${userInfo['fullName']} reported: ${_issueController.text.trim()} at ${reportData['placeName']}',
+                'Resident ${userInfo['fullName']} reported: $issueText at ${reportData['placeName']}',
             'timestamp': Timestamp.now(),
             'read': false,
           });
@@ -439,7 +448,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
         'action': 'Report Submitted',
         'userId': userInfo['userId'],
         'details':
-            'Report submitted by ${userInfo['fullName']}: ${_issueController.text.trim()} with ${_imageFiles.length} images',
+            'Report submitted by ${userInfo['fullName']}: $issueText with ${imageFilesSnapshot.length} images',
         'timestamp': FieldValue.serverTimestamp(),
       }).catchError((e) {
         print('Error writing log entry: $e');
@@ -451,23 +460,25 @@ class _ReportProblemPageState extends State<ReportProblemPage>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-              'Report submitted successfully with ${_imageFiles.length} images'),
+              'Report submitted successfully with ${imageFilesSnapshot.length} images'),
           backgroundColor: Colors.green,
           duration: Duration(seconds: 2),
         ),
       );
 
       // Reset form
-      setState(() {
-        _issueController.clear();
-        _additionalInfoController.clear();
-        _imageFiles.clear();
-        _imageNameController.clear();
-        _selectedLocation = null;
-        _selectedPlaceName = null;
-        _locationController.clear();
-        _isPublicReport = false;
-      });
+      if (mounted) {
+        setState(() {
+          _issueController.clear();
+          _additionalInfoController.clear();
+          _imageFiles.clear();
+          _imageNameController.clear();
+          _selectedLocation = null;
+          _selectedPlaceName = null;
+          _locationController.clear();
+          _isPublicReport = false;
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       Navigator.of(context).pop(); // Close loading dialog
