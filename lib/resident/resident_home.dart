@@ -2005,7 +2005,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   }
 }
 
-// Enhanced Notification Dropdown - More Compact Version
+// UPDATED: Enhanced Notification Dropdown with scrollability and clear read/unread indicators
 class NotificationDropdown extends StatefulWidget {
   final Function(Map<String, dynamic>) onNotificationTap;
   final Function(String) onMarkAsRead;
@@ -2027,9 +2027,6 @@ class NotificationDropdown extends StatefulWidget {
 
 class _NotificationDropdownState extends State<NotificationDropdown>
     with AutomaticKeepAliveClientMixin {
-  int _page = 0;
-  static const int _itemsPerPage = 6; // Reduced from 8
-
   @override
   bool get wantKeepAlive => true;
 
@@ -2058,6 +2055,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
         final unread = notificationsData['unread']!;
         final read = notificationsData['read']!;
         final allNotifications = [...unread, ...read];
+
         if (allNotifications.isEmpty) {
           return Container(
             width: 350,
@@ -2094,15 +2092,13 @@ class _NotificationDropdownState extends State<NotificationDropdown>
             ),
           );
         }
+
         allNotifications.sort((a, b) =>
             (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime));
-        final totalPages = (allNotifications.length / _itemsPerPage).ceil();
-        final currentItems = allNotifications
-            .skip(_page * _itemsPerPage)
-            .take(_itemsPerPage)
-            .toList();
+
         return Container(
           width: 350,
+          height: 400, // Fixed height for scrollable content
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
@@ -2150,7 +2146,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                               ),
                             ),
                           ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 8),
                         IconButton(
                           icon: const Icon(Icons.close,
                               size: 18, color: Colors.white),
@@ -2163,19 +2159,27 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                   ],
                 ),
               ),
-              // Notifications list
-              Container(
-                constraints: const BoxConstraints(maxHeight: 300),
-                child: ListView.builder(
+
+              // Notifications list - Now scrollable
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.only(top: 4),
                   shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: currentItems.length,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  itemCount: allNotifications.length,
+                  separatorBuilder: (context, index) => Divider(
+                    height: 1,
+                    color: Colors.grey.shade200,
+                    indent: 12,
+                    endIndent: 12,
+                  ),
                   itemBuilder: (context, index) {
-                    final notification = currentItems[index];
+                    final notification = allNotifications[index];
                     return _buildNotificationItem(notification);
                   },
                 ),
               ),
+
               // Footer
               Container(
                 padding: const EdgeInsets.all(8),
@@ -2201,6 +2205,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                               widget.onMarkAsRead(notification['id']);
                             }
                           }
+                          setState(() {});
                         },
                         icon: Icon(Icons.mark_chat_read,
                             size: 14, color: Colors.blue.shade700),
@@ -2216,53 +2221,15 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                               horizontal: 8, vertical: 4),
                         ),
                       ),
-                    // Pagination
-                    if (totalPages > 1)
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.chevron_left,
-                                color: _page > 0
-                                    ? Colors.blue.shade700
-                                    : Colors.grey,
-                                size: 20),
-                            onPressed: _page > 0
-                                ? () => setState(() => _page--)
-                                : null,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: Colors.grey.shade300),
-                            ),
-                            child: Text(
-                              '${_page + 1} / $totalPages',
-                              style: GoogleFonts.poppins(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: Colors.grey.shade700,
-                              ),
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(Icons.chevron_right,
-                                color: _page < totalPages - 1
-                                    ? Colors.blue.shade700
-                                    : Colors.grey,
-                                size: 20),
-                            onPressed: _page < totalPages - 1
-                                ? () => setState(() => _page++)
-                                : null,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                          ),
-                        ],
+                    const Spacer(),
+                    // Show counts
+                    Text(
+                      '${unread.length} unread • ${read.length} read',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -2346,23 +2313,37 @@ class _NotificationDropdownState extends State<NotificationDropdown>
         onTap: () => widget.onNotificationTap(notification),
         child: Container(
           padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(color: Colors.grey.shade200),
-            ),
-          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Notification icon
-              Container(
-                margin: const EdgeInsets.only(right: 10),
-                child: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: iconColor.withOpacity(0.1),
-                  child: Icon(icon, size: 18, color: iconColor),
-                ),
+              // Notification icon with read/unread indicator
+              Stack(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(right: 10),
+                    child: CircleAvatar(
+                      radius: 16,
+                      backgroundColor: iconColor.withOpacity(0.1),
+                      child: Icon(icon, size: 18, color: iconColor),
+                    ),
+                  ),
+                  if (!isRead)
+                    Positioned(
+                      right: 8,
+                      top: 0,
+                      child: Container(
+                        width: 10,
+                        height: 10,
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 1.5),
+                        ),
+                      ),
+                    ),
+                ],
               ),
+
               // Notification content
               Expanded(
                 child: Column(
@@ -2378,18 +2359,21 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                             style: GoogleFonts.poppins(
                               fontSize: 13,
                               fontWeight:
-                                  isRead ? FontWeight.w500 : FontWeight.w600,
-                              color:
-                                  isRead ? Colors.grey.shade800 : Colors.black,
+                                  isRead ? FontWeight.w500 : FontWeight.bold,
+                              color: isRead
+                                  ? Colors.grey.shade700
+                                  : Colors.black87,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
+                        // New indicator dot
                         if (!isRead)
                           Container(
                             width: 8,
                             height: 8,
+                            margin: const EdgeInsets.only(left: 4, top: 3),
                             decoration: const BoxDecoration(
                               color: Colors.red,
                               shape: BoxShape.circle,
@@ -2397,6 +2381,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                           ),
                       ],
                     ),
+
                     // Message
                     if (message.isNotEmpty) ...[
                       const SizedBox(height: 4),
@@ -2404,12 +2389,15 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                         message,
                         style: GoogleFonts.poppins(
                           fontSize: 12,
-                          color: Colors.grey.shade700,
+                          color: isRead
+                              ? Colors.grey.shade600
+                              : Colors.grey.shade800,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
+
                     // New bill details (if applicable)
                     if (type == 'new_bill' &&
                         month != null &&
@@ -2458,6 +2446,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                         ),
                       ),
                     ],
+
                     // Bill updated details (if applicable)
                     if (type == 'bill_updated' && month != null) ...[
                       const SizedBox(height: 6),
@@ -2504,6 +2493,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                         ),
                       ),
                     ],
+
                     // Payment details (if applicable)
                     if (type == 'payment' &&
                         month != null &&
@@ -2576,6 +2566,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                         ),
                       ),
                     ],
+
                     // Timestamp
                     const SizedBox(height: 6),
                     Row(
@@ -2587,9 +2578,26 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                               : 'Recently',
                           style: GoogleFonts.poppins(
                             fontSize: 10,
-                            color: Colors.grey.shade500,
+                            color: isRead
+                                ? Colors.grey.shade500
+                                : Colors.grey.shade600,
                           ),
                         ),
+                        if (isRead)
+                          Row(
+                            children: [
+                              Icon(Icons.check_circle,
+                                  size: 10, color: Colors.green.shade600),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Read',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 9,
+                                  color: Colors.green.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
                       ],
                     ),
                   ],

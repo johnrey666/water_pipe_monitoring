@@ -1116,323 +1116,335 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
           ),
           // Content
           Expanded(
-            child: _loading && _reportedBills.isEmpty
-                ? Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? Center(child: Text(_error!))
-                    : _reportedBills.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.check_circle,
-                                    size: 48, color: Colors.green),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'No pending reports',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    color: Colors.grey,
+              child: _loading && _reportedBills.isEmpty
+                  ? Center(child: CircularProgressIndicator())
+                  : _error != null
+                      ? Center(child: Text(_error!))
+                      : _reportedBills.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.check_circle,
+                                      size: 48, color: Colors.green),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No pending reports',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      color: Colors.grey,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          )
-                        : NotificationListener<ScrollNotification>(
-                            onNotification: (ScrollNotification scrollInfo) {
-                              if (_hasMoreReports &&
-                                  !_loading &&
-                                  scrollInfo.metrics.pixels ==
-                                      scrollInfo.metrics.maxScrollExtent) {
-                                _loadReportedBills(loadMore: true);
-                                return true;
-                              }
-                              return false;
-                            },
-                            child: ListView.builder(
-                              padding: const EdgeInsets.all(12),
-                              itemCount: _reportedBills.length +
-                                  (_hasMoreReports ? 1 : 0),
-                              itemBuilder: (context, index) {
-                                if (index >= _reportedBills.length) {
-                                  return Padding(
-                                    padding: const EdgeInsets.all(16.0),
-                                    child: Center(
-                                      child: _loading
-                                          ? CircularProgressIndicator()
-                                          : Container(),
-                                    ),
-                                  );
+                                ],
+                              ),
+                            )
+                          : NotificationListener<ScrollNotification>(
+                              onNotification: (ScrollNotification scrollInfo) {
+                                if (_hasMoreReports &&
+                                    !_loading &&
+                                    scrollInfo.metrics.pixels ==
+                                        scrollInfo.metrics.maxScrollExtent) {
+                                  _loadReportedBills(loadMore: true);
+                                  return true;
                                 }
-                                final report = _reportedBills[index];
-                                final reportId =
-                                    report['reportId'] as String? ?? '';
-                                final residentId =
-                                    report['residentId'] as String?;
-                                final billId = report['billId'] as String?;
-                                final residentDetails =
-                                    _residentDetails[residentId] ?? {};
-                                final billDetails = _billDetails[billId ?? ''];
-                                final submittedAt =
-                                    report['submittedAt'] as Timestamp?;
-                                final isExpanded =
-                                    _expandedReports[reportId] ?? false;
-                                return Container(
-                                  margin: const EdgeInsets.only(bottom: 12),
-                                  child: Card(
-                                    elevation: 1,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          // Header
-                                          Row(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              CircleAvatar(
-                                                backgroundColor:
-                                                    Colors.orange.shade100,
-                                                child: Icon(Icons.person,
-                                                    color: Colors.orange,
-                                                    size: 18),
-                                              ),
-                                              const SizedBox(width: 12),
-                                              Expanded(
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      report['residentName']
-                                                              as String? ??
-                                                          'Unknown',
-                                                      style:
-                                                          GoogleFonts.poppins(
-                                                        fontSize: 14,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      residentDetails['address']
-                                                              as String? ??
-                                                          'No address',
-                                                      style:
-                                                          GoogleFonts.poppins(
-                                                        fontSize: 11,
-                                                        color: Colors.grey,
-                                                      ),
-                                                    ),
-                                                    if (submittedAt != null)
-                                                      Padding(
-                                                        padding:
-                                                            const EdgeInsets
-                                                                .only(top: 2),
-                                                        child: Text(
-                                                          'Reported: ${DateFormat('MMM d, h:mm a').format(submittedAt.toDate())}',
-                                                          style: GoogleFonts
-                                                              .poppins(
-                                                            fontSize: 10,
-                                                            color: Colors
-                                                                .grey.shade600,
-                                                          ),
-                                                        ),
-                                                      ),
-                                                  ],
-                                                ),
-                                              ),
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 8,
-                                                  vertical: 4,
-                                                ),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.orange.shade100,
-                                                  borderRadius:
-                                                      BorderRadius.circular(6),
-                                                ),
-                                                child: Text(
-                                                  'REPORTED',
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 9,
-                                                    fontWeight: FontWeight.w600,
-                                                    color:
-                                                        Colors.orange.shade800,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 12),
-                                          // Report reason
-                                          Container(
-                                            padding: const EdgeInsets.all(10),
-                                            decoration: BoxDecoration(
-                                              color: Colors.red.shade50,
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                              border: Border.all(
-                                                  color: Colors.red.shade100),
-                                            ),
-                                            child: Column(
+                                return false;
+                              },
+                              child: ListView.builder(
+                                padding: const EdgeInsets.all(12),
+                                itemCount: _reportedBills.length +
+                                    (_hasMoreReports ? 1 : 0),
+                                itemBuilder: (context, index) {
+                                  if (index >= _reportedBills.length) {
+                                    return Padding(
+                                      padding: const EdgeInsets.all(16.0),
+                                      child: Center(
+                                        child: _loading
+                                            ? CircularProgressIndicator()
+                                            : Container(),
+                                      ),
+                                    );
+                                  }
+                                  final report = _reportedBills[index];
+                                  final reportId =
+                                      report['reportId'] as String? ?? '';
+                                  final residentId =
+                                      report['residentId'] as String?;
+                                  final billId = report['billId'] as String?;
+                                  final residentDetails =
+                                      _residentDetails[residentId] ?? {};
+                                  final billDetails =
+                                      _billDetails[billId ?? ''];
+                                  final submittedAt =
+                                      report['submittedAt'] as Timestamp?;
+                                  final isExpanded =
+                                      _expandedReports[reportId] ?? false;
+                                  return Container(
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    child: Card(
+                                      elevation: 1,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(12),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            // Header
+                                            Row(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
-                                                Row(
-                                                  children: [
-                                                    Icon(Icons.report_problem,
-                                                        size: 14,
-                                                        color: Colors
-                                                            .red.shade700),
-                                                    const SizedBox(width: 6),
-                                                    Text(
-                                                      'Report Reason',
-                                                      style:
-                                                          GoogleFonts.poppins(
-                                                        fontSize: 12,
-                                                        fontWeight:
-                                                            FontWeight.w600,
-                                                        color:
-                                                            Colors.red.shade700,
-                                                      ),
-                                                    ),
-                                                  ],
+                                                CircleAvatar(
+                                                  backgroundColor:
+                                                      Colors.orange.shade100,
+                                                  child: Icon(Icons.person,
+                                                      color: Colors.orange,
+                                                      size: 18),
                                                 ),
-                                                const SizedBox(height: 6),
-                                                Text(
-                                                  report['reportReason']
-                                                          as String? ??
-                                                      'No reason provided',
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 11,
-                                                    color: Colors.grey.shade800,
+                                                const SizedBox(width: 12),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Text(
+                                                        report['residentName']
+                                                                as String? ??
+                                                            'Unknown',
+                                                        style:
+                                                            GoogleFonts.poppins(
+                                                          fontSize: 14,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        residentDetails[
+                                                                    'address']
+                                                                as String? ??
+                                                            'No address',
+                                                        style:
+                                                            GoogleFonts.poppins(
+                                                          fontSize: 11,
+                                                          color: Colors.grey,
+                                                        ),
+                                                      ),
+                                                      if (submittedAt != null)
+                                                        Padding(
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .only(top: 2),
+                                                          child: Text(
+                                                            'Reported: ${DateFormat('MMM d, h:mm a').format(submittedAt.toDate())}',
+                                                            style: GoogleFonts
+                                                                .poppins(
+                                                              fontSize: 10,
+                                                              color: Colors.grey
+                                                                  .shade600,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color:
+                                                        Colors.orange.shade100,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            6),
+                                                  ),
+                                                  child: Text(
+                                                    'REPORTED',
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 9,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: Colors
+                                                          .orange.shade800,
+                                                    ),
                                                   ),
                                                 ),
                                               ],
                                             ),
-                                          ),
-                                          // Expand/Collapse button for bill details
-                                          if (billDetails != null) ...[
                                             const SizedBox(height: 12),
-                                            GestureDetector(
-                                              onTap: () =>
-                                                  _toggleExpand(reportId),
-                                              child: Container(
-                                                padding:
-                                                    const EdgeInsets.all(10),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.blue.shade50,
-                                                  borderRadius:
-                                                      BorderRadius.circular(8),
-                                                  border: Border.all(
-                                                      color:
-                                                          Colors.blue.shade200),
-                                                ),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment
-                                                          .spaceBetween,
-                                                  children: [
-                                                    Row(
-                                                      children: [
-                                                        Icon(Icons.receipt_long,
-                                                            size: 16,
-                                                            color: Colors
-                                                                .blue.shade700),
-                                                        const SizedBox(
-                                                            width: 8),
-                                                        Text(
-                                                          'View Bill Details',
-                                                          style: GoogleFonts
-                                                              .poppins(
-                                                            fontSize: 12,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                            color: Colors
-                                                                .blue.shade700,
-                                                          ),
+                                            // Report reason
+                                            Container(
+                                              padding: const EdgeInsets.all(10),
+                                              decoration: BoxDecoration(
+                                                color: Colors.red.shade50,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: Border.all(
+                                                    color: Colors.red.shade100),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      Icon(Icons.report_problem,
+                                                          size: 14,
+                                                          color: Colors
+                                                              .red.shade700),
+                                                      const SizedBox(width: 6),
+                                                      Text(
+                                                        'Report Reason',
+                                                        style:
+                                                            GoogleFonts.poppins(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                          color: Colors
+                                                              .red.shade700,
                                                         ),
-                                                      ],
-                                                    ),
-                                                    Icon(
-                                                      isExpanded
-                                                          ? Icons.expand_less
-                                                          : Icons.expand_more,
-                                                      size: 18,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                  const SizedBox(height: 6),
+                                                  Text(
+                                                    report['reportReason']
+                                                            as String? ??
+                                                        'No reason provided',
+                                                    style: GoogleFonts.poppins(
+                                                      fontSize: 11,
                                                       color:
-                                                          Colors.blue.shade700,
+                                                          Colors.grey.shade800,
                                                     ),
-                                                  ],
-                                                ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
-                                            // Collapsible bill details
-                                            if (isExpanded) ...[
+                                            // Expand/Collapse button for bill details
+                                            if (billDetails != null) ...[
                                               const SizedBox(height: 12),
-                                              _buildBillReceipt(billDetails),
+                                              GestureDetector(
+                                                onTap: () =>
+                                                    _toggleExpand(reportId),
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.all(10),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.blue.shade50,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            8),
+                                                    border: Border.all(
+                                                        color: Colors
+                                                            .blue.shade200),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .spaceBetween,
+                                                    children: [
+                                                      Row(
+                                                        children: [
+                                                          Icon(
+                                                              Icons
+                                                                  .receipt_long,
+                                                              size: 16,
+                                                              color: Colors.blue
+                                                                  .shade700),
+                                                          const SizedBox(
+                                                              width: 8),
+                                                          Text(
+                                                            'View Bill Details',
+                                                            style: GoogleFonts
+                                                                .poppins(
+                                                              fontSize: 12,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                              color: Colors.blue
+                                                                  .shade700,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      Icon(
+                                                        isExpanded
+                                                            ? Icons.expand_less
+                                                            : Icons.expand_more,
+                                                        size: 18,
+                                                        color: Colors
+                                                            .blue.shade700,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                              // Collapsible bill details
+                                              if (isExpanded) ...[
+                                                const SizedBox(height: 12),
+                                                _buildBillReceipt(billDetails),
+                                              ],
                                             ],
+                                            // Action buttons
+                                            const SizedBox(height: 16),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: OutlinedButton.icon(
+                                                    onPressed: () =>
+                                                        _showActionDialog(
+                                                            reportId, report),
+                                                    icon: Icon(Icons.more_vert,
+                                                        size: 16),
+                                                    label: Text('Actions'),
+                                                    style: OutlinedButton
+                                                        .styleFrom(
+                                                      foregroundColor:
+                                                          Colors.blue,
+                                                      side: BorderSide(
+                                                          color: Colors.blue),
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          vertical: 8),
+                                                    ),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: ElevatedButton.icon(
+                                                    onPressed: () =>
+                                                        _showUpdateBillDialog(
+                                                            reportId, report),
+                                                    icon: Icon(Icons.edit,
+                                                        size: 16),
+                                                    label: Text('Update Bill'),
+                                                    style: ElevatedButton
+                                                        .styleFrom(
+                                                      backgroundColor:
+                                                          Colors.blue,
+                                                      foregroundColor:
+                                                          Colors.white,
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          vertical: 8),
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
                                           ],
-                                          // Action buttons
-                                          const SizedBox(height: 16),
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: OutlinedButton.icon(
-                                                  onPressed: () =>
-                                                      _showActionDialog(
-                                                          reportId, report),
-                                                  icon: Icon(Icons.more_vert,
-                                                      size: 16),
-                                                  label: Text('Actions'),
-                                                  style:
-                                                      OutlinedButton.styleFrom(
-                                                    foregroundColor:
-                                                        Colors.blue,
-                                                    side: BorderSide(
-                                                        color: Colors.blue),
-                                                    padding: const EdgeInsets
-                                                        .symmetric(vertical: 8),
-                                                  ),
-                                                ),
-                                              ),
-                                              const SizedBox(width: 8),
-                                              Expanded(
-                                                child: ElevatedButton.icon(
-                                                  onPressed: () =>
-                                                      _showUpdateBillDialog(
-                                                          reportId, report),
-                                                  icon: Icon(Icons.edit,
-                                                      size: 16),
-                                                  label: Text('Update Bill'),
-                                                  style:
-                                                      ElevatedButton.styleFrom(
-                                                    backgroundColor:
-                                                        Colors.blue,
-                                                    foregroundColor:
-                                                        Colors.white,
-                                                    padding: const EdgeInsets
-                                                        .symmetric(vertical: 8),
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-          ),
+                                  );
+                                },
+                              ),
+                            )),
         ],
       ),
     );
@@ -2970,9 +2982,13 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Enter';
+                        if (v == null || v.isEmpty)
+                          return 'Enter current reading';
                         final d = double.tryParse(v);
-                        if (d == null || d < previous) return 'Invalid';
+                        if (d == null) return 'Invalid number';
+                        if (d < previous) {
+                          return 'Current must be ≥ $previous';
+                        }
                         return null;
                       },
                       onChanged: (v) {
@@ -2981,10 +2997,47 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                     ),
                   ),
                 ),
+
+                // ADDED: Warning message when current reading is lower than previous
+                if (current < previous && current > 0)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 8),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade200),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.warning_amber,
+                              color: Colors.orange.shade700, size: 16),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '⚠️ Warning: Current reading ($current m³) is lower than previous reading ($previous m³). '
+                              'The system requires the current meter reading to exceed the previous reading for proper computation.',
+                              style: GoogleFonts.inter(
+                                fontSize: 11,
+                                color: Colors.orange.shade900,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
                 _receiptRow(
                   'CUBIC METER USED',
-                  '${cubicMeterUsed.toStringAsFixed(2)} m³',
+                  current < previous
+                      ? '0.00 m³ (Invalid: Current < Previous)'
+                      : '${cubicMeterUsed.toStringAsFixed(2)} m³',
                   isBold: true,
+                  valueColor: current < previous ? Colors.red : null,
                 ),
                 _dashedDivider(),
                 _receiptRow(
@@ -3072,6 +3125,22 @@ class _BillReceiptFormState extends State<_BillReceiptForm> {
                             ? null
                             : () async {
                                 if (_formKey.currentState!.validate()) {
+                                  // Additional validation for current reading
+                                  if (current < previous) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Error: Current reading must be greater than or equal to previous reading ($previous m³)',
+                                          style:
+                                              GoogleFonts.inter(fontSize: 13),
+                                        ),
+                                        backgroundColor: Colors.red,
+                                        duration: const Duration(seconds: 3),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
                                   try {
                                     setState(() {
                                       _loading = true;

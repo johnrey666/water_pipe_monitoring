@@ -830,6 +830,22 @@ class _WaterBillFormState extends State<WaterBillForm> {
     if (!_formKey.currentState!.validate()) return;
     final currentReading = double.tryParse(_currentReadingController.text);
     if (currentReading == null) return;
+
+    // ADDED: Additional validation for current reading
+    if (currentReading < _previousReading) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Error: Current reading must be greater than or equal to previous reading (${_previousReading.toStringAsFixed(2)} m³)',
+            style: GoogleFonts.inter(fontSize: 13),
+          ),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
     try {
       setState(() {
         _submitting = true;
@@ -961,37 +977,36 @@ class _WaterBillFormState extends State<WaterBillForm> {
   Widget _receiptRow(String label, String value,
       {Color? valueColor, bool isBold = false, double fontSize = 11}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-                color: Colors.black,
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                  color: Colors.black,
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-                fontSize: fontSize,
-                color: valueColor ?? Colors.grey.shade700,
+            Expanded(
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontFamily: 'monospace',
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                  fontSize: fontSize,
+                  color: valueColor ?? Colors.grey.shade700,
+                ),
+                textAlign: TextAlign.right,
+                overflow: label == 'Address' ? TextOverflow.ellipsis : null,
+                maxLines: label == 'Address' ? 2 : null,
               ),
-              textAlign: TextAlign.right,
-              overflow: label == 'Address' ? TextOverflow.ellipsis : null,
-              maxLines: label == 'Address' ? 2 : null,
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ));
   }
 
   Widget _rateRow(String category, String details) => Row(
@@ -1021,34 +1036,35 @@ class _WaterBillFormState extends State<WaterBillForm> {
   // UPDATED: New minimal underline-style field
   Widget _minimalInputField(String label, Widget child) {
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontFamily: 'monospace',
-              fontWeight: FontWeight.w600,
-              fontSize: 11,
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 4),
+            child,
+            const Divider(
+              height: 1,
+              thickness: 1,
               color: Colors.black,
             ),
-          ),
-          const SizedBox(height: 4),
-          child,
-          const Divider(
-            height: 1,
-            thickness: 1,
-            color: Colors.black,
-          ),
-        ],
-      ),
-    );
+          ],
+        ));
   }
 
   @override
   Widget build(BuildContext context) {
+    final currentReading =
+        double.tryParse(_currentReadingController.text) ?? 0.0;
     final isOverdue = DateTime.now().isAfter(_periodDue);
     final dueColor = isOverdue ? Colors.red : Colors.black;
     return SizedBox(
@@ -1464,9 +1480,53 @@ class _WaterBillFormState extends State<WaterBillForm> {
                                 ),
                               ),
 
-                              _receiptRow('Cubic Meter Used',
-                                  '${_cubicMeterUsed.toStringAsFixed(2)} m³',
-                                  isBold: true),
+                              // ADDED: Warning message when current reading is lower than previous
+                              if (currentReading < _previousReading &&
+                                  currentReading > 0)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.only(top: 4, bottom: 8),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: Colors.orange.shade200),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Icon(Icons.warning_amber,
+                                            color: Colors.orange.shade700,
+                                            size: 16),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            '⚠️ Warning: Current reading (${currentReading.toStringAsFixed(2)} m³) is lower than previous reading (${_previousReading.toStringAsFixed(2)} m³). '
+                                            'The system requires the current meter reading to exceed the previous reading for proper computation.',
+                                            style: GoogleFonts.inter(
+                                              fontSize: 11,
+                                              color: Colors.orange.shade900,
+                                              fontWeight: FontWeight.w500,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+
+                              _receiptRow(
+                                  'Cubic Meter Used',
+                                  currentReading < _previousReading
+                                      ? '0.00 m³ (Invalid: Current < Previous)'
+                                      : '${_cubicMeterUsed.toStringAsFixed(2)} m³',
+                                  isBold: true,
+                                  valueColor: currentReading < _previousReading
+                                      ? Colors.red
+                                      : null),
                               _dashedDivider(),
                               _receiptRow('Current Bill',
                                   '₱${_calculateBill().toStringAsFixed(2)}',
