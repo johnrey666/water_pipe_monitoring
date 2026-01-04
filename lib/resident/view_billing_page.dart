@@ -345,7 +345,9 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   }
 
   Future<void> _submitReport() async {
-    if (_reportReasonController.text.trim().isEmpty) {
+    final String reason = _reportReasonController.text.trim();
+
+    if (reason.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Please describe the issue'),
@@ -374,7 +376,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         'residentName': _currentBill!['fullName'],
         'residentAddress': _currentBill!['address'],
         'billAmount': _currentBill!['currentMonthBill']?.toDouble() ?? 0.0,
-        'reportReason': _reportReasonController.text.trim(),
+        'reportReason': reason,
         'submittedAt': Timestamp.now(),
         'status': 'pending',
         'reviewedBy': '',
@@ -390,9 +392,9 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
           .add(reportData);
 
       setState(() => _submittingReport = false);
-      Navigator.of(context).pop();
+      if (mounted) Navigator.of(context).pop();
 
-      _reportReasonController.clear();
+      if (mounted) _reportReasonController.clear();
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

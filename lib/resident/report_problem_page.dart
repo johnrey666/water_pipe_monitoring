@@ -402,8 +402,8 @@ class _ReportProblemPageState extends State<ReportProblemPage>
 
       // Convert multiple images to base64 using snapshot
       if (imageFilesSnapshot.isNotEmpty) {
-        final base64Images = await _convertImagesToBase64(
-            imageFilesSnapshot.cast<XFile>());
+        final base64Images =
+            await _convertImagesToBase64(imageFilesSnapshot.cast<XFile>());
         if (base64Images.isNotEmpty) {
           reportData['images'] = base64Images;
           reportData['imageCount'] = base64Images.length;
