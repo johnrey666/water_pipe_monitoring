@@ -592,9 +592,11 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   void _handleNotificationTap(Map<String, dynamic> notification) async {
     // Mark as read if unread
     if (!notification['isRead'] && notification['id'] != null) {
-      await _markNotificationAsRead(notification['id']);
+      // Fire-and-forget so UI isn't blocked by network latency
+      _markNotificationAsRead(notification['id']);
     }
-    // Remove overlay
+
+    // Remove overlay immediately so underlying pages regain interaction/focus
     _removeNotificationOverlay();
 
     // Handle different notification types
