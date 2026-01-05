@@ -1239,129 +1239,210 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
     );
   }
 
-  // Show mark as fixed dialog with image upload options
+  // Show mark as fixed dialog with image upload options - SIMPLIFIED VERSION
   void _showMarkFixedDialog() {
+    List<File> tempBeforeImages = List.from(_beforeFixImages);
+    List<File> tempAfterImages = List.from(_afterFixImages);
+
     showDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            title: Text(
-              'Mark as Fixed',
-              style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Upload images before and after fixing the issue:',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.of(context).size.height * 0.8,
+                  maxWidth: 400,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF87CEEB),
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(16),
+                          topRight: Radius.circular(16),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.check_circle,
+                              color: Colors.white, size: 24),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Mark as Fixed',
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.close,
+                                color: Colors.white, size: 24),
+                            onPressed: () {
+                              Navigator.pop(context);
+                            },
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
 
-                  // Before fix images
-                  _buildImageUploadSection(
-                    'Before Fix Images',
-                    _beforeFixImages,
-                    () async {
-                      final images = await _picker.pickMultiImage();
-                      // ignore: unnecessary_null_comparison
-                      if (images != null && images.isNotEmpty) {
-                        setDialogState(() {
-                          for (var image in images) {
-                            _beforeFixImages.add(File(image.path));
-                          }
-                        });
-                      }
-                    },
-                    (index) {
-                      setDialogState(() {
-                        _beforeFixImages.removeAt(index);
-                      });
-                    },
-                  ),
+                    // Content
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Upload images before and after fixing the issue:',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                            const SizedBox(height: 20),
 
-                  const SizedBox(height: 20),
+                            // Before fix images section
+                            _buildSimpleImageSection(
+                              'Before Fix Images',
+                              tempBeforeImages,
+                              () async {
+                                final images = await _picker.pickMultiImage();
+                                if (images != null && images.isNotEmpty) {
+                                  final remainingSlots =
+                                      10 - tempBeforeImages.length;
+                                  final imagesToAdd =
+                                      images.take(remainingSlots).toList();
+                                  setDialogState(() {
+                                    for (var image in imagesToAdd) {
+                                      tempBeforeImages.add(File(image.path));
+                                    }
+                                  });
+                                }
+                              },
+                              (index) {
+                                setDialogState(() {
+                                  tempBeforeImages.removeAt(index);
+                                });
+                              },
+                              setDialogState,
+                            ),
 
-                  // After fix images
-                  _buildImageUploadSection(
-                    'After Fix Images',
-                    _afterFixImages,
-                    () async {
-                      final images = await _picker.pickMultiImage();
-                      // ignore: unnecessary_null_comparison
-                      if (images != null && images.isNotEmpty) {
-                        setDialogState(() {
-                          for (var image in images) {
-                            _afterFixImages.add(File(image.path));
-                          }
-                        });
-                      }
-                    },
-                    (index) {
-                      setDialogState(() {
-                        _afterFixImages.removeAt(index);
-                      });
-                    },
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  setDialogState(() {
-                    _beforeFixImages.clear();
-                    _afterFixImages.clear();
-                  });
-                  Navigator.pop(context);
-                },
-                child: Text(
-                  'Cancel',
-                  style: GoogleFonts.poppins(
-                    color: Colors.grey[600],
-                  ),
+                            const SizedBox(height: 24),
+
+                            // After fix images section
+                            _buildSimpleImageSection(
+                              'After Fix Images',
+                              tempAfterImages,
+                              () async {
+                                final images = await _picker.pickMultiImage();
+                                if (images != null && images.isNotEmpty) {
+                                  final remainingSlots =
+                                      10 - tempAfterImages.length;
+                                  final imagesToAdd =
+                                      images.take(remainingSlots).toList();
+                                  setDialogState(() {
+                                    for (var image in imagesToAdd) {
+                                      tempAfterImages.add(File(image.path));
+                                    }
+                                  });
+                                }
+                              },
+                              (index) {
+                                setDialogState(() {
+                                  tempAfterImages.removeAt(index);
+                                });
+                              },
+                              setDialogState,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Actions
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(color: Colors.grey.shade300),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                            },
+                            child: Text(
+                              'Cancel',
+                              style: GoogleFonts.poppins(
+                                color: Colors.grey[600],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton(
+                            onPressed: () {
+                              setState(() {
+                                _beforeFixImages = List.from(tempBeforeImages);
+                                _afterFixImages = List.from(tempAfterImages);
+                              });
+                              Navigator.pop(context);
+                              _updateStatus('Fixed');
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF87CEEB),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: Text(
+                              'Mark as Fixed',
+                              style: GoogleFonts.poppins(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _updateStatus('Fixed');
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF87CEEB),
-                ),
-                child: Text(
-                  'Mark as Fixed',
-                  style: GoogleFonts.poppins(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+            );
+          },
+        );
+      },
     );
   }
 
-  Widget _buildImageUploadSection(
+  Widget _buildSimpleImageSection(
     String title,
     List<File> images,
     VoidCallback onPickImages,
-    void Function(int) onRemoveImage,
+    Function(int) onRemoveImage,
+    StateSetter setDialogState,
   ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1377,7 +1458,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
             ),
             const SizedBox(width: 8),
             Text(
-              '(${images.length})',
+              '(${images.length}/10)',
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 color: Colors.grey[600],
@@ -1386,107 +1467,115 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
           ],
         ),
         const SizedBox(height: 8),
-        ElevatedButton.icon(
-          onPressed: onPickImages,
-          icon: const Icon(Icons.photo_library, size: 20),
-          label: Text(
-            'Add Images',
-            style: GoogleFonts.poppins(fontSize: 14),
-          ),
+        ElevatedButton(
+          onPressed: images.length >= 10 ? null : onPickImages,
           style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.grey[100],
-            foregroundColor: Colors.black87,
-            elevation: 0,
+            backgroundColor: images.length >= 10
+                ? Colors.grey[300]
+                : const Color(0xFF87CEEB),
+            foregroundColor:
+                images.length >= 10 ? Colors.grey[500] : Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.photo_library, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Add Images',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ),
         if (images.isNotEmpty) const SizedBox(height: 12),
         if (images.isNotEmpty)
-          SizedBox(
-            height: 80,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: images.length,
-              itemBuilder: (context, index) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: Stack(
-                    children: [
-                      Container(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: List.generate(images.length, (index) {
+              return Stack(
+                children: [
+                  Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(
+                        images[index],
                         width: 80,
                         height: 80,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.file(
-                            images[index],
-                            width: 80,
-                            height: 80,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                color: Colors.grey.shade200,
-                                child: Center(
-                                  child: Icon(
-                                    Icons.broken_image,
-                                    color: Colors.grey.shade500,
-                                    size: 30,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: GestureDetector(
-                          onTap: () => onRemoveImage(index),
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.black54,
-                              shape: BoxShape.circle,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Colors.grey.shade200,
+                            child: Center(
+                              child: Icon(
+                                Icons.broken_image,
+                                color: Colors.grey.shade500,
+                                size: 30,
+                              ),
                             ),
-                            child: const Icon(
-                              Icons.close,
-                              size: 14,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
+                          );
+                        },
                       ),
-                      Positioned(
-                        bottom: 4,
-                        left: 4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            '${index + 1}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 10,
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
-                );
-              },
-            ),
+                  Positioned(
+                    top: 2,
+                    right: 2,
+                    child: GestureDetector(
+                      onTap: () => onRemoveImage(index),
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.close,
+                          size: 12,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 2,
+                    left: 2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        '${index + 1}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 10,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }),
           ),
       ],
     );

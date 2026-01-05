@@ -16,6 +16,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:intl/intl.dart';
+import 'package:carousel_slider/carousel_slider.dart';
 
 class ReportProblemPage extends StatefulWidget {
   const ReportProblemPage({super.key});
@@ -392,7 +393,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
             : userInfo['placeName'],
         'dateTime': Timestamp.fromDate(now), // Current date and time
         'createdAt': Timestamp.now(), // Also store creation timestamp
-        'status': 'Unfixed Reports',
+        'status': 'Monitoring', // CHANGED TO 'Monitoring'
         'isPublic': _isPublicReport,
       };
 
@@ -1351,10 +1352,237 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
   String _selectedStatus = 'All';
   List<String> statusOptions = [
     'All',
-    'Unfixed Reports',
+    'In Progress', // User sees this, but filters for "Monitoring"
     'Fixed',
-    'In Progress'
+    'Unfixed Reports'
   ];
+
+  // Function to display images in a carousel
+  Widget _buildImageCarousel(List<String> base64Images, String title) {
+    if (base64Images.isEmpty) {
+      return Container(
+        height: 150,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade200,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.image, size: 40, color: Colors.grey.shade500),
+              const SizedBox(height: 8),
+              Text(
+                'No $title images',
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '$title (${base64Images.length})',
+          style: GoogleFonts.poppins(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 8),
+        CarouselSlider.builder(
+          itemCount: base64Images.length,
+          options: CarouselOptions(
+            height: 180,
+            aspectRatio: 16 / 9,
+            viewportFraction: 0.8,
+            initialPage: 0,
+            enableInfiniteScroll: base64Images.length > 1,
+            reverse: false,
+            autoPlay: base64Images.length > 1,
+            autoPlayInterval: const Duration(seconds: 3),
+            autoPlayAnimationDuration: const Duration(milliseconds: 800),
+            autoPlayCurve: Curves.fastOutSlowIn,
+            enlargeCenterPage: true,
+            enlargeFactor: 0.3,
+            scrollDirection: Axis.horizontal,
+          ),
+          itemBuilder: (context, index, realIndex) {
+            return Container(
+              margin: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.memory(
+                  base64Decode(base64Images[index]),
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      color: Colors.grey.shade300,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.broken_image,
+                                size: 40, color: Colors.grey),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Image ${index + 1}',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+        if (base64Images.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.swipe, size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  'Swipe to view ${base64Images.length} images',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  // Widget for single image display
+  Widget _buildSingleImage(String base64Image, String title) {
+    try {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$title (1)',
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            height: 180,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 6,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.memory(
+                base64Decode(base64Image),
+                fit: BoxFit.cover,
+                width: double.infinity,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: Colors.grey.shade300,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.broken_image,
+                              size: 40, color: Colors.grey),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Image not available',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      );
+    } catch (e) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$title (1)',
+            style: GoogleFonts.poppins(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            height: 180,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 40, color: Colors.grey),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Failed to load image',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1513,14 +1741,22 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                   );
                 }
 
-                // Filter reports
+                // Filter reports - CORRECTED LOGIC
                 List<QueryDocumentSnapshot> filteredDocs = docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
+                  final reportStatus =
+                      data['status'] as String? ?? 'Monitoring';
 
-                  // Status filter
-                  if (_selectedStatus != 'All' &&
-                      data['status'] != _selectedStatus) {
-                    return false;
+                  // Status filter - CORRECTED: Each filter shows ONLY its specific status
+                  if (_selectedStatus != 'All') {
+                    if (_selectedStatus == 'In Progress') {
+                      // When user selects "In Progress", show ONLY "Monitoring" status
+                      return reportStatus == 'Monitoring';
+                    } else if (_selectedStatus == 'Fixed') {
+                      return reportStatus == 'Fixed';
+                    } else if (_selectedStatus == 'Unfixed Reports') {
+                      return reportStatus == 'Unfixed Reports';
+                    }
                   }
 
                   // Search filter
@@ -1530,8 +1766,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                         .toLowerCase();
                     final placeName =
                         (data['placeName'] ?? '').toString().toLowerCase();
-                    final status =
-                        (data['status'] ?? '').toString().toLowerCase();
+                    final status = reportStatus.toLowerCase();
 
                     return issueDesc.contains(_searchQuery.toLowerCase()) ||
                         placeName.contains(_searchQuery.toLowerCase()) ||
@@ -1596,19 +1831,37 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
       Map<String, dynamic> data, String reportId, int index) {
     final issueDesc = data['issueDescription'] ?? 'No description';
     final placeName = data['placeName'] ?? 'Unknown location';
-    final status = data['status'] ?? 'Unfixed Reports';
+    final status =
+        data['status'] ?? 'Monitoring'; // Get actual status from database
     final dateTime =
         (data['dateTime'] as Timestamp?)?.toDate() ?? DateTime.now();
     final imageCount = data['imageCount'] ?? 0;
     final isPublic = data['isPublic'] ?? false;
     final additionalInfo = data['additionalLocationInfo'] ?? '';
+    final monitoringDate = (data['monitoringDate'] as Timestamp?)?.toDate();
+    final assignedPlumber = data['assignedPlumber'] ?? '';
+    final assessment = data['assessment'] ?? '';
+    final fixedByName = data['fixedByName'] ?? '';
+    final fixedAt = (data['fixedAt'] as Timestamp?)?.toDate();
+
+    // Get original images (if any)
+    final originalImages =
+        (data['images'] as List<dynamic>?)?.cast<String>() ?? [];
+
+    // Get before/after fix images uploaded by plumber
+    final beforeFixImages =
+        (data['beforeFixImages'] as List<dynamic>?)?.cast<String>() ?? [];
+    final afterFixImages =
+        (data['afterFixImages'] as List<dynamic>?)?.cast<String>() ?? [];
+    final beforeFixImageCount = data['beforeFixImageCount'] ?? 0;
+    final afterFixImageCount = data['afterFixImageCount'] ?? 0;
 
     // Status color
-    Color statusColor = Colors.red.shade700;
+    Color statusColor = Colors.orange.shade800; // Default for 'Monitoring'
     if (status == 'Fixed') {
       statusColor = Colors.green.shade700;
-    } else if (status == 'In Progress') {
-      statusColor = Colors.orange.shade800;
+    } else if (status == 'Unfixed Reports') {
+      statusColor = Colors.red.shade700;
     }
 
     return FadeInUp(
@@ -1785,8 +2038,41 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Images Count
-                  if (imageCount > 0)
+                  // Original Images (from resident)
+                  if (originalImages.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    originalImages.length == 1
+                        ? _buildSingleImage(
+                            originalImages[0], 'Original Images')
+                        : _buildImageCarousel(
+                            originalImages, 'Original Images'),
+                  ],
+
+                  // Before Fix Images (uploaded by plumber)
+                  if (status == 'Fixed' && beforeFixImages.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    beforeFixImages.length == 1
+                        ? _buildSingleImage(
+                            beforeFixImages[0], 'Before Fix Images')
+                        : _buildImageCarousel(
+                            beforeFixImages, 'Before Fix Images'),
+                  ],
+
+                  // After Fix Images (uploaded by plumber)
+                  if (status == 'Fixed' && afterFixImages.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    afterFixImages.length == 1
+                        ? _buildSingleImage(
+                            afterFixImages[0], 'After Fix Images')
+                        : _buildImageCarousel(
+                            afterFixImages, 'After Fix Images'),
+                  ],
+
+                  // Images Count (if no images shown above)
+                  if (imageCount > 0 &&
+                      originalImages.isEmpty &&
+                      beforeFixImages.isEmpty &&
+                      afterFixImages.isEmpty)
                     Row(
                       children: [
                         Icon(Icons.image_outlined,
@@ -1801,7 +2087,11 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                         ),
                       ],
                     ),
-                  if (imageCount > 0) const SizedBox(height: 12),
+                  if (imageCount > 0 &&
+                      originalImages.isEmpty &&
+                      beforeFixImages.isEmpty &&
+                      afterFixImages.isEmpty)
+                    const SizedBox(height: 12),
 
                   // Status with icon
                   Row(
@@ -1823,6 +2113,126 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                     ],
                   ),
                   const SizedBox(height: 12),
+
+                  // Fixed By and Fixed At (for fixed reports)
+                  if (status == 'Fixed' && fixedByName.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        Icon(Icons.verified_user,
+                            size: 16, color: Colors.green.shade600),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Fixed By: $fixedByName',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            color: Colors.green.shade800,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+
+                  if (status == 'Fixed' && fixedAt != null) ...[
+                    Row(
+                      children: [
+                        Icon(Icons.timer,
+                            size: 16, color: Colors.green.shade600),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Fixed At: ${DateFormat('MMM dd, yyyy • hh:mm a').format(fixedAt)}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            color: Colors.green.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Assessment (if exists)
+                  if (assessment.isNotEmpty) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.amber.shade200),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.assessment_outlined,
+                                size: 16,
+                                color: Colors.amber.shade700,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Plumber Assessment',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.amber.shade800,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            assessment,
+                            style: GoogleFonts.poppins(
+                              fontSize: 13,
+                              color: Colors.amber.shade900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+
+                  // Assigned Plumber (if monitoring)
+                  if (assignedPlumber.isNotEmpty && status != 'Fixed')
+                    Row(
+                      children: [
+                        Icon(Icons.person_outline,
+                            size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Assigned Plumber: ${assignedPlumber.substring(0, 8)}...',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (assignedPlumber.isNotEmpty && status != 'Fixed')
+                    const SizedBox(height: 12),
+
+                  // Monitoring Date (if monitoring)
+                  if (monitoringDate != null && status != 'Fixed')
+                    Row(
+                      children: [
+                        Icon(Icons.calendar_today_outlined,
+                            size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Monitoring Date: ${DateFormat('MMM dd, yyyy').format(monitoringDate)}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  if (monitoringDate != null && status != 'Fixed')
+                    const SizedBox(height: 12),
 
                   // Full Date Time
                   Row(
@@ -1853,9 +2263,10 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
     switch (status) {
       case 'Fixed':
         return Icons.check_circle_outline;
-      case 'In Progress':
-        return Icons.build_outlined;
+      case 'Monitoring':
+        return Icons.monitor_heart_outlined;
       case 'Unfixed Reports':
+        return Icons.report_problem_outlined;
       default:
         return Icons.report_problem_outlined;
     }

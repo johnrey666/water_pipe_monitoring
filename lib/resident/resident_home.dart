@@ -32,8 +32,6 @@ class ResidentHomePage extends StatefulWidget {
 class _ResidentHomePageState extends State<ResidentHomePage>
     with TickerProviderStateMixin {
   ResidentPage _selectedPage = ResidentPage.home;
-  final GlobalKey _notificationButtonKey = GlobalKey();
-  OverlayEntry? _notificationOverlay;
   String _residentName = 'Resident';
   String? _residentId;
   int _unreadNotifCount = 0;
@@ -44,27 +42,33 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   String _meterNumber = 'N/A';
   String _purok = 'N/A';
   String _address = 'N/A';
-
   // Create page instances once and reuse them
   late final ReportProblemPage _reportPage;
   late final ViewBillingPage _billingPage;
   bool _pagesInitialized = false;
-
   // PageStorage bucket to preserve state
   final PageStorageBucket _bucket = PageStorageBucket();
-
   // Stream subscription for new bills
   StreamSubscription<QuerySnapshot>? _billsSubscription;
+
+  // Cached futures to prevent refetching on every rebuild
+  late Future<double> _totalConsumptionFuture;
+  late Future<double> _thisMonthConsumptionFuture;
+  late Future<double> _averageConsumptionFuture;
+  late Future<List<Map<String, dynamic>>> _lastSixMonthsFuture;
 
   @override
   void initState() {
     super.initState();
+    _totalConsumptionFuture = _fetchTotalWaterConsumption();
+    _thisMonthConsumptionFuture = _fetchThisMonthConsumption();
+    _averageConsumptionFuture = _fetchAverageMonthlyConsumption();
+    _lastSixMonthsFuture = _fetchLastSixMonthsConsumption();
     _fetchResidentData();
     _fetchUnreadNotifCount();
     _setupBillNotificationListener();
     _fetchCurrentBill();
     _fetchUserProfile();
-
     // Initialize pages that don't need residentId
     if (!_pagesInitialized) {
       _reportPage = const ReportProblemPage();
@@ -76,7 +80,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   @override
   void dispose() {
     _billsSubscription?.cancel();
-    _removeNotificationOverlay();
     super.dispose();
   }
 
@@ -84,13 +87,11 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
-
       final doc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .get();
       final data = doc.data();
-
       if (data != null && mounted) {
         setState(() {
           _meterNumber = data['meterNumber']?.toString() ?? 'N/A';
@@ -107,10 +108,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
-
       final currentYear = DateTime.now().year;
       final currentMonth = DateTime.now().month;
-
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -119,12 +118,10 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           .where('month', isEqualTo: currentMonth)
           .limit(1)
           .get();
-
       if (snapshot.docs.isNotEmpty) {
         final bill = snapshot.docs.first.data();
         final amount = bill['currentMonthBill']?.toDouble() ?? 0.0;
         final status = bill['status']?.toString() ?? 'unpaid';
-
         if (mounted) {
           setState(() {
             _currentBillAmount = amount;
@@ -140,11 +137,9 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   Future<void> _setupBillNotificationListener() async {
     User? user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-
     setState(() {
       _residentId = user.uid;
     });
-
     // Listen for new bills
     _billsSubscription = FirebaseFirestore.instance
         .collection('users')
@@ -158,11 +153,9 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         final bill = snapshot.docs.first;
         final billData = bill.data();
         final billTimestamp = billData['issueDate'] as Timestamp?;
-
         if (billTimestamp != null) {
           final billTime = billTimestamp.toDate();
           final now = DateTime.now();
-
           // Check if bill was created within the last 5 minutes (to avoid duplicate notifications)
           if (now.difference(billTime).inMinutes < 5) {
             // Check if notification already exists for this bill
@@ -173,7 +166,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                 .where('type', isEqualTo: 'new_bill')
                 .limit(1)
                 .get();
-
             if (existingNotif.docs.isEmpty) {
               // Create notification for new bill
               await _createNewBillNotification(bill.id, billData);
@@ -192,7 +184,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           ? DateFormat('MMM yyyy').format(periodStart)
           : 'Current Month';
       final amount = billData['currentMonthBill']?.toDouble() ?? 0.0;
-
       final notificationData = {
         'userId': _residentId!,
         'type': 'new_bill',
@@ -206,11 +197,9 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         'read': false,
         'timestamp': FieldValue.serverTimestamp(),
       };
-
       await FirebaseFirestore.instance
           .collection('notifications')
           .add(notificationData);
-
       // Update notification count
       _fetchUnreadNotifCount();
     } catch (e) {
@@ -409,10 +398,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     try {
       User? user = FirebaseAuth.instance.currentUser;
       if (user == null) return {'amount': 0.0, 'status': 'No bill'};
-
       final currentYear = DateTime.now().year;
       final currentMonth = DateTime.now().month;
-
       final snapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -421,7 +408,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           .where('month', isEqualTo: currentMonth)
           .limit(1)
           .get();
-
       if (snapshot.docs.isNotEmpty) {
         final bill = snapshot.docs.first.data();
         return {
@@ -492,17 +478,21 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   Future<void> _refreshDashboard() async {
     await Future.delayed(const Duration(seconds: 1));
     if (mounted) {
+      setState(() {
+        _totalConsumptionFuture = _fetchTotalWaterConsumption();
+        _thisMonthConsumptionFuture = _fetchThisMonthConsumption();
+        _averageConsumptionFuture = _fetchAverageMonthlyConsumption();
+        _lastSixMonthsFuture = _fetchLastSixMonthsConsumption();
+      });
       _fetchResidentData();
       _fetchUnreadNotifCount();
       _fetchCurrentBill();
       _fetchUserProfile();
-      setState(() {});
     }
   }
 
   void _onSelectPage(ResidentPage page) {
     if (!mounted) return;
-    _removeNotificationOverlay();
     Future.microtask(() {
       if (mounted) {
         setState(() {
@@ -590,17 +580,12 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   // FIXED: Improved notification tap handler to prevent app reload
   void _handleNotificationTap(Map<String, dynamic> notification) async {
-    // Close overlay immediately
-    _removeNotificationOverlay();
-
     // Mark as read if unread - do this asynchronously without waiting
     if (!notification['isRead'] && notification['id'] != null) {
       Future.microtask(() => _markNotificationAsRead(notification['id']));
     }
-
     // Handle different notification types WITHOUT calling setState
     final type = notification['type'];
-
     if (type == 'new_bill' || type == 'bill_updated') {
       // For bill notifications, navigate to billing page WITHOUT setState
       if (_selectedPage != ResidentPage.billing) {
@@ -612,7 +597,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           }
         });
       }
-      
+
       // Show a snackbar
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -853,91 +838,58 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     }
   }
 
-  // FIXED: Improved overlay handling
-  void _showNotificationOverlay() {
-    // If overlay already exists, just remove it (toggle behavior)
-    if (_notificationOverlay != null) {
-      _removeNotificationOverlay();
-      return;
-    }
+  // FIXED: Use showMenu instead of PopupMenuButton to avoid reloads
+  void _showNotificationDropdown() async {
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final position = renderBox.localToGlobal(Offset.zero);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _notificationButtonKey.currentContext == null) return;
-      
-      try {
-        final RenderBox renderBox = _notificationButtonKey.currentContext!
-            .findRenderObject() as RenderBox;
-        final position = renderBox.localToGlobal(Offset.zero);
-        final size = renderBox.size;
-        final screenSize = MediaQuery.of(context).size;
-        
-        _notificationOverlay = OverlayEntry(
-          builder: (context) {
-            return Stack(
-              children: [
-                // FULLSCREEN TRANSPARENT TAP-BARRIER
-                GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: _removeNotificationOverlay,
-                  child: Container(
-                    width: screenSize.width,
-                    height: screenSize.height,
-                    color: Colors.transparent,
-                  ),
-                ),
-                // Notification dropdown
-                Positioned(
-                  right: screenSize.width - position.dx - size.width,
-                  top: position.dy + size.height + 8,
-                  child: Material(
-                    elevation: 8,
-                    borderRadius: BorderRadius.circular(12),
-                    child: ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: screenSize.width * 0.9,
-                        maxHeight: screenSize.height * 0.7,
-                      ),
-                      child: NotificationDropdown(
-                        onNotificationTap: _handleNotificationTap,
-                        onMarkAsRead: _markNotificationAsRead,
-                        onClose: _removeNotificationOverlay,
-                        fetchNotifications: _fetchNotifications,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-        
-        if (mounted) {
-          Overlay.of(context).insert(_notificationOverlay!);
-        }
-      } catch (e) {
-        print('Error showing notification overlay: $e');
-        _removeNotificationOverlay();
-      }
-    });
-  }
+    // Fetch notifications first
+    final notifications = await _fetchNotifications();
 
-  // FIXED: Improved overlay removal
-  void _removeNotificationOverlay() {
-    if (_notificationOverlay != null) {
-      final overlay = _notificationOverlay!;
-      _notificationOverlay = null;
-      
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        try {
-          overlay.remove();
-        } catch (e) {
-          // Overlay might already be removed, ignore
-        }
-        
-        // Don't unfocus here - this was causing text fields to lose input
-        // Let the notification tap handler decide what to do with focus
-      });
-    }
+    await showMenu(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        position.dx - 200, // Left position
+        position.dy + 50, // Top position (below the button)
+        position.dx + 150, // Right position
+        position.dy + 450, // Bottom position
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey.shade300, width: 1),
+      ),
+      constraints: const BoxConstraints(
+        minWidth: 350,
+        maxWidth: 350,
+        minHeight: 200,
+        maxHeight: 400,
+      ),
+      items: [
+        PopupMenuItem(
+          enabled: false,
+          padding: EdgeInsets.zero,
+          child: SizedBox(
+            width: 350,
+            height: 400,
+            child: Material(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              child: NotificationDropdown(
+                notificationsData: notifications,
+                onNotificationTap: (notification) {
+                  Navigator.of(context).pop();
+                  _handleNotificationTap(notification);
+                },
+                onMarkAsRead: _markNotificationAsRead,
+                onClose: () => Navigator.of(context).pop(),
+                onRefreshCount: _fetchUnreadNotifCount,
+                fetchNotifications: _fetchNotifications,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -1007,37 +959,32 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           elevation: 2,
           leading: Builder(
             builder: (context) => IconButton(
-              icon: Icon(Icons.menu, color: Colors.blue.shade700),
+              icon: const Icon(Icons.menu, color: Colors.blue),
               onPressed: () => Scaffold.of(context).openDrawer(),
             ),
           ),
           actions: [
+            // Simple IconButton with overlay dropdown
             Stack(
               children: [
                 IconButton(
-                  key: _notificationButtonKey,
                   icon: Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: Colors.blue.shade50,
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
+                    child: const Padding(
+                      padding: EdgeInsets.all(8.0),
                       child: Icon(
                         Icons.notifications_outlined,
-                        color: Colors.blue.shade700,
+                        color: Colors.blue,
                         size: 24,
                       ),
                     ),
                   ),
                   onPressed: () {
                     if (!mounted) return;
-                    // Use a small delay to ensure any previous operations are complete
-                    Future.delayed(const Duration(milliseconds: 10), () {
-                      if (mounted) {
-                        _showNotificationOverlay();
-                      }
-                    });
+                    _showNotificationDropdown();
                   },
                 ),
                 if (_unreadNotifCount > 0)
@@ -1218,11 +1165,11 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              CircularProgressIndicator(
+                              const CircularProgressIndicator(
                                 valueColor: AlwaysStoppedAnimation<Color>(
                                     Color(0xFF87CEEB)),
                               ),
-                              SizedBox(height: 16),
+                              const SizedBox(height: 16),
                               Text(
                                 'Loading user data...',
                                 style: GoogleFonts.poppins(
@@ -1305,7 +1252,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         builder: (context, constraints) {
           return SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: EdgeInsets.all(16.0),
+            padding: const EdgeInsets.all(16.0),
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 minHeight: constraints.maxHeight,
@@ -1401,9 +1348,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                       ),
                     ),
                   ),
-
                   const SizedBox(height: 16),
-
                   // Quick Stats Row - Made responsive
                   SizedBox(
                     height: constraints.maxWidth < 600 ? 140 : 130,
@@ -1413,7 +1358,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                           child: ElasticIn(
                             duration: const Duration(milliseconds: 300),
                             child: FutureBuilder<double>(
-                              future: _fetchTotalWaterConsumption(),
+                              future: _totalConsumptionFuture,
                               builder: (context, snapshot) {
                                 String value = 'Loading...';
                                 if (snapshot.hasData) {
@@ -1440,7 +1385,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                             duration: const Duration(milliseconds: 300),
                             delay: const Duration(milliseconds: 100),
                             child: FutureBuilder<double>(
-                              future: _fetchThisMonthConsumption(),
+                              future: _thisMonthConsumptionFuture,
                               builder: (context, snapshot) {
                                 String value = 'Loading...';
                                 if (snapshot.hasData) {
@@ -1468,7 +1413,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                               duration: const Duration(milliseconds: 300),
                               delay: const Duration(milliseconds: 200),
                               child: FutureBuilder<double>(
-                                future: _fetchAverageMonthlyConsumption(),
+                                future: _averageConsumptionFuture,
                                 builder: (context, snapshot) {
                                   String value = 'Loading...';
                                   if (snapshot.hasData) {
@@ -1493,7 +1438,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                       ],
                     ),
                   ),
-
                   // Show average consumption as separate card on small screens
                   if (constraints.maxWidth <= 400) ...[
                     const SizedBox(height: 12),
@@ -1501,7 +1445,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                       duration: const Duration(milliseconds: 300),
                       delay: const Duration(milliseconds: 200),
                       child: FutureBuilder<double>(
-                        future: _fetchAverageMonthlyConsumption(),
+                        future: _averageConsumptionFuture,
                         builder: (context, snapshot) {
                           String value = 'Loading...';
                           if (snapshot.hasData) {
@@ -1522,16 +1466,13 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                       ),
                     ),
                   ],
-
                   const SizedBox(height: 16),
-
                   // Monthly Usage Chart
                   FadeInUp(
                     duration: const Duration(milliseconds: 300),
                     child: _buildMonthlyUsageChart(constraints),
                   ),
                   const SizedBox(height: 16),
-
                   // Water Conservation Tips
                   FadeInUp(
                     duration: const Duration(milliseconds: 300),
@@ -1585,7 +1526,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                     ),
                   ),
                   const SizedBox(height: 16),
-
                   // Important Contacts
                   FadeInUp(
                     duration: const Duration(milliseconds: 300),
@@ -1633,7 +1573,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                           _buildContactItem(
                             icon: Icons.email,
                             title: 'Email Support',
-                            subtitle: 'support@waterbilling.com',
+                            subtitle: '<support@waterbilling.com>',
                             color: Colors.green.shade600,
                           ),
                         ],
@@ -1780,12 +1720,11 @@ class _ResidentHomePageState extends State<ResidentHomePage>
 
   Widget _buildMonthlyUsageChart(BoxConstraints constraints) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _fetchLastSixMonthsConsumption(),
+      future: _lastSixMonthsFuture,
       builder: (context, snapshot) {
         List<BarChartGroupData> barGroups = [];
         double maxY = 250.0;
         List<String> monthNames = [];
-
         if (snapshot.hasData) {
           final months = snapshot.data!;
           monthNames = months.map((m) => m['monthName'].toString()).toList();
@@ -1805,7 +1744,6 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           barGroups =
               List.generate(6, (index) => _buildBarGroup(index, 0.0, 'Err'));
         }
-
         return Container(
           width: double.infinity,
           decoration: BoxDecoration(
@@ -1996,19 +1934,23 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   }
 }
 
-// FIXED: Enhanced Notification Dropdown with better state management
+// UPDATED: NotificationDropdown now accepts notificationsData to prevent reloads
 class NotificationDropdown extends StatefulWidget {
+  final Map<String, List<Map<String, dynamic>>> notificationsData;
   final Function(Map<String, dynamic>) onNotificationTap;
   final Function(String) onMarkAsRead;
   final VoidCallback onClose;
+  final VoidCallback? onRefreshCount;
   final Future<Map<String, List<Map<String, dynamic>>>> Function()
       fetchNotifications;
 
   const NotificationDropdown({
     super.key,
+    required this.notificationsData,
     required this.onNotificationTap,
     required this.onMarkAsRead,
     required this.onClose,
+    this.onRefreshCount,
     required this.fetchNotifications,
   });
 
@@ -2018,11 +1960,8 @@ class NotificationDropdown extends StatefulWidget {
 
 class _NotificationDropdownState extends State<NotificationDropdown>
     with AutomaticKeepAliveClientMixin {
-  Map<String, List<Map<String, dynamic>>> _notificationsData = {
-    'unread': [],
-    'read': []
-  };
-  bool _isLoading = true;
+  late Map<String, List<Map<String, dynamic>>> _notificationsData;
+  bool _isLoading = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -2030,11 +1969,14 @@ class _NotificationDropdownState extends State<NotificationDropdown>
   @override
   void initState() {
     super.initState();
-    _loadNotifications();
+    _notificationsData = widget.notificationsData;
   }
 
   Future<void> _loadNotifications() async {
     try {
+      setState(() {
+        _isLoading = true;
+      });
       final data = await widget.fetchNotifications();
       if (mounted) {
         setState(() {
@@ -2055,7 +1997,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
   @override
   Widget build(BuildContext context) {
     super.build(context);
-    
+
     if (_isLoading) {
       return Container(
         width: 350,
@@ -2071,11 +2013,10 @@ class _NotificationDropdownState extends State<NotificationDropdown>
         ),
       );
     }
-    
+
     final unread = _notificationsData['unread']!;
     final read = _notificationsData['read']!;
     final allNotifications = [...unread, ...read];
-
     if (allNotifications.isEmpty) {
       return Container(
         width: 350,
@@ -2112,10 +2053,8 @@ class _NotificationDropdownState extends State<NotificationDropdown>
         ),
       );
     }
-
     allNotifications.sort((a, b) =>
         (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime));
-
     return Container(
       width: 350,
       height: 400,
@@ -2179,7 +2118,6 @@ class _NotificationDropdownState extends State<NotificationDropdown>
               ],
             ),
           ),
-
           // Notifications list
           Expanded(
             child: ListView.separated(
@@ -2199,7 +2137,6 @@ class _NotificationDropdownState extends State<NotificationDropdown>
               },
             ),
           ),
-
           // Footer
           Container(
             padding: const EdgeInsets.all(8),
@@ -2226,6 +2163,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                         }
                       }
                       _loadNotifications(); // Refresh the list
+                      widget.onRefreshCount?.call(); // Update badge count
                     },
                     icon: Icon(Icons.mark_chat_read,
                         size: 14, color: Colors.blue.shade700),
@@ -2267,12 +2205,10 @@ class _NotificationDropdownState extends State<NotificationDropdown>
     final status = notification['status'];
     final month = notification['month'];
     final amount = notification['amount'];
-
     // Determine icon and color based on type and status
     IconData icon;
     Color iconColor;
     Color backgroundColor = isRead ? Colors.white : Colors.blue.shade50;
-
     switch (type) {
       case 'new_bill':
         icon = Icons.receipt;
@@ -2322,7 +2258,6 @@ class _NotificationDropdownState extends State<NotificationDropdown>
         icon = Icons.notifications;
         iconColor = Colors.blue.shade700;
     }
-
     return Material(
       color: backgroundColor,
       child: InkWell(
@@ -2359,7 +2294,6 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                     ),
                 ],
               ),
-
               // Notification content
               Expanded(
                 child: Column(
@@ -2397,7 +2331,6 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                           ),
                       ],
                     ),
-
                     // Message
                     if (message.isNotEmpty) ...[
                       const SizedBox(height: 4),
@@ -2413,7 +2346,6 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
-
                     // New bill details (if applicable)
                     if (type == 'new_bill' &&
                         month != null &&
@@ -2462,7 +2394,6 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                         ),
                       ),
                     ],
-
                     // Timestamp
                     const SizedBox(height: 6),
                     Row(
@@ -2510,7 +2441,6 @@ class _NotificationDropdownState extends State<NotificationDropdown>
 // FIXED: Rejected Payment Dialog with proper overflow handling for receipts
 class _RejectedPaymentDialog extends StatefulWidget {
   final Map<String, dynamic> paymentDetails;
-
   const _RejectedPaymentDialog({required this.paymentDetails});
 
   @override
@@ -2546,10 +2476,10 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
     final formattedProcessedDate = processedDate != null
         ? DateFormat.yMMMd().format(processedDate)
         : DateFormat.yMMMd().format(DateTime.now());
-    
+
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
-    
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(16),
@@ -2622,11 +2552,13 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                           Flexible(
                             child: Row(
                               children: [
-                                Image.asset('assets/images/icon.png', height: 40),
+                                Image.asset('assets/images/icon.png',
+                                    height: 40),
                                 const SizedBox(width: 8),
                                 Flexible(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       const Text(
                                         'San Jose Water Services',
@@ -2751,7 +2683,8 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                                   child: Row(
                                     children: [
                                       Icon(Icons.receipt,
-                                          color: Colors.blue.shade700, size: 18),
+                                          color: Colors.blue.shade700,
+                                          size: 18),
                                       const SizedBox(width: 8),
                                       Flexible(
                                         child: Text(
@@ -2816,7 +2749,8 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                                     child: Image.memory(
                                       base64.decode(receiptImage),
                                       fit: BoxFit.contain,
-                                      errorBuilder: (context, error, stackTrace) {
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
                                         return Center(
                                           child: Column(
                                             mainAxisAlignment:
@@ -3203,9 +3137,9 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
     final formattedProcessedDate = processedDate != null
         ? DateFormat.yMMMd().format(processedDate)
         : DateFormat.yMMMd().format(DateTime.now());
-    
+
     final screenWidth = MediaQuery.of(context).size.width;
-    
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(16),
@@ -3495,8 +3429,8 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                       Expanded(
                         child: ElevatedButton.icon(
                           onPressed: () => Navigator.pop(context),
-                          icon:
-                              const Icon(Icons.check_circle, color: Colors.white),
+                          icon: const Icon(Icons.check_circle,
+                              color: Colors.white),
                           label: const Text(
                             'Close',
                             style: TextStyle(
