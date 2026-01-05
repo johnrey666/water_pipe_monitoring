@@ -1022,8 +1022,8 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
   bool _isUpdating = false;
   final TextEditingController _assessmentController = TextEditingController();
   final ImagePicker _picker = ImagePicker();
-  List<XFile> _beforeFixImages = [];
-  List<XFile> _afterFixImages = [];
+  List<File> _beforeFixImages = [];
+  List<File> _afterFixImages = [];
 
   @override
   void dispose() {
@@ -1043,13 +1043,13 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
       List<String> beforeFixBase64 = [];
       List<String> afterFixBase64 = [];
 
-      for (var image in _beforeFixImages) {
-        final bytes = await image.readAsBytes();
+      for (var imageFile in _beforeFixImages) {
+        final bytes = await imageFile.readAsBytes();
         beforeFixBase64.add(base64Encode(bytes));
       }
 
-      for (var image in _afterFixImages) {
-        final bytes = await image.readAsBytes();
+      for (var imageFile in _afterFixImages) {
+        final bytes = await imageFile.readAsBytes();
         afterFixBase64.add(base64Encode(bytes));
       }
 
@@ -1276,9 +1276,14 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                     _beforeFixImages,
                     () async {
                       final images = await _picker.pickMultiImage();
-                      setDialogState(() {
-                        _beforeFixImages.addAll(images);
-                      });
+                      // ignore: unnecessary_null_comparison
+                      if (images != null && images.isNotEmpty) {
+                        setDialogState(() {
+                          for (var image in images) {
+                            _beforeFixImages.add(File(image.path));
+                          }
+                        });
+                      }
                     },
                     (index) {
                       setDialogState(() {
@@ -1295,9 +1300,14 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                     _afterFixImages,
                     () async {
                       final images = await _picker.pickMultiImage();
-                      setDialogState(() {
-                        _afterFixImages.addAll(images);
-                      });
+                      // ignore: unnecessary_null_comparison
+                      if (images != null && images.isNotEmpty) {
+                        setDialogState(() {
+                          for (var image in images) {
+                            _afterFixImages.add(File(image.path));
+                          }
+                        });
+                      }
                     },
                     (index) {
                       setDialogState(() {
@@ -1310,7 +1320,13 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  setDialogState(() {
+                    _beforeFixImages.clear();
+                    _afterFixImages.clear();
+                  });
+                  Navigator.pop(context);
+                },
                 child: Text(
                   'Cancel',
                   style: GoogleFonts.poppins(
@@ -1343,7 +1359,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
 
   Widget _buildImageUploadSection(
     String title,
-    List<XFile> images,
+    List<File> images,
     VoidCallback onPickImages,
     void Function(int) onRemoveImage,
   ) {
@@ -1381,6 +1397,9 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
             backgroundColor: Colors.grey[100],
             foregroundColor: Colors.black87,
             elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         ),
         if (images.isNotEmpty) const SizedBox(height: 12),
@@ -1395,13 +1414,33 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                   padding: const EdgeInsets.only(right: 8),
                   child: Stack(
                     children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          File(images[index].path),
-                          width: 80,
-                          height: 80,
-                          fit: BoxFit.cover,
+                      Container(
+                        width: 80,
+                        height: 80,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(
+                            images[index],
+                            width: 80,
+                            height: 80,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: Colors.grey.shade200,
+                                child: Center(
+                                  child: Icon(
+                                    Icons.broken_image,
+                                    color: Colors.grey.shade500,
+                                    size: 30,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                         ),
                       ),
                       Positioned(
@@ -1419,6 +1458,26 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                               Icons.close,
                               size: 14,
                               color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 4,
+                        left: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            '${index + 1}',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                         ),
@@ -1552,49 +1611,75 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
 
   // Widget for single image display
   Widget _buildSingleImage(String base64Image, String issueDescription) {
-    return Container(
-      height: 180,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 6,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Image.memory(
-          base64Decode(base64Image),
-          fit: BoxFit.cover,
-          width: double.infinity,
-          errorBuilder: (context, error, stackTrace) {
-            return Container(
-              color: Colors.grey.shade300,
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.broken_image,
-                        size: 40, color: Colors.grey),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Image not available',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.grey.shade600,
+    try {
+      return Container(
+        height: 180,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 6,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.memory(
+            base64Decode(base64Image),
+            fit: BoxFit.cover,
+            width: double.infinity,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                color: Colors.grey.shade300,
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.broken_image,
+                          size: 40, color: Colors.grey),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Image not available',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    } catch (e) {
+      return Container(
+        height: 180,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade300,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 40, color: Colors.grey),
+              const SizedBox(height: 8),
+              Text(
+                'Failed to load image',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
                 ),
               ),
-            );
-          },
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   @override

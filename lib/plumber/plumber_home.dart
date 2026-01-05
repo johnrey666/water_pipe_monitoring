@@ -1,3 +1,5 @@
+// ignore_for_file: unnecessary_cast, unused_element
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -45,6 +47,9 @@ class _PlumberHomePageState extends State<PlumberHomePage>
 
   // Monitoring events for calendar
   Map<DateTime, List<Map<String, dynamic>>> _monitoringEvents = {};
+
+  // Prevent multiple navigations
+  bool _isNavigating = false;
 
   @override
   void initState() {
@@ -176,24 +181,54 @@ class _PlumberHomePageState extends State<PlumberHomePage>
   }
 
   void _handleNotificationTap(Map<String, dynamic> notif) async {
-    if (!(notif['read'] ?? false)) {
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .doc(notif['id'])
-          .update({'read': true});
-      setState(() {
-        _unreadCount--;
-      });
+    if (_isNavigating) return;
+    _isNavigating = true;
+    
+    try {
+      // Mark as read if not already read
+      if (!(notif['read'] ?? false)) {
+        await FirebaseFirestore.instance
+            .collection('notifications')
+            .doc(notif['id'])
+            .update({'read': true});
+        setState(() {
+          _unreadCount--;
+        });
+      }
+      
+      _removeNotificationOverlay();
+      
+      // Add a small delay to ensure overlay is removed
+      await Future.delayed(const Duration(milliseconds: 50));
+      
+      // Handle the notification based on type
+      if (notif['monitoringId'] != null) {
+        _showWeeklyMonitoringModal(monitoringId: notif['monitoringId']);
+      } else if (notif['reportId'] != null) {
+        // Clear any existing report ID first
+        setState(() {
+          _initialReportId = null;
+        });
+        
+        // Wait for state to update
+        await Future.delayed(const Duration(milliseconds: 50));
+        
+        // Navigate to reports page with the report ID
+        if (mounted) {
+          setState(() {
+            _initialReportId = notif['reportId'];
+            _selectedPage = PlumberPage.reports;
+          });
+        }
+      } else {
+        // General notification - just close the overlay
+        print('General notification tapped: ${notif['title']}');
+      }
+    } catch (e) {
+      print('Error handling notification tap: $e');
+    } finally {
+      _isNavigating = false;
     }
-    if (notif['monitoringId'] != null) {
-      _showWeeklyMonitoringModal(monitoringId: notif['monitoringId']);
-    } else if (notif['reportId'] != null) {
-      setState(() {
-        _initialReportId = notif['reportId'];
-        _selectedPage = PlumberPage.reports;
-      });
-    }
-    _removeNotificationOverlay();
   }
 
   void _showWeeklyMonitoringModal({String? monitoringId}) {
@@ -696,7 +731,7 @@ class _PlumberHomePageState extends State<PlumberHomePage>
             ),
           ),
           child: Container(
-            key: ValueKey(_selectedPage),
+            key: ValueKey('${_selectedPage}_${_initialReportId ?? "no_report"}'),
             child: _selectedPage == PlumberPage.schedule
                 ? _buildScheduleContent()
                 : _getPageContent(),
