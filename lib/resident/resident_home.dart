@@ -2507,7 +2507,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
   }
 }
 
-// Rejected Payment Dialog (unchanged)
+// FIXED: Rejected Payment Dialog with proper overflow handling for receipts
 class _RejectedPaymentDialog extends StatefulWidget {
   final Map<String, dynamic> paymentDetails;
 
@@ -2546,213 +2546,340 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
     final formattedProcessedDate = processedDate != null
         ? DateFormat.yMMMd().format(processedDate)
         : DateFormat.yMMMd().format(DateTime.now());
+    
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(16),
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 750),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          ],
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: screenWidth * 0.9,
+          maxHeight: screenHeight * 0.9,
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.red.withOpacity(0.3),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  const Text(
-                    'PAYMENT REJECTED',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Please resubmit with corrections',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withOpacity(0.9),
-                    ),
-                  ),
-                ],
-              ),
+        child: SingleChildScrollView(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
+                ),
+              ],
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Header
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Image.asset('assets/images/icon.png', height: 40),
-                            const SizedBox(width: 8),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(16)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.red.withOpacity(0.3),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      const Text(
+                        'PAYMENT REJECTED',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Please resubmit with corrections',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: Row(
                               children: [
-                                const Text(
-                                  'San Jose Water Services',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF4A90E2),
-                                  ),
-                                ),
-                                Text(
-                                  purok,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.bold,
+                                Image.asset('assets/images/icon.png', height: 40),
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'San Jose Water Services',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF4A90E2),
+                                        ),
+                                      ),
+                                      Text(
+                                        purok,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.red,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                        Text(
-                          formattedProcessedDate,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                            fontWeight: FontWeight.w500,
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'PAYMENT REJECTION NOTICE',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _dashedDivider(),
-                    _receiptRow('Name', fullName),
-                    _receiptRow('Address', address),
-                    _receiptRow('Contact', contactNumber),
-                    _receiptRow('Meter No.', meterNumber),
-                    _receiptRow('Billing Period Start', formattedPeriodStart),
-                    _receiptRow('Processed Date', formattedProcessedDate),
-                    _dashedDivider(),
-                    _receiptRow('Previous Reading',
-                        '${previousReading.toStringAsFixed(2)} m³'),
-                    _receiptRow('Current Reading',
-                        '${currentReading.toStringAsFixed(2)} m³'),
-                    _receiptRow('Cubic Meter Used',
-                        '${cubicMeterUsed.toStringAsFixed(2)} m³'),
-                    _dashedDivider(),
-                    _receiptRow('Amount', '₱${amount.toStringAsFixed(2)}',
-                        valueColor: Colors.red, isBold: true, fontSize: 14),
-                    // Rejection Reason Section
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.red.shade200),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.error_outline,
-                                  color: Colors.red.shade700, size: 20),
-                              const SizedBox(width: 8),
-                              Text(
-                                'Rejection Reason',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.red.shade800,
-                                ),
+                          Flexible(
+                            child: Text(
+                              formattedProcessedDate,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w500,
                               ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            rejectionReason,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.red.shade900,
-                              height: 1.4,
+                              textAlign: TextAlign.right,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Receipt Image Section
-                    if (receiptImage != null) ...[
+                      const SizedBox(height: 12),
+                      const Text(
+                        'PAYMENT REJECTION NOTICE',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _dashedDivider(),
+                      _receiptRow('Name', fullName),
+                      _receiptRow('Address', address),
+                      _receiptRow('Contact', contactNumber),
+                      _receiptRow('Meter No.', meterNumber),
+                      _receiptRow('Billing Period Start', formattedPeriodStart),
+                      _receiptRow('Processed Date', formattedProcessedDate),
+                      _dashedDivider(),
+                      _receiptRow('Previous Reading',
+                          '${previousReading.toStringAsFixed(2)} m³'),
+                      _receiptRow('Current Reading',
+                          '${currentReading.toStringAsFixed(2)} m³'),
+                      _receiptRow('Cubic Meter Used',
+                          '${cubicMeterUsed.toStringAsFixed(2)} m³'),
+                      _dashedDivider(),
+                      _receiptRow('Amount', '₱${amount.toStringAsFixed(2)}',
+                          valueColor: Colors.red, isBold: true, fontSize: 14),
+                      // Rejection Reason Section
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.error_outline,
+                                    color: Colors.red.shade700, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Rejection Reason',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red.shade800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              rejectionReason,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.red.shade900,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Receipt Image Section
+                      if (receiptImage != null) ...[
+                        GestureDetector(
+                          onTap: () =>
+                              setState(() => _showReceipt = !_showReceipt),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 10, horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.blue.shade200),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Flexible(
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.receipt,
+                                          color: Colors.blue.shade700, size: 18),
+                                      const SizedBox(width: 8),
+                                      Flexible(
+                                        child: Text(
+                                          'View Submitted Receipt',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: Colors.blue.shade700,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Icon(
+                                  _showReceipt
+                                      ? Icons.expand_less
+                                      : Icons.expand_more,
+                                  size: 18,
+                                  color: Colors.blue.shade700,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        AnimatedCrossFade(
+                          firstChild: const SizedBox.shrink(),
+                          secondChild: Container(
+                            margin: const EdgeInsets.only(top: 8),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.grey.shade300),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              children: [
+                                Text(
+                                  'Submitted Receipt',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxHeight: 200,
+                                    maxWidth: screenWidth * 0.7,
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.memory(
+                                      base64.decode(receiptImage),
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Center(
+                                          child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            children: [
+                                              Icon(Icons.error,
+                                                  color: Colors.red.shade400,
+                                                  size: 40),
+                                              const SizedBox(height: 8),
+                                              Text(
+                                                'Unable to load receipt',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey.shade600,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          crossFadeState: _showReceipt
+                              ? CrossFadeState.showSecond
+                              : CrossFadeState.showFirst,
+                          duration: const Duration(milliseconds: 300),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      // Rate Information
                       GestureDetector(
-                        onTap: () =>
-                            setState(() => _showReceipt = !_showReceipt),
+                        onTap: () => setState(() => _showRates = !_showRates),
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                               vertical: 10, horizontal: 12),
                           decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
+                            color: Colors.grey.shade100,
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.blue.shade200),
                           ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                children: [
-                                  Icon(Icons.receipt,
-                                      color: Colors.blue.shade700, size: 18),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'View Submitted Receipt',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.blue.shade700,
-                                    ),
+                              Flexible(
+                                child: Text(
+                                  'Rate Information',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey.shade800,
                                   ),
-                                ],
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                               Icon(
-                                _showReceipt
+                                _showRates
                                     ? Icons.expand_less
                                     : Icons.expand_more,
                                 size: 18,
-                                color: Colors.blue.shade700,
+                                color: Colors.grey.shade700,
                               ),
                             ],
                           ),
@@ -2776,256 +2903,150 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                             ],
                           ),
                           child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                'Submitted Receipt',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey.shade700,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Container(
-                                height: 200,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(8),
-                                  border:
-                                      Border.all(color: Colors.grey.shade300),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.memory(
-                                    base64.decode(receiptImage),
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(Icons.error,
-                                                color: Colors.red.shade400,
-                                                size: 40),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              'Unable to load receipt',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: Colors.grey.shade600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                              ),
+                              _rateRow('Residential',
+                                  'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
+                              const SizedBox(height: 6),
+                              _rateRow('Commercial',
+                                  'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
+                              const SizedBox(height: 6),
+                              _rateRow('Non Residence',
+                                  'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
+                              const SizedBox(height: 6),
+                              _rateRow('Industrial',
+                                  'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
                             ],
                           ),
                         ),
-                        crossFadeState: _showReceipt
+                        crossFadeState: _showRates
                             ? CrossFadeState.showSecond
                             : CrossFadeState.showFirst,
                         duration: const Duration(milliseconds: 300),
                       ),
-                      const SizedBox(height: 12),
-                    ],
-                    // Rate Information
-                    GestureDetector(
-                      onTap: () => setState(() => _showRates = !_showRates),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 10, horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade100,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Rate Information',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey.shade800,
-                              ),
-                            ),
-                            Icon(
-                              _showRates
-                                  ? Icons.expand_less
-                                  : Icons.expand_more,
-                              size: 18,
-                              color: Colors.grey.shade700,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    AnimatedCrossFade(
-                      firstChild: const SizedBox.shrink(),
-                      secondChild: Container(
-                        margin: const EdgeInsets.only(top: 8),
+                      const SizedBox(height: 16),
+                      // Instructions
+                      Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: Colors.amber.shade50,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.grey.shade300),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+                          border: Border.all(color: Colors.amber.shade200),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            _rateRow('Residential',
-                                'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
-                            const SizedBox(height: 6),
-                            _rateRow('Commercial',
-                                'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
-                            const SizedBox(height: 6),
-                            _rateRow('Non Residence',
-                                'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
-                            const SizedBox(height: 6),
-                            _rateRow('Industrial',
-                                'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
-                          ],
-                        ),
-                      ),
-                      crossFadeState: _showRates
-                          ? CrossFadeState.showSecond
-                          : CrossFadeState.showFirst,
-                      duration: const Duration(milliseconds: 300),
-                    ),
-                    const SizedBox(height: 16),
-                    // Instructions
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.amber.shade200),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.info_outline,
-                              color: Colors.amber.shade700, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Please correct the issue mentioned above and resubmit your payment.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.amber.shade900,
+                            Icon(Icons.info_outline,
+                                color: Colors.amber.shade700, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Please correct the issue mentioned above and resubmit your payment.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.amber.shade900,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue.shade200),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.phone,
+                                color: Colors.blue.shade700, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'GCash Payment',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue.shade800,
+                                    ),
+                                  ),
+                                  Text(
+                                    '09853886411',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.blue.shade900,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.phone,
-                              color: Colors.blue.shade700, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'GCash Payment',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue.shade800,
-                                  ),
-                                ),
-                                Text(
-                                  '09853886411',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.blue.shade900,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
+                    ],
+                  ),
+                ),
+                // Action buttons
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.pop(context);
+                            // Navigate to billing page to resubmit payment
+                          },
+                          icon: const Icon(Icons.refresh, color: Colors.white),
+                          label: const Text(
+                            'Resubmit Payment',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ],
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue.shade700,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          label: const Text(
+                            'Close',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.grey.shade600,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
-            // Action buttons
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        // Navigate to billing page to resubmit payment
-                        // This would be handled by the parent widget
-                      },
-                      icon: const Icon(Icons.refresh, color: Colors.white),
-                      label: const Text(
-                        'Resubmit Payment',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.shade700,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      label: const Text(
-                        'Close',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey.shade600,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -3082,12 +3103,14 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
   Widget _rateRow(String category, String details) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            category,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 11,
-              color: Colors.black87,
+          Flexible(
+            child: Text(
+              category,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+                color: Colors.black87,
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -3104,7 +3127,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
       );
 }
 
-// PaidBillDialog (unchanged)
+// FIXED: PaidBillDialog with proper overflow handling
 class _PaidBillDialog extends StatefulWidget {
   final Map<String, dynamic> billDetails;
 
@@ -3180,50 +3203,57 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
     final formattedProcessedDate = processedDate != null
         ? DateFormat.yMMMd().format(processedDate)
         : DateFormat.yMMMd().format(DateTime.now());
+    
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(16),
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 500, maxHeight: 750),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 10,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.green,
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(16)),
+      backgroundColor: Colors.transparent,
+      insetPadding: const EdgeInsets.all(16),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: screenWidth * 0.9,
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        child: SingleChildScrollView(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
                 ),
-                child: const Center(
-                  child: Text(
-                    'PAID',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.green,
+                    borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'PAID',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Expanded(
-                child: RepaintBoundary(
+                RepaintBoundary(
                   key: _boundaryKey,
                   child: Container(
                     color: Colors.white,
-                    child: SingleChildScrollView(
+                    child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3232,34 +3262,38 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                children: [
-                                  Image.asset('assets/images/icon.png',
-                                      height: 36),
-                                  const SizedBox(width: 8),
-                                  Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'San Jose Water Services',
-                                        style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: Color(0xFF4A90E2),
-                                        ),
+                              Flexible(
+                                child: Row(
+                                  children: [
+                                    Image.asset('assets/images/icon.png',
+                                        height: 36),
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'San Jose Water Services',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                              color: Color(0xFF4A90E2),
+                                            ),
+                                          ),
+                                          Text(
+                                            purok,
+                                            style: const TextStyle(
+                                              fontSize: 10,
+                                              color: Colors.green,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                      Text(
-                                        purok,
-                                        style: const TextStyle(
-                                          fontSize: 10,
-                                          color: Colors.green,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
@@ -3311,12 +3345,15 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text(
-                                    'Rate Information',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF4A90E2),
+                                  const Flexible(
+                                    child: Text(
+                                      'Rate Information',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF4A90E2),
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   Icon(
@@ -3430,58 +3467,60 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                     ),
                   ),
                 ),
-              ),
-              // Action buttons
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _downloadReceipt,
-                        icon: const Icon(Icons.download, color: Colors.white),
-                        label: const Text(
-                          'Download Receipt',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
+                // Action buttons
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _downloadReceipt,
+                          icon: const Icon(Icons.download, color: Colors.white),
+                          label: const Text(
+                            'Download Receipt',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue.shade700,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue.shade700,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () => Navigator.pop(context),
-                        icon:
-                            const Icon(Icons.check_circle, color: Colors.white),
-                        label: const Text(
-                          'Close',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => Navigator.pop(context),
+                          icon:
+                              const Icon(Icons.check_circle, color: Colors.white),
+                          label: const Text(
+                            'Close',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                         ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ));
+        ),
+      ),
+    );
   }
 
   Widget _dashedDivider() => Padding(
@@ -3535,12 +3574,14 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
   Widget _rateRow(String category, String details) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            category,
-            style: const TextStyle(
-              fontWeight: FontWeight.w600,
-              fontSize: 10,
-              color: Colors.black,
+          Flexible(
+            child: Text(
+              category,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 10,
+                color: Colors.black,
+              ),
             ),
           ),
           const SizedBox(width: 4),
