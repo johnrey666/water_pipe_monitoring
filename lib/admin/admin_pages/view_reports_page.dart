@@ -1,4 +1,10 @@
+// ignore_for_file: unused_import
+
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,7 +13,9 @@ import 'package:animate_do/animate_do.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'package:universal_html/html.dart' as html;
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:carousel_slider/carousel_slider.dart';
 import '../components/admin_layout.dart';
 import 'monitor_page.dart';
 import 'admin_view_reported_reports.dart';
@@ -535,15 +543,38 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
     );
   }
 
-  // Convert XFile to base64
-  Future<List<String>> _convertImagesToBase64(List<File> imageFiles) async {
+  // Platform-aware image handling
+  Future<List<String>> _convertImagesToBase64(List<dynamic> imageFiles) async {
     final List<String> base64Images = [];
 
     for (final imageFile in imageFiles) {
       try {
-        final bytes = await imageFile.readAsBytes();
-        final base64Image = base64Encode(bytes);
-        base64Images.add(base64Image);
+        if (kIsWeb) {
+          // For web: use html.File
+          final html.File webFile = imageFile;
+          final reader = html.FileReader();
+
+          // Create a completer to wait for the file to load
+          final completer = Completer<void>();
+          reader.onLoad.listen((event) {
+            completer.complete();
+          });
+
+          reader.readAsDataUrl(webFile);
+          await completer.future;
+
+          final dataUrl = reader.result as String;
+          // Remove data:image/*;base64, prefix
+          final commaIndex = dataUrl.indexOf(',');
+          final base64Data = dataUrl.substring(commaIndex + 1);
+          base64Images.add(base64Data);
+        } else {
+          // For mobile: use File
+          final File mobileFile = imageFile;
+          final bytes = await mobileFile.readAsBytes();
+          final base64Image = base64Encode(bytes);
+          base64Images.add(base64Image);
+        }
       } catch (e) {
         print('Error encoding image: $e');
       }
@@ -552,14 +583,630 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
     return base64Images;
   }
 
-  // Updated minimalist illegal tapping report dialog
+  // Platform-aware image preview widget
+  Widget _buildImagePreview(
+      dynamic imageFile, int index, VoidCallback onRemove) {
+    if (kIsWeb) {
+      // Web: use html.File to create object URL
+      return FutureBuilder<String?>(
+        future: () async {
+          try {
+            final html.File webFile = imageFile;
+            final String url = html.Url.createObjectUrlFromBlob(webFile);
+            return url;
+          } catch (e) {
+            print('Error creating object URL: $e');
+            return null;
+          }
+        }(),
+        builder: (context, snapshot) {
+          final url = snapshot.data;
+          return Container(
+            margin: EdgeInsets.only(
+              right: index < 9 ? 8 : 0,
+            ),
+            width: 120,
+            height: 120,
+            child: Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: url != null
+                      ? Image.network(
+                          url,
+                          width: 120,
+                          height: 120,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes !=
+                                          null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 120,
+                              height: 120,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.broken_image,
+                                color: Colors.grey,
+                                size: 40,
+                              ),
+                            );
+                          },
+                        )
+                      : Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.broken_image,
+                            color: Colors.grey,
+                            size: 40,
+                          ),
+                        ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: GestureDetector(
+                    onTap: onRemove,
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.9),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child:
+                          const Icon(Icons.close, size: 16, color: Colors.red),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 4,
+                  left: 4,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.6),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${index + 1}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 10,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    } else {
+      // Mobile: use File
+      final File mobileFile = imageFile;
+      return Container(
+        margin: EdgeInsets.only(
+          right: index < 9 ? 8 : 0,
+        ),
+        width: 120,
+        height: 120,
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.file(
+                mobileFile,
+                width: 120,
+                height: 120,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.broken_image,
+                      color: Colors.grey,
+                      size: 40,
+                    ),
+                  );
+                },
+              ),
+            ),
+            Positioned(
+              top: 4,
+              right: 4,
+              child: GestureDetector(
+                onTap: onRemove,
+                child: Container(
+                  width: 24,
+                  height: 24,
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.9),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(Icons.close, size: 16, color: Colors.red),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 4,
+              left: 4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${index + 1}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  // Web-specific file picker
+  Future<List<html.File>?> _pickImagesWeb() async {
+    final input = html.FileUploadInputElement();
+    input
+      ..multiple = true
+      ..accept = 'image/*'
+      ..click();
+
+    await input.onChange.first;
+
+    if (input.files != null && input.files!.isNotEmpty) {
+      return input.files!.toList();
+    }
+    return null;
+  }
+
+  // Web-specific camera access (fallback to file picker)
+  Future<html.File?> _takePhotoWeb() async {
+    final input = html.FileUploadInputElement();
+    input
+      ..accept = 'image/*'
+      ..click();
+
+    await input.onChange.first;
+
+    if (input.files != null && input.files!.isNotEmpty) {
+      return input.files!.first;
+    }
+    return null;
+  }
+
+  // NEW FUNCTION: Show assessment/fix details for illegal tapping reports
+  void _showAssessmentDetails(BuildContext context, DocumentSnapshot report) {
+    final data = report.data() as Map<String, dynamic>;
+    final assessment = data['assessment']?.toString();
+    final beforeFixImages = data['beforeFixImages'] != null
+        ? List<String>.from(data['beforeFixImages'])
+        : <String>[];
+    final afterFixImages = data['afterFixImages'] != null
+        ? List<String>.from(data['afterFixImages'])
+        : <String>[];
+    final fixedByName = data['fixedByName']?.toString() ?? 'Unknown Plumber';
+    final fixedAt = data['fixedAt']?.toDate();
+    final status = data['status']?.toString() ?? '';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          insetPadding: const EdgeInsets.all(20),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 500,
+              maxHeight: MediaQuery.of(context).size.height * 0.85,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: status == 'Fixed'
+                        ? Colors.green.shade50
+                        : Colors.blue.shade50,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      topRight: Radius.circular(16),
+                    ),
+                    border: Border(
+                      bottom: BorderSide(color: Colors.grey.shade200),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        status == 'Fixed'
+                            ? Icons.check_circle
+                            : Icons.assessment,
+                        color: status == 'Fixed'
+                            ? Colors.green.shade700
+                            : Colors.blue.shade700,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          status == 'Fixed'
+                              ? 'Fix Details'
+                              : 'Assessment Details',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: status == 'Fixed'
+                                ? Colors.green.shade900
+                                : Colors.blue.shade900,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.close,
+                            color: Colors.grey.shade600, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Status and plumber info
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: status == 'Fixed'
+                                ? Colors.green.shade100
+                                : Colors.blue.shade100,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: status == 'Fixed'
+                                  ? Colors.green.shade200
+                                  : Colors.blue.shade200,
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                status == 'Fixed' ? Icons.check : Icons.person,
+                                color: status == 'Fixed'
+                                    ? Colors.green.shade700
+                                    : Colors.blue.shade700,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      status == 'Fixed'
+                                          ? 'Fixed by $fixedByName'
+                                          : 'Assessed by $fixedByName',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: status == 'Fixed'
+                                            ? Colors.green.shade800
+                                            : Colors.blue.shade800,
+                                      ),
+                                    ),
+                                    if (fixedAt != null)
+                                      Text(
+                                        DateFormat.yMMMd()
+                                            .add_jm()
+                                            .format(fixedAt),
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // Assessment text
+                        if (assessment != null && assessment.isNotEmpty)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Assessment:',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade50,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border:
+                                      Border.all(color: Colors.grey.shade300),
+                                ),
+                                child: Text(
+                                  assessment,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                            ],
+                          ),
+
+                        // Before fix images
+                        if (beforeFixImages.isNotEmpty)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Before Fix Images (${beforeFixImages.length}):',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              _buildImageGrid(beforeFixImages),
+                              const SizedBox(height: 20),
+                            ],
+                          ),
+
+                        // After fix images
+                        if (afterFixImages.isNotEmpty)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'After Fix Images (${afterFixImages.length}):',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade800,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              _buildImageGrid(afterFixImages),
+                            ],
+                          ),
+
+                        // No assessment/fix message
+                        if (assessment == null &&
+                            beforeFixImages.isEmpty &&
+                            afterFixImages.isEmpty)
+                          Container(
+                            padding: const EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  size: 48,
+                                  color: Colors.grey.shade400,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  status == 'Fixed'
+                                      ? 'No fix details recorded yet.'
+                                      : 'No assessment recorded yet.',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    color: Colors.grey.shade600,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Footer
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(color: Colors.grey.shade200),
+                    ),
+                  ),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF4FC3F7),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: Text(
+                        'Close',
+                        style: GoogleFonts.poppins(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Helper function to build image grid
+  Widget _buildImageGrid(List<String> base64Images) {
+    if (base64Images.isEmpty) return const SizedBox.shrink();
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 8,
+        mainAxisSpacing: 8,
+        childAspectRatio: 1,
+      ),
+      itemCount: base64Images.length,
+      itemBuilder: (context, index) {
+        return GestureDetector(
+          onTap: () => _showFullScreenImage(context, base64Images[index]),
+          child: Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.memory(
+                base64Decode(base64Images[index]),
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) {
+                  return Container(
+                    color: Colors.grey.shade200,
+                    child: const Center(
+                      child: Icon(Icons.broken_image, color: Colors.grey),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // Helper function to show full screen image
+  void _showFullScreenImage(BuildContext context, String base64Image) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(0),
+        child: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Container(
+            color: Colors.black.withOpacity(0.9),
+            child: Center(
+              child: InteractiveViewer(
+                maxScale: 5.0,
+                child: Image.memory(
+                  base64Decode(base64Image),
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      padding: const EdgeInsets.all(20),
+                      child: const Icon(
+                        Icons.broken_image,
+                        color: Colors.white,
+                        size: 60,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Updated minimalist illegal tapping report dialog with platform-aware image handling
   void _showCreateIllegalTappingDialog(BuildContext context) {
     String locationName = '';
     String type = 'Unauthorized Connection';
     String description = '';
     String evidenceNotes = '';
     LatLng? selectedLocation;
-    List<File> _imageFiles = [];
+    List<dynamic> _imageFiles =
+        []; // Changed to dynamic for platform compatibility
     bool isUploading = false;
     String? _errorMessage;
 
@@ -574,24 +1221,35 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
           builder: (context, setState) {
             Future<void> _pickImages() async {
               try {
-                // Pick multiple images
-                final List<XFile>? images = await _picker.pickMultiImage(
-                  maxWidth: 1920,
-                  maxHeight: 1080,
-                  imageQuality: 85,
-                );
-
-                if (images != null && images.isNotEmpty) {
-                  // Limit to 10 images maximum
-                  final newImages = images.take(10 - _imageFiles.length).toList();
-                  final newFiles = <File>[];
-                  for (var image in newImages) {
-                    newFiles.add(File(image.path));
+                if (kIsWeb) {
+                  final images = await _pickImagesWeb();
+                  if (images != null && images.isNotEmpty) {
+                    final newImages =
+                        images.take(10 - _imageFiles.length).toList();
+                    setState(() {
+                      _imageFiles.addAll(newImages);
+                      _errorMessage = null;
+                    });
                   }
-                  setState(() {
-                    _imageFiles.addAll(newFiles);
-                    _errorMessage = null;
-                  });
+                } else {
+                  final List<XFile>? images = await _picker.pickMultiImage(
+                    maxWidth: 1920,
+                    maxHeight: 1080,
+                    imageQuality: 85,
+                  );
+
+                  if (images != null && images.isNotEmpty) {
+                    final newImages =
+                        images.take(10 - _imageFiles.length).toList();
+                    final newFiles = <File>[];
+                    for (var image in newImages) {
+                      newFiles.add(File(image.path));
+                    }
+                    setState(() {
+                      _imageFiles.addAll(newFiles);
+                      _errorMessage = null;
+                    });
+                  }
                 }
               } catch (e) {
                 setState(() {
@@ -602,21 +1260,34 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
 
             Future<void> _takePhoto() async {
               try {
-                final XFile? image = await _picker.pickImage(
-                  source: ImageSource.camera,
-                  maxWidth: 1920,
-                  maxHeight: 1080,
-                  imageQuality: 85,
-                );
+                if (kIsWeb) {
+                  final photo = await _takePhotoWeb();
+                  if (photo != null) {
+                    setState(() {
+                      if (_imageFiles.length < 10) {
+                        _imageFiles.add(photo);
+                      } else {
+                        _errorMessage = 'Maximum 10 images allowed';
+                      }
+                    });
+                  }
+                } else {
+                  final XFile? image = await _picker.pickImage(
+                    source: ImageSource.camera,
+                    maxWidth: 1920,
+                    maxHeight: 1080,
+                    imageQuality: 85,
+                  );
 
-                if (image != null) {
-                  setState(() {
-                    if (_imageFiles.length < 10) {
-                      _imageFiles.add(File(image.path));
-                    } else {
-                      _errorMessage = 'Maximum 10 images allowed';
-                    }
-                  });
+                  if (image != null) {
+                    setState(() {
+                      if (_imageFiles.length < 10) {
+                        _imageFiles.add(File(image.path));
+                      } else {
+                        _errorMessage = 'Maximum 10 images allowed';
+                      }
+                    });
+                  }
                 }
               } catch (e) {
                 setState(() {
@@ -659,7 +1330,8 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                         if (_imageFiles.isNotEmpty)
                           TextButton.icon(
                             onPressed: _clearAllImages,
-                            icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                            icon: const Icon(Icons.delete,
+                                size: 16, color: Colors.red),
                             label: Text(
                               'Clear All',
                               style: GoogleFonts.poppins(
@@ -669,14 +1341,15 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                               ),
                             ),
                             style: TextButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 8),
                             ),
                           ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     SizedBox(
-                      height: 120, // Fixed height
+                      height: 120,
                       child: _imageFiles.isEmpty
                           ? Container(
                               alignment: Alignment.center,
@@ -692,85 +1365,10 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                               scrollDirection: Axis.horizontal,
                               itemCount: _imageFiles.length,
                               itemBuilder: (context, index) {
-                                return Container(
-                                  margin: EdgeInsets.only(
-                                    right: index < _imageFiles.length - 1 ? 8 : 0,
-                                  ),
-                                  width: 120, // Fixed width
-                                  height: 120, // Fixed height
-                                  child: Stack(
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Image.file(
-                                          _imageFiles[index],
-                                          width: 120,
-                                          height: 120,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) {
-                                            return Container(
-                                              width: 120,
-                                              height: 120,
-                                              decoration: BoxDecoration(
-                                                color: Colors.grey.shade200,
-                                                borderRadius: BorderRadius.circular(12),
-                                              ),
-                                              child: const Icon(
-                                                Icons.broken_image,
-                                                color: Colors.grey,
-                                                size: 40,
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                      Positioned(
-                                        top: 4,
-                                        right: 4,
-                                        child: GestureDetector(
-                                          onTap: () => removeImage(index),
-                                          child: Container(
-                                            width: 24,
-                                            height: 24,
-                                            padding: const EdgeInsets.all(4),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white.withOpacity(0.9),
-                                              shape: BoxShape.circle,
-                                              boxShadow: [
-                                                BoxShadow(
-                                                  color: Colors.black.withOpacity(0.2),
-                                                  blurRadius: 4,
-                                                  offset: const Offset(0, 2),
-                                                ),
-                                              ],
-                                            ),
-                                            child: const Icon(Icons.close,
-                                                size: 16, color: Colors.red),
-                                          ),
-                                        ),
-                                      ),
-                                      Positioned(
-                                        bottom: 4,
-                                        left: 4,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withOpacity(0.6),
-                                            borderRadius: BorderRadius.circular(8),
-                                          ),
-                                          child: Text(
-                                            '${index + 1}',
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 10,
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                return _buildImagePreview(
+                                  _imageFiles[index],
+                                  index,
+                                  () => removeImage(index),
                                 );
                               },
                             ),
@@ -788,7 +1386,8 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
 
                 try {
                   // Convert images to base64
-                  final base64Images = await _convertImagesToBase64(_imageFiles);
+                  final base64Images =
+                      await _convertImagesToBase64(_imageFiles);
 
                   final reportData = {
                     'fullName': 'Staff Report',
@@ -962,7 +1561,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                     ),
                                   ),
                                 ),
-                              
+
                               // Location Field
                               Text(
                                 'Location',
@@ -973,15 +1572,16 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              
+
                               // Location Selection
                               if (selectedLocation == null)
                                 SizedBox(
                                   width: double.infinity,
-                                  height: 48, // Fixed height
+                                  height: 48,
                                   child: ElevatedButton(
                                     onPressed: () async {
-                                      final location = await _showMapLocationPicker(context);
+                                      final location =
+                                          await _showMapLocationPicker(context);
                                       if (location != null) {
                                         setState(() {
                                           selectedLocation = location;
@@ -998,7 +1598,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                     child: Text('Select Location on Map'),
                                   ),
                                 ),
-                              
+
                               if (selectedLocation != null)
                                 Container(
                                   padding: const EdgeInsets.all(12),
@@ -1006,15 +1606,19 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                   decoration: BoxDecoration(
                                     color: Colors.green.shade50,
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: Colors.green.shade200),
+                                    border: Border.all(
+                                        color: Colors.green.shade200),
                                   ),
                                   child: Row(
                                     children: [
-                                      Icon(Icons.check_circle, color: Colors.green.shade600, size: 20),
+                                      Icon(Icons.check_circle,
+                                          color: Colors.green.shade600,
+                                          size: 20),
                                       const SizedBox(width: 10),
                                       Expanded(
                                         child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               'Location Selected',
@@ -1035,9 +1639,13 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                         ),
                                       ),
                                       IconButton(
-                                        icon: Icon(Icons.edit, size: 18, color: Colors.blue.shade700),
+                                        icon: Icon(Icons.edit,
+                                            size: 18,
+                                            color: Colors.blue.shade700),
                                         onPressed: () async {
-                                          final location = await _showMapLocationPicker(context);
+                                          final location =
+                                              await _showMapLocationPicker(
+                                                  context);
                                           if (location != null) {
                                             setState(() {
                                               selectedLocation = location;
@@ -1048,12 +1656,12 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                     ],
                                   ),
                                 ),
-                              
+
                               const SizedBox(height: 16),
-                              
+
                               // Location Name
                               SizedBox(
-                                height: 70, // Fixed height for text field
+                                height: 70,
                                 child: TextFormField(
                                   decoration: InputDecoration(
                                     labelText: 'Location Name / Address',
@@ -1061,10 +1669,12 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 14),
                                   ),
                                   style: GoogleFonts.poppins(fontSize: 14),
-                                  onSaved: (value) => locationName = value ?? '',
+                                  onSaved: (value) =>
+                                      locationName = value ?? '',
                                   validator: (value) {
                                     if (value == null || value.isEmpty) {
                                       return 'Please enter location name';
@@ -1073,9 +1683,9 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                   },
                                 ),
                               ),
-                              
+
                               const SizedBox(height: 20),
-                              
+
                               // Type of Illegal Activity
                               Text(
                                 'Type of Illegal Activity',
@@ -1087,7 +1697,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                               ),
                               const SizedBox(height: 8),
                               SizedBox(
-                                height: 70, // Fixed height for dropdown
+                                height: 70,
                                 child: DropdownButtonFormField(
                                   value: type,
                                   items: [
@@ -1115,14 +1725,15 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 14),
                                   ),
                                   style: GoogleFonts.poppins(fontSize: 14),
                                 ),
                               ),
-                              
+
                               const SizedBox(height: 20),
-                              
+
                               // Description
                               Text(
                                 'Description',
@@ -1134,7 +1745,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                               ),
                               const SizedBox(height: 8),
                               SizedBox(
-                                height: 120, // Fixed height for description field
+                                height: 120,
                                 child: TextFormField(
                                   maxLines: 3,
                                   decoration: InputDecoration(
@@ -1143,7 +1754,8 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 14),
                                   ),
                                   style: GoogleFonts.poppins(fontSize: 14),
                                   onSaved: (value) => description = value ?? '',
@@ -1155,9 +1767,9 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                   },
                                 ),
                               ),
-                              
+
                               const SizedBox(height: 20),
-                              
+
                               // Evidence Photos
                               Text(
                                 'Evidence Photos',
@@ -1176,19 +1788,23 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                 ),
                               ),
                               const SizedBox(height: 12),
-                              
+
                               Row(
                                 children: [
                                   Expanded(
                                     child: SizedBox(
-                                      height: 48, // Fixed height
+                                      height: 48,
                                       child: OutlinedButton.icon(
-                                        onPressed: _imageFiles.length < 10 ? _pickImages : null,
-                                        icon: Icon(Icons.photo_library, size: 18),
+                                        onPressed: _imageFiles.length < 10
+                                            ? _pickImages
+                                            : null,
+                                        icon:
+                                            Icon(Icons.photo_library, size: 18),
                                         label: Text('Gallery'),
                                         style: OutlinedButton.styleFrom(
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(10),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
                                           ),
                                         ),
                                       ),
@@ -1197,14 +1813,17 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: SizedBox(
-                                      height: 48, // Fixed height
+                                      height: 48,
                                       child: OutlinedButton.icon(
-                                        onPressed: _imageFiles.length < 10 ? _takePhoto : null,
+                                        onPressed: _imageFiles.length < 10
+                                            ? _takePhoto
+                                            : null,
                                         icon: Icon(Icons.camera_alt, size: 18),
                                         label: Text('Camera'),
                                         style: OutlinedButton.styleFrom(
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(10),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
                                           ),
                                         ),
                                       ),
@@ -1212,15 +1831,15 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                   ),
                                 ],
                               ),
-                              
+
                               // Display selected images
                               _selectedImagesPreview(),
-                              
+
                               const SizedBox(height: 20),
-                              
+
                               // Additional Notes (Optional)
                               SizedBox(
-                                height: 100, // Fixed height for additional notes
+                                height: 100,
                                 child: TextFormField(
                                   maxLines: 3,
                                   decoration: InputDecoration(
@@ -1229,17 +1848,19 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 14),
                                   ),
                                   style: GoogleFonts.poppins(fontSize: 14),
-                                  onSaved: (value) => evidenceNotes = value ?? '',
+                                  onSaved: (value) =>
+                                      evidenceNotes = value ?? '',
                                 ),
                               ),
                             ],
                           ),
                         ),
                       ),
-                      
+
                       // Footer Actions
                       Container(
                         padding: const EdgeInsets.all(16),
@@ -1252,9 +1873,11 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                           children: [
                             Expanded(
                               child: SizedBox(
-                                height: 48, // Fixed height
+                                height: 48,
                                 child: OutlinedButton(
-                                  onPressed: isUploading ? null : () => Navigator.pop(context),
+                                  onPressed: isUploading
+                                      ? null
+                                      : () => Navigator.pop(context),
                                   style: OutlinedButton.styleFrom(
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
@@ -1267,7 +1890,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                             const SizedBox(width: 12),
                             Expanded(
                               child: SizedBox(
-                                height: 48, // Fixed height
+                                height: 48,
                                 child: ElevatedButton(
                                   onPressed: isUploading ? null : submitReport,
                                   style: ElevatedButton.styleFrom(
@@ -1287,7 +1910,8 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                           ),
                                         )
                                       : Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
                                             Icon(Icons.send, size: 18),
                                             const SizedBox(width: 8),
@@ -1420,7 +2044,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                 const SizedBox(height: 12),
                 Container(
                   width: 300,
-                  height: 70, // Fixed height for dropdown
+                  height: 70,
                   child: DropdownButtonFormField<String>(
                     decoration: InputDecoration(
                       labelText: 'Filter by Plumber',
@@ -1572,12 +2196,20 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                         null
                                     ? List<String>.from(data['evidenceImages'])
                                     : <String>[];
+                                final hasAssessment =
+                                    data['assessment'] != null;
+                                final hasFixImages =
+                                    data['beforeFixImages'] != null ||
+                                        data['afterFixImages'] != null;
+                                final isFixed = status == 'Fixed';
+
                                 // For illegal tapping, show special badge
                                 final displayStatus = isIllegalTapping
                                     ? 'Illegal Tapping'
                                     : status;
                                 return Container(
-                                  margin: const EdgeInsets.symmetric(vertical: 6),
+                                  margin:
+                                      const EdgeInsets.symmetric(vertical: 6),
                                   child: FadeInUp(
                                     duration: const Duration(milliseconds: 300),
                                     child: Card(
@@ -1594,8 +2226,8 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                             Container(
                                               width: 4,
                                               height: 60,
-                                              color:
-                                                  _getStatusColor(displayStatus),
+                                              color: _getStatusColor(
+                                                  displayStatus),
                                             ),
                                             const SizedBox(width: 12),
                                             Expanded(
@@ -1623,7 +2255,8 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .w700,
-                                                                color: Colors.grey
+                                                                color: Colors
+                                                                    .grey
                                                                     .shade800,
                                                               ),
                                                               overflow:
@@ -1634,7 +2267,8 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                                               Container(
                                                                 margin: EdgeInsets
                                                                     .only(
-                                                                        left: 8),
+                                                                        left:
+                                                                            8),
                                                                 padding: EdgeInsets
                                                                     .symmetric(
                                                                         horizontal:
@@ -1643,8 +2277,8 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                                                             2),
                                                                 decoration:
                                                                     BoxDecoration(
-                                                                  color:
-                                                                      Colors.red,
+                                                                  color: Colors
+                                                                      .red,
                                                                   borderRadius:
                                                                       BorderRadius
                                                                           .circular(
@@ -1652,10 +2286,10 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                                                 ),
                                                                 child: Text(
                                                                   'ILLEGAL',
-                                                                  style:
-                                                                      GoogleFonts
-                                                                          .poppins(
-                                                                    fontSize: 10,
+                                                                  style: GoogleFonts
+                                                                      .poppins(
+                                                                    fontSize:
+                                                                        10,
                                                                     color: Colors
                                                                         .white,
                                                                     fontWeight:
@@ -1668,7 +2302,8 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                                               Container(
                                                                 margin: EdgeInsets
                                                                     .only(
-                                                                        left: 4),
+                                                                        left:
+                                                                            4),
                                                                 padding: EdgeInsets
                                                                     .symmetric(
                                                                         horizontal:
@@ -1697,7 +2332,8 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                                                           .white,
                                                                     ),
                                                                     SizedBox(
-                                                                        width: 2),
+                                                                        width:
+                                                                            2),
                                                                     Text(
                                                                       '${evidenceImages.length}',
                                                                       style:
@@ -1726,7 +2362,8 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                                         TextOverflow.ellipsis,
                                                     style: GoogleFonts.poppins(
                                                       fontSize: 13,
-                                                      color: Colors.grey.shade600,
+                                                      color:
+                                                          Colors.grey.shade600,
                                                     ),
                                                   ),
                                                   Row(
@@ -1744,19 +2381,21 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                                           data['priority'] ==
                                                               'high')
                                                         Container(
-                                                          margin: EdgeInsets.only(
-                                                              left: 8),
+                                                          margin:
+                                                              EdgeInsets.only(
+                                                                  left: 8),
                                                           padding: EdgeInsets
                                                               .symmetric(
                                                                   horizontal: 6,
                                                                   vertical: 2),
                                                           decoration:
                                                               BoxDecoration(
-                                                            color: Colors
-                                                                .orange.shade100,
+                                                            color: Colors.orange
+                                                                .shade100,
                                                             borderRadius:
                                                                 BorderRadius
-                                                                    .circular(4),
+                                                                    .circular(
+                                                                        4),
                                                             border: Border.all(
                                                               color: Colors
                                                                   .orange
@@ -1782,29 +2421,67 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                                 ],
                                               ),
                                             ),
-                                            SizedBox(
-                                              width: 60,
-                                              height: 36,
-                                              child: TextButton(
-                                                onPressed: () {
-                                                  Navigator.push(
-                                                    context,
-                                                    MaterialPageRoute(
-                                                      builder: (context) =>
-                                                          MonitorPage(
-                                                        reportId: report.id,
+                                            // Button(s) section
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                // View Assessment/Fix button (only for illegal tapping with assessment or fix images)
+                                                if (isIllegalTapping &&
+                                                    (hasAssessment ||
+                                                        hasFixImages ||
+                                                        isFixed))
+                                                  SizedBox(
+                                                    width: 60,
+                                                    height: 36,
+                                                    child: TextButton(
+                                                      onPressed: () {
+                                                        _showAssessmentDetails(
+                                                            context, report);
+                                                      },
+                                                      child: Text(
+                                                        isFixed
+                                                            ? 'View Fix'
+                                                            : 'View Assessment',
+                                                        style:
+                                                            GoogleFonts.poppins(
+                                                          fontSize: 10,
+                                                          color: isFixed
+                                                              ? Colors.green
+                                                              : const Color(
+                                                                  0xFF4FC3F7),
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
                                                       ),
                                                     ),
-                                                  );
-                                                },
-                                                child: Text(
-                                                  'View',
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 12,
-                                                    color: const Color(0xFF4FC3F7),
+                                                  ),
+                                                SizedBox(
+                                                  width: 60,
+                                                  height: 36,
+                                                  child: TextButton(
+                                                    onPressed: () {
+                                                      Navigator.push(
+                                                        context,
+                                                        MaterialPageRoute(
+                                                          builder: (context) =>
+                                                              MonitorPage(
+                                                            reportId: report.id,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                    child: Text(
+                                                      'View',
+                                                      style:
+                                                          GoogleFonts.poppins(
+                                                        fontSize: 12,
+                                                        color: const Color(
+                                                            0xFF4FC3F7),
+                                                      ),
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
+                                              ],
                                             ),
                                           ],
                                         ),
@@ -1816,7 +2493,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                             ),
                           ),
                           Container(
-                            height: 60, // Fixed height for pagination
+                            height: 60,
                             child: _buildPaginationButtons(),
                           ),
                         ],

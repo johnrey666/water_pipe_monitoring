@@ -1026,11 +1026,88 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
   List<File> _afterFixImages = [];
 
   @override
+  void initState() {
+    super.initState();
+    // Load existing assessment if any
+    final data = widget.report.data() as Map<String, dynamic>;
+    final existingAssessment = data['assessment']?.toString();
+    if (existingAssessment != null && existingAssessment.isNotEmpty) {
+      _assessmentController.text = existingAssessment;
+    }
+  }
+
+  @override
   void dispose() {
     _assessmentController.dispose();
     super.dispose();
   }
 
+  // UPDATED: Save assessment separately (without marking as Fixed)
+  Future<void> _saveAssessment() async {
+    if (_isUpdating) return;
+
+    setState(() {
+      _isUpdating = true;
+    });
+
+    try {
+      // Get plumber info
+      final plumber = FirebaseAuth.instance.currentUser;
+      String plumberName = 'Unknown Plumber';
+      if (plumber != null) {
+        final plumberDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(plumber.uid)
+            .get();
+        if (plumberDoc.exists && plumberDoc.data()?['fullName'] != null) {
+          plumberName = plumberDoc.data()!['fullName'];
+        }
+      }
+
+      final assessment = _assessmentController.text.trim();
+      if (assessment.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter assessment details')),
+        );
+        return;
+      }
+
+      final updateData = {
+        'assessment': assessment,
+        'assessedAt': FieldValue.serverTimestamp(),
+        'assessedBy': plumber?.uid,
+        'assessedByName': plumberName,
+        // Keep the status as is (don't change to Fixed)
+        'status': widget.report['status'] ?? 'Monitoring',
+      };
+
+      await FirebaseFirestore.instance
+          .collection('reports')
+          .doc(widget.report.id)
+          .update(updateData);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Assessment saved successfully')),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving assessment: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUpdating = false;
+        });
+      }
+    }
+  }
+
+  // UPDATED: Update status to Fixed (with assessment and images)
   Future<void> _updateStatus(String newStatus) async {
     if (_isUpdating) return;
 
@@ -1077,6 +1154,10 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
       final assessment = _assessmentController.text.trim();
       if (assessment.isNotEmpty) {
         updateData['assessment'] = assessment;
+        // Also save who assessed it if not already saved
+        updateData['assessedBy'] = plumber?.uid;
+        updateData['assessedByName'] = plumberName;
+        updateData['assessedAt'] = FieldValue.serverTimestamp();
       }
 
       // Add before fix images if any
@@ -1156,7 +1237,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
     }
   }
 
-  // Show assessment dialog
+  // UPDATED: Show assessment dialog with save button
   void _showAssessmentInputDialog() {
     showDialog(
       context: context,
@@ -1190,7 +1271,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                     maxLines: 5,
                     decoration: InputDecoration(
                       hintText:
-                          'e.g., Estimated time: 2 hours\nRequired: Pipe fittings, sealant',
+                          'e.g., Estimated time: 2 hours\nRequired: Pipe fittings, sealant\nNotes: This is an illegal tapping case',
                       hintStyle: GoogleFonts.poppins(color: Colors.grey[400]),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -1215,22 +1296,29 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                 ),
               ),
               ElevatedButton(
-                onPressed: () {
+                onPressed: () async {
                   Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Assessment saved')),
-                  );
+                  await _saveAssessment();
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF87CEEB),
                 ),
-                child: Text(
-                  'Save Assessment',
-                  style: GoogleFonts.poppins(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                child: _isUpdating
+                    ? SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        'Save Assessment',
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
               ),
             ],
           );
@@ -1305,6 +1393,40 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Assessment preview
+                            if (_assessmentController.text.isNotEmpty)
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Assessment:',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey.shade50,
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                          color: Colors.grey.shade300),
+                                    ),
+                                    child: Text(
+                                      _assessmentController.text,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 13,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 20),
+                                ],
+                              ),
+
                             Text(
                               'Upload images before and after fixing the issue:',
                               style: GoogleFonts.poppins(
@@ -1416,13 +1538,22 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                                 borderRadius: BorderRadius.circular(8),
                               ),
                             ),
-                            child: Text(
-                              'Mark as Fixed',
-                              style: GoogleFonts.poppins(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            child: _isUpdating
+                                ? SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : Text(
+                                    'Mark as Fixed',
+                                    style: GoogleFonts.poppins(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                           ),
                         ],
                       ),
@@ -1791,6 +1922,8 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
     final illegalTappingType =
         reportData['illegalTappingType']?.toString() ?? 'Unknown Type';
     final evidenceNotes = reportData['evidenceNotes']?.toString();
+    final assessedByName = reportData['assessedByName']?.toString();
+    final assessedAt = reportData['assessedAt']?.toDate();
 
     // Get images data
     final imageCount = reportData['imageCount'] ?? 0;
@@ -2324,6 +2457,24 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: 8),
+                              if (assessedByName != null)
+                                Text(
+                                  'Assessed by: $assessedByName',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    color: Colors.amber.shade800,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              if (assessedAt != null)
+                                Text(
+                                  'Assessed on: ${DateFormat.yMMMd().add_jm().format(assessedAt)}',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    color: Colors.amber.shade700,
+                                  ),
+                                ),
                               const SizedBox(height: 8),
                               Text(
                                 assessment,

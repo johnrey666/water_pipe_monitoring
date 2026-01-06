@@ -646,10 +646,17 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                               color: Colors.blue[50],
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Icon(
-                              Icons.water_drop,
-                              color: Colors.blue[700],
-                              size: 20,
+                            child: Image.asset(
+                              'assets/images/icon.png',
+                              width: 24,
+                              height: 24,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Icon(
+                                Icons.water_drop,
+                                color: Colors.blue[700],
+                                size: 20,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -981,10 +988,17 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                               color: Colors.blue[50],
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Icon(
-                              Icons.water_drop,
-                              color: Colors.blue[700],
-                              size: 20,
+                            child: Image.asset(
+                              'assets/images/icon.png',
+                              width: 24,
+                              height: 24,
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Icon(
+                                Icons.water_drop,
+                                color: Colors.blue[700],
+                                size: 20,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
