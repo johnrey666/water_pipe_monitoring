@@ -2374,7 +2374,7 @@ class _IllegalTappingReportPageState extends State<IllegalTappingReportPage> {
               ),
             ),
           ],
-        )sd);
+        ));
   }
 
   // Map location picker dialog
