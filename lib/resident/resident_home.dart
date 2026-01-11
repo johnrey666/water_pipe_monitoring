@@ -57,9 +57,13 @@ class _ResidentHomePageState extends State<ResidentHomePage>
   late Future<double> _averageConsumptionFuture;
   late Future<List<Map<String, dynamic>>> _lastSixMonthsFuture;
 
+  // Ads rotation variables - moved to separate stateful widget to prevent reloads
+  late GlobalKey<_DashboardContentState> _dashboardContentKey;
+
   @override
   void initState() {
     super.initState();
+    _dashboardContentKey = GlobalKey<_DashboardContentState>();
     _totalConsumptionFuture = _fetchTotalWaterConsumption();
     _thisMonthConsumptionFuture = _fetchThisMonthConsumption();
     _averageConsumptionFuture = _fetchAverageMonthlyConsumption();
@@ -450,7 +454,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
               'Cancel',
               style: GoogleFonts.poppins(
                 fontSize: 14,
-                color: Colors.blue.shade700,
+                color: const Color(0xFF00BCD4),
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -603,7 +607,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(notification['message'] ?? 'New bill available'),
-            backgroundColor: Colors.blue,
+            backgroundColor: const Color(0xFF00BCD4),
             duration: const Duration(seconds: 2),
           ),
         );
@@ -801,6 +805,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     if (mounted) {
       showDialog(
         context: context,
+        barrierDismissible: false,
         builder: (context) => Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.all(16),
@@ -829,6 +834,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     if (mounted) {
       showDialog(
         context: context,
+        barrierDismissible: false,
         builder: (context) => Dialog(
           backgroundColor: Colors.transparent,
           insetPadding: const EdgeInsets.all(16),
@@ -898,10 +904,32 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
+          // NEW: Water droplet loading screen
+          return Scaffold(
+            backgroundColor: Colors.white,
             body: Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF87CEEB)),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  WaterDropletLoading(),
+                  const SizedBox(height: 30),
+                  Text(
+                    'Loading your dashboard...',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF00BCD4),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'Please wait a moment',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
               ),
             ),
           );
@@ -924,8 +952,25 @@ class _ResidentHomePageState extends State<ResidentHomePage>
               (route) => false,
             );
           });
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
+          return Scaffold(
+            backgroundColor: Colors.white,
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  WaterDropletLoading(),
+                  const SizedBox(height: 30),
+                  Text(
+                    'Redirecting to login...',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF00BCD4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           );
         }
         return _buildHomeContent(context);
@@ -945,7 +990,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         return false;
       },
       child: Scaffold(
-        backgroundColor: Colors.grey.shade50,
+        backgroundColor: const Color(0xFFE0F7FA), // Aqua blue background
         appBar: AppBar(
           backgroundColor: Colors.white,
           title: Text(
@@ -953,13 +998,13 @@ class _ResidentHomePageState extends State<ResidentHomePage>
             style: GoogleFonts.poppins(
               fontSize: 18,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: const Color(0xFF00BCD4), // Aqua blue text
             ),
           ),
           elevation: 2,
           leading: Builder(
             builder: (context) => IconButton(
-              icon: const Icon(Icons.menu, color: Colors.blue),
+              icon: const Icon(Icons.menu, color: Color(0xFF00BCD4)),
               onPressed: () => Scaffold.of(context).openDrawer(),
             ),
           ),
@@ -971,13 +1016,13 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                   icon: Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: Colors.blue.shade50,
+                      color: const Color(0xFFE0F7FA), // Aqua blue
                     ),
                     child: const Padding(
                       padding: EdgeInsets.all(8.0),
                       child: Icon(
                         Icons.notifications_outlined,
-                        color: Colors.blue,
+                        color: Color(0xFF00BCD4),
                         size: 24,
                       ),
                     ),
@@ -1032,8 +1077,8 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
                       colors: [
-                        Color(0xFF87CEEB),
-                        Color.fromARGB(255, 127, 190, 226),
+                        Color(0xFF00BCD4), // Aqua blue
+                        Color(0xFF4DD0E1), // Lighter aqua blue
                       ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -1049,7 +1094,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                         radius: 28,
                         backgroundColor: Colors.white,
                         child: Icon(Icons.person,
-                            size: 36, color: Color.fromARGB(255, 58, 56, 56)),
+                            size: 36, color: Color(0xFF00BCD4)),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -1059,7 +1104,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                             Text(
                               'Welcome!',
                               style: GoogleFonts.poppins(
-                                color: Colors.grey[800],
+                                color: Colors.white,
                                 fontWeight: FontWeight.w500,
                                 fontSize: 16,
                               ),
@@ -1067,7 +1112,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                             Text(
                               _residentName,
                               style: GoogleFonts.poppins(
-                                color: Colors.grey[800],
+                                color: Colors.white,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 20,
                               ),
@@ -1137,7 +1182,18 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                 offstage: _selectedPage != ResidentPage.home,
                 child: TickerMode(
                   enabled: _selectedPage == ResidentPage.home,
-                  child: _buildDashboard(),
+                  child: DashboardContent(
+                    key: _dashboardContentKey,
+                    residentName: _residentName,
+                    address: _address,
+                    purok: _purok,
+                    meterNumber: _meterNumber,
+                    totalConsumptionFuture: _totalConsumptionFuture,
+                    thisMonthConsumptionFuture: _thisMonthConsumptionFuture,
+                    averageConsumptionFuture: _averageConsumptionFuture,
+                    lastSixMonthsFuture: _lastSixMonthsFuture,
+                    refreshDashboard: _refreshDashboard,
+                  ),
                 ),
               ),
               Offstage(
@@ -1165,16 +1221,13 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const CircularProgressIndicator(
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                    Color(0xFF87CEEB)),
-                              ),
+                              WaterDropletLoading(size: 40),
                               const SizedBox(height: 16),
                               Text(
-                                'Loading user data...',
+                                'Loading transaction history...',
                                 style: GoogleFonts.poppins(
                                   fontSize: 14,
-                                  color: Colors.grey.shade600,
+                                  color: const Color(0xFF00BCD4),
                                 ),
                               ),
                             ],
@@ -1213,14 +1266,15 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Material(
-        color: isSelected ? const Color(0xFF87CEEB) : Colors.transparent,
+        color: isSelected ? const Color(0xFFE0F7FA) : Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
         ),
         child: ListTile(
           leading: Icon(
             icon,
-            color: Colors.grey[800],
+            color:
+                isSelected ? const Color(0xFF00BCD4) : const Color(0xFF00BCD4),
             size: 24,
           ),
           title: Text(
@@ -1228,7 +1282,9 @@ class _ResidentHomePageState extends State<ResidentHomePage>
             style: GoogleFonts.poppins(
               fontSize: 16,
               fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: Colors.grey[800],
+              color: isSelected
+                  ? const Color(0xFF00BCD4)
+                  : const Color(0xFF00BCD4),
             ),
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
@@ -1242,11 +1298,116 @@ class _ResidentHomePageState extends State<ResidentHomePage>
       ),
     );
   }
+}
 
-  Widget _buildDashboard() {
+// NEW: DashboardContent as a separate StatefulWidget to preserve ad state
+class DashboardContent extends StatefulWidget {
+  final String residentName;
+  final String address;
+  final String purok;
+  final String meterNumber;
+  final Future<double> totalConsumptionFuture;
+  final Future<double> thisMonthConsumptionFuture;
+  final Future<double> averageConsumptionFuture;
+  final Future<List<Map<String, dynamic>>> lastSixMonthsFuture;
+  final Future<void> Function() refreshDashboard;
+
+  const DashboardContent({
+    super.key,
+    required this.residentName,
+    required this.address,
+    required this.purok,
+    required this.meterNumber,
+    required this.totalConsumptionFuture,
+    required this.thisMonthConsumptionFuture,
+    required this.averageConsumptionFuture,
+    required this.lastSixMonthsFuture,
+    required this.refreshDashboard,
+  });
+
+  @override
+  State<DashboardContent> createState() => _DashboardContentState();
+}
+
+class _DashboardContentState extends State<DashboardContent>
+    with SingleTickerProviderStateMixin {
+  // Ads rotation variables
+  final List<String> _adImages = [
+    'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1562157873-818bc0726f68?w-800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1562077981-4d7eafd8d4b0?w-800&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&auto=format&fit=crop',
+  ];
+  final List<String> _adTitles = [
+    'Save Water, Save Money!',
+    'Conserve Water Today',
+    'Smart Water Usage Tips',
+    'Fix Leaks, Save Resources',
+  ];
+  final List<String> _adSubTitles = [
+    'Learn how to reduce your water bill by 20%',
+    'Check our water conservation guide',
+    'Get free water-saving devices',
+    'Detect and repair leaks efficiently',
+  ];
+  int _currentAdIndex = 0;
+  late Timer _adRotateTimer;
+  late AnimationController _adController;
+  late Animation<double> _adFadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _adController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _adFadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _adController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    // Start ad rotation timer
+    _startAdRotationTimer();
+  }
+
+  void _startAdRotationTimer() {
+    _adRotateTimer = Timer.periodic(const Duration(seconds: 8), (timer) {
+      if (mounted) {
+        setState(() {
+          _currentAdIndex = (_currentAdIndex + 1) % _adImages.length;
+        });
+        // Start fade animation
+        _adController.reset();
+        _adController.forward();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _adRotateTimer.cancel();
+    _adController.dispose();
+    super.dispose();
+  }
+
+  void _nextAd() {
+    if (mounted) {
+      setState(() {
+        _currentAdIndex = (_currentAdIndex + 1) % _adImages.length;
+      });
+      _adController.reset();
+      _adController.forward();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: _refreshDashboard,
-      color: Colors.blue.shade700,
+      onRefresh: widget.refreshDashboard,
+      color: const Color(0xFF00BCD4),
       backgroundColor: Colors.white,
       child: LayoutBuilder(
         builder: (context, constraints) {
@@ -1271,20 +1432,28 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: const Color(0xFF00BCD4).withOpacity(0.1),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
                         ],
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFFE0F7FA),
+                            Colors.white,
+                          ],
+                        ),
                       ),
                       child: Row(
                         children: [
                           CircleAvatar(
                             radius: 24,
-                            backgroundColor: Colors.blue.shade100,
+                            backgroundColor: const Color(0xFFE0F7FA),
                             child: Icon(
                               Icons.person,
-                              color: Colors.blue.shade700,
+                              color: const Color(0xFF00BCD4),
                               size: 28,
                             ),
                           ),
@@ -1294,20 +1463,20 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Welcome, $_residentName!',
+                                  'Welcome, ${widget.residentName}!',
                                   style: GoogleFonts.poppins(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.black87,
+                                    color: const Color(0xFF00BCD4),
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 1,
                                 ),
                                 Text(
-                                  _address,
+                                  widget.address,
                                   style: GoogleFonts.poppins(
                                     fontSize: 12,
-                                    color: Colors.grey.shade600,
+                                    color: const Color(0xFF4DD0E1),
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                   maxLines: 1,
@@ -1322,24 +1491,28 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.blue.shade50,
+                                  color: const Color(0xFFE0F7FA),
                                   borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: const Color(0xFF00BCD4),
+                                    width: 1,
+                                  ),
                                 ),
                                 child: Text(
-                                  _purok,
+                                  widget.purok,
                                   style: GoogleFonts.poppins(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.blue.shade700,
+                                    color: const Color(0xFF00BCD4),
                                   ),
                                 ),
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Meter: $_meterNumber',
+                                'Meter: ${widget.meterNumber}',
                                 style: GoogleFonts.poppins(
                                   fontSize: 10,
-                                  color: Colors.grey.shade600,
+                                  color: const Color(0xFF4DD0E1),
                                 ),
                               ),
                             ],
@@ -1348,7 +1521,25 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                       ),
                     ),
                   ),
+
                   const SizedBox(height: 16),
+
+                  // Ad Banner Section - Fixed overflow
+                  FadeInLeft(
+                    duration: const Duration(milliseconds: 400),
+                    child: _buildAdBanner(constraints),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Water Conservation Reminder (Replaced Daily Water Challenge)
+                  FadeInUp(
+                    duration: const Duration(milliseconds: 500),
+                    child: _buildWaterConservationReminder(),
+                  ),
+
+                  const SizedBox(height: 16),
+
                   // Quick Stats Row - Made responsive
                   SizedBox(
                     height: constraints.maxWidth < 600 ? 140 : 130,
@@ -1358,7 +1549,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                           child: ElasticIn(
                             duration: const Duration(milliseconds: 300),
                             child: FutureBuilder<double>(
-                              future: _totalConsumptionFuture,
+                              future: widget.totalConsumptionFuture,
                               builder: (context, snapshot) {
                                 String value = 'Loading...';
                                 if (snapshot.hasData) {
@@ -1372,7 +1563,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                                   value: value,
                                   subtitle: 'All-time usage',
                                   icon: Icons.water_drop,
-                                  color: Colors.blue.shade700,
+                                  color: const Color(0xFF00BCD4),
                                   constraints: constraints,
                                 );
                               },
@@ -1385,7 +1576,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                             duration: const Duration(milliseconds: 300),
                             delay: const Duration(milliseconds: 100),
                             child: FutureBuilder<double>(
-                              future: _thisMonthConsumptionFuture,
+                              future: widget.thisMonthConsumptionFuture,
                               builder: (context, snapshot) {
                                 String value = 'Loading...';
                                 if (snapshot.hasData) {
@@ -1399,7 +1590,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                                   value: value,
                                   subtitle: 'Current usage',
                                   icon: Icons.calendar_today,
-                                  color: Colors.green.shade700,
+                                  color: const Color(0xFF4DD0E1),
                                   constraints: constraints,
                                 );
                               },
@@ -1413,7 +1604,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                               duration: const Duration(milliseconds: 300),
                               delay: const Duration(milliseconds: 200),
                               child: FutureBuilder<double>(
-                                future: _averageConsumptionFuture,
+                                future: widget.averageConsumptionFuture,
                                 builder: (context, snapshot) {
                                   String value = 'Loading...';
                                   if (snapshot.hasData) {
@@ -1427,7 +1618,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                                     value: value,
                                     subtitle: 'Average usage',
                                     icon: Icons.trending_up,
-                                    color: Colors.purple.shade700,
+                                    color: const Color(0xFF26C6DA),
                                     constraints: constraints,
                                   );
                                 },
@@ -1445,7 +1636,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                       duration: const Duration(milliseconds: 300),
                       delay: const Duration(milliseconds: 200),
                       child: FutureBuilder<double>(
-                        future: _averageConsumptionFuture,
+                        future: widget.averageConsumptionFuture,
                         builder: (context, snapshot) {
                           String value = 'Loading...';
                           if (snapshot.hasData) {
@@ -1458,7 +1649,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                             value: value,
                             subtitle: 'Average monthly usage',
                             icon: Icons.trending_up,
-                            color: Colors.purple.shade700,
+                            color: const Color(0xFF26C6DA),
                             constraints: constraints,
                             isFullWidth: true,
                           );
@@ -1473,7 +1664,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                     child: _buildMonthlyUsageChart(constraints),
                   ),
                   const SizedBox(height: 16),
-                  // Water Conservation Tips
+                  // Water Conservation Tips - Aqua Blue Version
                   FadeInUp(
                     duration: const Duration(milliseconds: 300),
                     delay: const Duration(milliseconds: 200),
@@ -1481,52 +1672,85 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFFE0F7FA),
+                            Color(0xFFB2EBF2),
+                          ],
+                        ),
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
+                            color: const Color(0xFF00BCD4).withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
                           ),
                         ],
+                        border: Border.all(
+                          color: const Color(0xFF00BCD4),
+                          width: 1,
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.eco, color: Colors.green.shade700),
-                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF00BCD4),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(Icons.eco,
+                                    color: Colors.white, size: 20),
+                              ),
+                              const SizedBox(width: 12),
                               Text(
-                                'Water Conservation Tips',
+                                '💧 Water Conservation Tips',
                                 style: GoogleFonts.poppins(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green.shade800,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF00838F),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '• Fix leaky faucets promptly\n'
-                            '• Take shorter showers\n'
-                            '• Turn off tap while brushing teeth\n'
-                            '• Use washing machine with full loads\n'
-                            '• Collect rainwater for plants',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: Colors.grey.shade700,
-                              height: 1.5,
-                            ),
+                          const SizedBox(height: 12),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _buildTipChip(
+                                '🚿 Short showers',
+                                'Save 10L per minute!',
+                                const Color(0xFF00BCD4),
+                              ),
+                              _buildTipChip(
+                                '💧 Fix leaks',
+                                'Save 90L per day!',
+                                const Color(0xFF4DD0E1),
+                              ),
+                              _buildTipChip(
+                                '🌱 Smart watering',
+                                'Save 50% water!',
+                                const Color(0xFF26C6DA),
+                              ),
+                              _buildTipChip(
+                                '🚰 Turn off tap',
+                                'Save 6L per minute!',
+                                const Color(0xFF80DEEA),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Important Contacts
+                  // Water Usage Insights (Replaced Community Leaderboard)
                   FadeInUp(
                     duration: const Duration(milliseconds: 300),
                     delay: const Duration(milliseconds: 300),
@@ -1534,47 +1758,141 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Color(0xFFE0F7FA),
+                            Color(0xFFB2EBF2),
+                          ],
+                        ),
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
+                            color: const Color(0xFF00BCD4).withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
                           ),
                         ],
+                        border: Border.all(
+                          color: const Color(0xFF00BCD4),
+                          width: 1,
+                        ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Important Contacts',
-                            style: GoogleFonts.poppins(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
+                          Row(
+                            children: [
+                              const Icon(Icons.insights,
+                                  color: Color(0xFF00BCD4)),
+                              const SizedBox(width: 8),
+                              Text(
+                                '📈 Water Usage Insights',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF00BCD4),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          _buildUsageInsightItem(
+                            '📊 Your Usage Pattern',
+                            'Your consumption is 15% lower than community average',
+                            Icons.trending_down,
+                            const Color(0xFF4CAF50),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildUsageInsightItem(
+                            '💰 Potential Savings',
+                            'Reducing shower time by 2 mins saves ₱150/month',
+                            Icons.savings,
+                            const Color(0xFFFF9800),
+                          ),
+                          const SizedBox(height: 8),
+                          _buildUsageInsightItem(
+                            '🌍 Environmental Impact',
+                            'You\'ve saved 2,500L water this year',
+                            Icons.eco,
+                            const Color(0xFF00BCD4),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Important Contacts with Aqua Blue Design
+                  FadeInUp(
+                    duration: const Duration(milliseconds: 300),
+                    delay: const Duration(milliseconds: 400),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.white,
+                            Color(0xFFE0F7FA),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF00BCD4).withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                        border: Border.all(
+                          color: const Color(0xFFB2EBF2),
+                          width: 1,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.contacts,
+                                  color: Color(0xFF00BCD4)),
+                              const SizedBox(width: 8),
+                              Text(
+                                '📞 Quick Contacts',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF00BCD4),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 12),
                           _buildContactItem(
-                            icon: Icons.phone,
-                            title: 'Emergency Line',
+                            icon: Icons.emergency,
+                            title: '24/7 Emergency',
                             subtitle: '(0912) 345-6789',
-                            color: Colors.red.shade600,
+                            color: const Color(0xFF00BCD4),
+                            emoji: '🚨',
                           ),
                           const SizedBox(height: 8),
                           _buildContactItem(
                             icon: Icons.support_agent,
-                            title: 'Customer Service',
+                            title: 'Customer Care',
                             subtitle: '(0912) 987-6543',
-                            color: Colors.blue.shade600,
+                            color: const Color(0xFF4DD0E1),
+                            emoji: '💁',
                           ),
                           const SizedBox(height: 8),
                           _buildContactItem(
                             icon: Icons.email,
                             title: 'Email Support',
-                            subtitle: '<support@waterbilling.com>',
-                            color: Colors.green.shade600,
+                            subtitle: 'support@waterutility.com',
+                            color: const Color(0xFF26C6DA),
+                            emoji: '📧',
                           ),
                         ],
                       ),
@@ -1587,6 +1905,406 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           );
         },
       ),
+    );
+  }
+
+  // Water Conservation Reminder Widget (Replaced Daily Water Challenge)
+  Widget _buildWaterConservationReminder() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFE0F7FA),
+            Color(0xFFB2EBF2),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00BCD4).withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+        border: Border.all(
+          color: const Color(0xFF00BCD4),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF00BCD4),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.tips_and_updates,
+                    color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '💡 Water Conservation Reminder',
+                style: GoogleFonts.poppins(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF00838F),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Every Drop Counts!',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF00796B),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildReminderItem(
+                            '🚰 Check faucets for leaks regularly'),
+                        const SizedBox(height: 6),
+                        _buildReminderItem('🚿 Keep showers under 5 minutes'),
+                        const SizedBox(height: 6),
+                        _buildReminderItem(
+                            '💧 Use washing machine with full loads'),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF00BCD4),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          'TODAY',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          'TIP',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFB2EBF2),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF80DEEA)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.water_drop,
+                        color: Color(0xFF00796B), size: 16),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Small changes make big differences in water conservation',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: const Color(0xFF00796B),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReminderItem(String text) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.check_circle, color: Color(0xFF00BCD4), size: 16),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            text,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: const Color(0xFF00796B),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTipChip(String title, String subtitle, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            subtitle,
+            style: GoogleFonts.poppins(
+              fontSize: 10,
+              color: color.withOpacity(0.8),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUsageInsightItem(
+      String title, String description, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE0E0E0)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF424242),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: GoogleFonts.poppins(
+                    fontSize: 11,
+                    color: Colors.grey.shade600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Ad Banner Widget - Fixed overflow with proper constraints
+  Widget _buildAdBanner(BoxConstraints constraints) {
+    return AnimatedBuilder(
+      animation: _adController,
+      builder: (context, child) {
+        return Opacity(
+          opacity: _adFadeAnimation.value,
+          child: Container(
+            width: double.infinity,
+            height: 100, // Reduced height to prevent overflow
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: const LinearGradient(
+                colors: [
+                  Color(0xFF00BCD4),
+                  Color(0xFF4DD0E1),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF00BCD4).withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                // Background image - smaller to prevent overflow
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                    child: Container(
+                      width: 100, // Reduced width
+                      decoration: BoxDecoration(
+                        image: DecorationImage(
+                          image: NetworkImage(_adImages[_currentAdIndex]),
+                          fit: BoxFit.cover,
+                          colorFilter: ColorFilter.mode(
+                            Colors.black.withOpacity(0.1),
+                            BlendMode.darken,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Content
+                Padding(
+                  padding: const EdgeInsets.all(12), // Reduced padding
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.9),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                'ADVERTISEMENT',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 8, // Smaller font
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF00BCD4),
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _adTitles[_currentAdIndex],
+                              style: GoogleFonts.poppins(
+                                fontSize: constraints.maxWidth < 400 ? 12 : 13,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _adSubTitles[_currentAdIndex],
+                              style: GoogleFonts.poppins(
+                                fontSize: constraints.maxWidth < 400 ? 9 : 10,
+                                color: Colors.white.withOpacity(0.9),
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Navigation and indicator dots - made smaller
+                      Container(
+                        width: 40, // Fixed width to prevent overflow
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Manual next button
+                            IconButton(
+                              onPressed: _nextAd,
+                              icon: const Icon(
+                                Icons.arrow_forward_ios,
+                                color: Colors.white,
+                                size: 14, // Smaller icon
+                              ),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                            ),
+                            const SizedBox(height: 4),
+                            // Indicator dots - smaller
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                for (int i = 0; i < _adImages.length; i++)
+                                  Container(
+                                    margin: const EdgeInsets.symmetric(
+                                        horizontal: 1),
+                                    width: 4,
+                                    height: 4,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: _currentAdIndex == i
+                                          ? Colors.white
+                                          : Colors.white.withOpacity(0.5),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -1606,11 +2324,15 @@ class _ResidentHomePageState extends State<ResidentHomePage>
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+            color: color.withOpacity(0.1),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
           ),
         ],
+        border: Border.all(
+          color: color.withOpacity(0.2),
+          width: 1,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
@@ -1621,10 +2343,10 @@ class _ResidentHomePageState extends State<ResidentHomePage>
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(6),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon,
                       color: color, size: constraints.maxWidth < 400 ? 18 : 20),
@@ -1655,7 +2377,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                     style: GoogleFonts.poppins(
                       fontSize: constraints.maxWidth < 400 ? 11 : 12,
                       fontWeight: FontWeight.w600,
-                      color: Colors.grey.shade800,
+                      color: color,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1664,7 +2386,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                     subtitle,
                     style: GoogleFonts.poppins(
                       fontSize: constraints.maxWidth < 400 ? 9 : 10,
-                      color: Colors.grey.shade600,
+                      color: color.withOpacity(0.7),
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -1683,44 +2405,60 @@ class _ResidentHomePageState extends State<ResidentHomePage>
     required String title,
     required String subtitle,
     required Color color,
+    required String emoji,
   }) {
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 20,
-          backgroundColor: color.withOpacity(0.1),
-          child: Icon(icon, color: color, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: GoogleFonts.poppins(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade800,
-                ),
-              ),
-              Text(
-                subtitle,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: color,
-                ),
-              ),
-            ],
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              emoji,
+              style: const TextStyle(fontSize: 16),
+            ),
           ),
-        ),
-      ],
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.poppins(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: color.withOpacity(0.8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Icon(icon, color: color),
+        ],
+      ),
     );
   }
 
   Widget _buildMonthlyUsageChart(BoxConstraints constraints) {
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _lastSixMonthsFuture,
+      future: widget.lastSixMonthsFuture,
       builder: (context, snapshot) {
         List<BarChartGroupData> barGroups = [];
         double maxY = 250.0;
@@ -1751,11 +2489,15 @@ class _ResidentHomePageState extends State<ResidentHomePage>
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
+                color: const Color(0xFF00BCD4).withOpacity(0.1),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
               ),
             ],
+            border: Border.all(
+              color: const Color(0xFFE0F7FA),
+              width: 1,
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -1766,26 +2508,31 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Monthly Water Consumption',
+                      '📊 Water Consumption Trend',
                       style: GoogleFonts.poppins(
                         fontSize: constraints.maxWidth < 400 ? 14 : 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF00BCD4),
                       ),
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
+                        gradient: const LinearGradient(
+                          colors: [
+                            Color(0xFF00BCD4),
+                            Color(0xFF4DD0E1),
+                          ],
+                        ),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         'Last 6 Months',
                         style: GoogleFonts.poppins(
                           fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blue.shade700,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -1836,7 +2583,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                                   style: GoogleFonts.poppins(
                                     fontSize:
                                         constraints.maxWidth < 400 ? 10 : 11,
-                                    color: Colors.grey[800],
+                                    color: const Color(0xFF00BCD4),
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
@@ -1858,7 +2605,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                                   style: GoogleFonts.poppins(
                                     fontSize:
                                         constraints.maxWidth < 400 ? 9 : 10,
-                                    color: Colors.grey[600],
+                                    color: const Color(0xFF4DD0E1),
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
@@ -1876,7 +2623,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                         drawVerticalLine: false,
                         getDrawingHorizontalLine: (value) {
                           return FlLine(
-                            color: Colors.grey.shade200,
+                            color: const Color(0xFFE0F7FA),
                             strokeWidth: 1,
                           );
                         },
@@ -1895,7 +2642,12 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                       width: 12,
                       height: 12,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF87CEEB),
+                        gradient: const LinearGradient(
+                          colors: [
+                            Color(0xFF00BCD4),
+                            Color(0xFF4DD0E1),
+                          ],
+                        ),
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
@@ -1904,7 +2656,7 @@ class _ResidentHomePageState extends State<ResidentHomePage>
                       'Water Consumption (m³)',
                       style: GoogleFonts.poppins(
                         fontSize: 11,
-                        color: Colors.grey.shade600,
+                        color: const Color(0xFF4DD0E1),
                       ),
                     ),
                   ],
@@ -1927,10 +2679,214 @@ class _ResidentHomePageState extends State<ResidentHomePage>
           borderRadius: const BorderRadius.vertical(
             top: Radius.circular(4),
           ),
-          color: const Color(0xFF87CEEB),
+          gradient: const LinearGradient(
+            colors: [
+              Color(0xFF00BCD4),
+              Color(0xFF4DD0E1),
+            ],
+            begin: Alignment.bottomCenter,
+            end: Alignment.topCenter,
+          ),
         ),
       ],
     );
+  }
+}
+
+// NEW: Water Droplet Loading Animation Widget
+class WaterDropletLoading extends StatefulWidget {
+  final double size;
+  final Color color;
+
+  const WaterDropletLoading({
+    super.key,
+    this.size = 60,
+    this.color = const Color(0xFF00BCD4),
+  });
+
+  @override
+  State<WaterDropletLoading> createState() => _WaterDropletLoadingState();
+}
+
+class _WaterDropletLoadingState extends State<WaterDropletLoading>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _sizeAnimation;
+  late Animation<double> _opacityAnimation;
+  late Animation<Offset> _positionAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 1400),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    _sizeAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 1.2), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.2, end: 0.8), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 0.8, end: 1.0), weight: 30),
+    ]).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    _opacityAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.3, end: 1.0), weight: 40),
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 0.7), weight: 30),
+      TweenSequenceItem(tween: Tween(begin: 0.7, end: 0.3), weight: 30),
+    ]).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    _positionAnimation = TweenSequence<Offset>([
+      TweenSequenceItem(
+        tween: Tween(begin: const Offset(0, 0), end: const Offset(0, -0.2)),
+        weight: 50,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: const Offset(0, -0.2), end: const Offset(0, 0.1)),
+        weight: 30,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: const Offset(0, 0.1), end: const Offset(0, 0)),
+        weight: 20,
+      ),
+    ]).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeInOut,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: _positionAnimation.value * widget.size,
+          child: Opacity(
+            opacity: _opacityAnimation.value,
+            child: Transform.scale(
+              scale: _sizeAnimation.value,
+              child: CustomPaint(
+                size: Size(widget.size, widget.size),
+                painter: WaterDropletPainter(
+                  progress: _controller.value,
+                  color: widget.color,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class WaterDropletPainter extends CustomPainter {
+  final double progress;
+  final Color color;
+
+  WaterDropletPainter({
+    required this.progress,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = size.width / 2 * 0.8;
+
+    // Draw water droplet
+    final dropletPaint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill
+      ..shader = RadialGradient(
+        colors: [
+          color.withOpacity(0.9),
+          color.withOpacity(0.6),
+          color.withOpacity(0.3),
+        ],
+        stops: const [0.0, 0.7, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: radius));
+
+    // Create droplet shape
+    final path = Path();
+    path.moveTo(center.dx, center.dy - radius);
+    path.quadraticBezierTo(
+      center.dx + radius * 0.8,
+      center.dy - radius * 0.2,
+      center.dx,
+      center.dy + radius,
+    );
+    path.quadraticBezierTo(
+      center.dx - radius * 0.8,
+      center.dy - radius * 0.2,
+      center.dx,
+      center.dy - radius,
+    );
+    path.close();
+
+    canvas.drawPath(path, dropletPaint);
+
+    // Draw ripple effect
+    final ripplePaint = Paint()
+      ..color = color.withOpacity(0.15 * (1 - progress))
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+
+    final rippleRadius = radius * (1 + progress * 0.5);
+    canvas.drawCircle(center, rippleRadius, ripplePaint);
+
+    // Draw highlight
+    final highlightPaint = Paint()
+      ..color = Colors.white.withOpacity(0.3)
+      ..style = PaintingStyle.fill;
+
+    final highlightPath = Path();
+    final highlightRadius = radius * 0.3;
+    highlightPath.addOval(Rect.fromCircle(
+      center: Offset(center.dx - radius * 0.2, center.dy - radius * 0.3),
+      radius: highlightRadius,
+    ));
+    canvas.drawPath(highlightPath, highlightPaint);
+
+    // Draw falling water droplets
+    final dropCount = 3;
+    for (int i = 0; i < dropCount; i++) {
+      final dropProgress = (progress + i * 0.2) % 1.0;
+      if (dropProgress < 0.8) {
+        final dropY = center.dy + radius + dropProgress * radius * 1.5;
+        final dropX = center.dx + (i - 1) * radius * 0.3;
+
+        final dropPaint = Paint()
+          ..color = color.withOpacity(0.7 * (1 - dropProgress / 0.8))
+          ..style = PaintingStyle.fill;
+
+        final dropSize = radius * 0.15 * (1 - dropProgress / 0.8);
+        canvas.drawCircle(Offset(dropX, dropY), dropSize, dropPaint);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant WaterDropletPainter oldDelegate) {
+    return progress != oldDelegate.progress || color != oldDelegate.color;
   }
 }
 
@@ -2006,9 +2962,20 @@ class _NotificationDropdownState extends State<NotificationDropdown>
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Center(
-          child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF87CEEB)),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              WaterDropletLoading(size: 40),
+              const SizedBox(height: 16),
+              Text(
+                'Loading notifications...',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: const Color(0xFF00BCD4),
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -2030,14 +2997,14 @@ class _NotificationDropdownState extends State<NotificationDropdown>
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.notifications_off,
-                  size: 40, color: Colors.grey.shade400),
+                  size: 40, color: const Color(0xFFB2EBF2)),
               const SizedBox(height: 8),
               Text(
                 'No notifications',
                 style: GoogleFonts.poppins(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: Colors.grey.shade600,
+                  color: const Color(0xFF00BCD4),
                 ),
               ),
               const SizedBox(height: 4),
@@ -2045,7 +3012,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                 'You\'re all caught up!',
                 style: GoogleFonts.poppins(
                   fontSize: 11,
-                  color: Colors.grey.shade500,
+                  color: const Color(0xFF4DD0E1),
                 ),
               ),
             ],
@@ -2068,9 +3035,9 @@ class _NotificationDropdownState extends State<NotificationDropdown>
           // Header
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF87CEEB),
-              borderRadius: const BorderRadius.only(
+            decoration: const BoxDecoration(
+              color: Color(0xFF00BCD4),
+              borderRadius: BorderRadius.only(
                 topLeft: Radius.circular(12),
                 topRight: Radius.circular(12),
               ),
@@ -2101,7 +3068,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                           style: GoogleFonts.poppins(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: const Color(0xFF87CEEB),
+                            color: const Color(0xFF00BCD4),
                           ),
                         ),
                       ),
@@ -2127,7 +3094,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
               itemCount: allNotifications.length,
               separatorBuilder: (context, index) => Divider(
                 height: 1,
-                color: Colors.grey.shade200,
+                color: const Color(0xFFE0F7FA),
                 indent: 12,
                 endIndent: 12,
               ),
@@ -2141,9 +3108,9 @@ class _NotificationDropdownState extends State<NotificationDropdown>
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.grey.shade50,
+              color: const Color(0xFFF5F5F5),
               border: Border(
-                top: BorderSide(color: Colors.grey.shade300),
+                top: BorderSide(color: const Color(0xFFE0E0E0)),
               ),
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(12),
@@ -2166,12 +3133,12 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                       widget.onRefreshCount?.call(); // Update badge count
                     },
                     icon: Icon(Icons.mark_chat_read,
-                        size: 14, color: Colors.blue.shade700),
+                        size: 14, color: const Color(0xFF00BCD4)),
                     label: Text(
                       'Mark all read',
                       style: GoogleFonts.poppins(
                         fontSize: 11,
-                        color: Colors.blue.shade700,
+                        color: const Color(0xFF00BCD4),
                       ),
                     ),
                     style: TextButton.styleFrom(
@@ -2185,7 +3152,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                   '${unread.length} unread • ${read.length} read',
                   style: GoogleFonts.poppins(
                     fontSize: 11,
-                    color: Colors.grey.shade600,
+                    color: const Color(0xFF757575),
                   ),
                 ),
               ],
@@ -2208,28 +3175,28 @@ class _NotificationDropdownState extends State<NotificationDropdown>
     // Determine icon and color based on type and status
     IconData icon;
     Color iconColor;
-    Color backgroundColor = isRead ? Colors.white : Colors.blue.shade50;
+    Color backgroundColor = isRead ? Colors.white : const Color(0xFFE0F7FA);
     switch (type) {
       case 'new_bill':
         icon = Icons.receipt;
-        iconColor = Colors.blue;
+        iconColor = const Color(0xFF00BCD4);
         backgroundColor = isRead
-            ? Colors.blue.shade50
-            : Colors.blue.shade100.withOpacity(0.5);
+            ? const Color(0xFFE0F7FA)
+            : const Color(0xFFB2EBF2).withOpacity(0.5);
         break;
       case 'bill_updated':
         icon = Icons.edit_note;
-        iconColor = Colors.purple;
+        iconColor = const Color(0xFF8E24AA);
         backgroundColor = isRead
-            ? Colors.purple.shade50
-            : Colors.purple.shade100.withOpacity(0.5);
+            ? const Color(0xFFF3E5F5)
+            : const Color(0xFFE1BEE7).withOpacity(0.5);
         break;
       case 'report_fixed':
         icon = Icons.check_circle_outline;
-        iconColor = Colors.green;
+        iconColor = const Color(0xFF43A047);
         backgroundColor = isRead
-            ? Colors.green.shade50
-            : Colors.green.shade100.withOpacity(0.5);
+            ? const Color(0xFFE8F5E9)
+            : const Color(0xFFC8E6C9).withOpacity(0.5);
         break;
       case 'payment':
         icon = status == 'approved'
@@ -2238,25 +3205,25 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                 ? Icons.cancel
                 : Icons.payment;
         iconColor = status == 'approved'
-            ? Colors.green
+            ? const Color(0xFF43A047)
             : status == 'rejected'
-                ? Colors.red
-                : Colors.orange;
+                ? const Color(0xFFE53935)
+                : const Color(0xFFFB8C00);
         backgroundColor = isRead
             ? (status == 'approved'
-                ? Colors.green.shade50
+                ? const Color(0xFFE8F5E9)
                 : status == 'rejected'
-                    ? Colors.red.shade50
-                    : Colors.orange.shade50)
+                    ? const Color(0xFFFFEBEE)
+                    : const Color(0xFFFFF3E0))
             : (status == 'approved'
-                ? Colors.green.shade100.withOpacity(0.5)
+                ? const Color(0xFFC8E6C9).withOpacity(0.5)
                 : status == 'rejected'
-                    ? Colors.red.shade100.withOpacity(0.5)
-                    : Colors.orange.shade100.withOpacity(0.5));
+                    ? const Color(0xFFFFCDD2).withOpacity(0.5)
+                    : const Color(0xFFFFE0B2).withOpacity(0.5));
         break;
       default:
         icon = Icons.notifications;
-        iconColor = Colors.blue.shade700;
+        iconColor = const Color(0xFF00BCD4);
     }
     return Material(
       color: backgroundColor,
@@ -2286,7 +3253,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                         width: 10,
                         height: 10,
                         decoration: BoxDecoration(
-                          color: Colors.red,
+                          color: const Color(0xFFE53935),
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 1.5),
                         ),
@@ -2311,8 +3278,8 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                               fontWeight:
                                   isRead ? FontWeight.w500 : FontWeight.bold,
                               color: isRead
-                                  ? Colors.grey.shade700
-                                  : Colors.black87,
+                                  ? const Color(0xFF424242)
+                                  : const Color(0xFF212121),
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -2325,7 +3292,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                             height: 8,
                             margin: const EdgeInsets.only(left: 4, top: 3),
                             decoration: const BoxDecoration(
-                              color: Colors.red,
+                              color: Color(0xFFE53935),
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -2339,8 +3306,8 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                         style: GoogleFonts.poppins(
                           fontSize: 12,
                           color: isRead
-                              ? Colors.grey.shade600
-                              : Colors.grey.shade800,
+                              ? const Color(0xFF757575)
+                              : const Color(0xFF424242),
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -2354,10 +3321,10 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                       Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
+                          color: const Color(0xFFE0F7FA),
                           borderRadius: BorderRadius.circular(4),
                           border: Border.all(
-                            color: Colors.blue.shade200,
+                            color: const Color(0xFFB2EBF2),
                           ),
                         ),
                         child: Row(
@@ -2365,7 +3332,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                             Icon(
                               Icons.attach_money,
                               size: 12,
-                              color: Colors.blue.shade700,
+                              color: const Color(0xFF00BCD4),
                             ),
                             const SizedBox(width: 4),
                             Expanded(
@@ -2377,14 +3344,14 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                                     style: GoogleFonts.poppins(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
-                                      color: Colors.blue.shade900,
+                                      color: const Color(0xFF006064),
                                     ),
                                   ),
                                   Text(
                                     'Tap to view bill',
                                     style: GoogleFonts.poppins(
                                       fontSize: 10,
-                                      color: Colors.blue.shade700,
+                                      color: const Color(0xFF00BCD4),
                                     ),
                                   ),
                                 ],
@@ -2406,21 +3373,21 @@ class _NotificationDropdownState extends State<NotificationDropdown>
                           style: GoogleFonts.poppins(
                             fontSize: 10,
                             color: isRead
-                                ? Colors.grey.shade500
-                                : Colors.grey.shade600,
+                                ? const Color(0xFFBDBDBD)
+                                : const Color(0xFF9E9E9E),
                           ),
                         ),
                         if (isRead)
                           Row(
                             children: [
                               Icon(Icons.check_circle,
-                                  size: 10, color: Colors.green.shade600),
+                                  size: 10, color: const Color(0xFF43A047)),
                               const SizedBox(width: 4),
                               Text(
                                 'Read',
                                 style: GoogleFonts.poppins(
                                   fontSize: 9,
-                                  color: Colors.green.shade600,
+                                  color: const Color(0xFF43A047),
                                 ),
                               ),
                             ],
@@ -2438,7 +3405,7 @@ class _NotificationDropdownState extends State<NotificationDropdown>
   }
 }
 
-// FIXED: Rejected Payment Dialog with proper overflow handling for receipts
+// FIXED: Rejected Payment Dialog with proper scrolling
 class _RejectedPaymentDialog extends StatefulWidget {
   final Map<String, dynamic> paymentDetails;
   const _RejectedPaymentDialog({required this.paymentDetails});
@@ -2477,16 +3444,12 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
         ? DateFormat.yMMMd().format(processedDate)
         : DateFormat.yMMMd().format(DateTime.now());
 
-    final screenWidth = MediaQuery.of(context).size.width;
-    final screenHeight = MediaQuery.of(context).size.height;
-
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(16),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: screenWidth * 0.9,
-          maxHeight: screenHeight * 0.9,
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
         ),
         child: SingleChildScrollView(
           child: Container(
@@ -2507,15 +3470,15 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFE53935),
                     borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(16)),
+                        BorderRadius.vertical(top: Radius.circular(16)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.red.withOpacity(0.3),
+                        color: Color(0x55E53935),
                         blurRadius: 4,
-                        offset: const Offset(0, 2),
+                        offset: Offset(0, 2),
                       ),
                     ],
                   ),
@@ -2552,8 +3515,16 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                           Flexible(
                             child: Row(
                               children: [
-                                Image.asset('assets/images/icon.png',
-                                    height: 40),
+                                Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF00BCD4),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(Icons.water_drop,
+                                      color: Colors.white),
+                                ),
                                 const SizedBox(width: 8),
                                 Flexible(
                                   child: Column(
@@ -2565,14 +3536,14 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                                         style: TextStyle(
                                           fontSize: 15,
                                           fontWeight: FontWeight.bold,
-                                          color: Color(0xFF4A90E2),
+                                          color: Color(0xFF00BCD4),
                                         ),
                                       ),
                                       Text(
                                         purok,
                                         style: const TextStyle(
                                           fontSize: 12,
-                                          color: Colors.red,
+                                          color: Color(0xFFE53935),
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
@@ -2587,7 +3558,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                               formattedProcessedDate,
                               style: const TextStyle(
                                 fontSize: 12,
-                                color: Colors.grey,
+                                color: Color(0xFF757575),
                                 fontWeight: FontWeight.w500,
                               ),
                               textAlign: TextAlign.right,
@@ -2601,7 +3572,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.red,
+                          color: Color(0xFFE53935),
                           letterSpacing: 0.5,
                         ),
                       ),
@@ -2622,15 +3593,17 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                           '${cubicMeterUsed.toStringAsFixed(2)} m³'),
                       _dashedDivider(),
                       _receiptRow('Amount', '₱${amount.toStringAsFixed(2)}',
-                          valueColor: Colors.red, isBold: true, fontSize: 14),
+                          valueColor: const Color(0xFFE53935),
+                          isBold: true,
+                          fontSize: 14),
                       // Rejection Reason Section
                       const SizedBox(height: 16),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.red.shade50,
+                          color: const Color(0xFFFFEBEE),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.shade200),
+                          border: Border.all(color: const Color(0xFFEF9A9A)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2638,14 +3611,14 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                             Row(
                               children: [
                                 Icon(Icons.error_outline,
-                                    color: Colors.red.shade700, size: 20),
+                                    color: const Color(0xFFE53935), size: 20),
                                 const SizedBox(width: 8),
                                 Text(
                                   'Rejection Reason',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.red.shade800,
+                                    color: const Color(0xFFE53935),
                                   ),
                                 ),
                               ],
@@ -2653,9 +3626,9 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                             const SizedBox(height: 8),
                             Text(
                               rejectionReason,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 13,
-                                color: Colors.red.shade900,
+                                color: Color(0xFFD32F2F),
                                 height: 1.4,
                               ),
                             ),
@@ -2672,9 +3645,10 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                             padding: const EdgeInsets.symmetric(
                                 vertical: 10, horizontal: 12),
                             decoration: BoxDecoration(
-                              color: Colors.blue.shade50,
+                              color: const Color(0xFFE0F7FA),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.blue.shade200),
+                              border:
+                                  Border.all(color: const Color(0xFFB2EBF2)),
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2683,7 +3657,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                                   child: Row(
                                     children: [
                                       Icon(Icons.receipt,
-                                          color: Colors.blue.shade700,
+                                          color: const Color(0xFF00BCD4),
                                           size: 18),
                                       const SizedBox(width: 8),
                                       Flexible(
@@ -2692,7 +3666,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                                           style: TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
-                                            color: Colors.blue.shade700,
+                                            color: const Color(0xFF00BCD4),
                                           ),
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -2705,7 +3679,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                                       ? Icons.expand_less
                                       : Icons.expand_more,
                                   size: 18,
-                                  color: Colors.blue.shade700,
+                                  color: const Color(0xFF00BCD4),
                                 ),
                               ],
                             ),
@@ -2719,7 +3693,8 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.grey.shade300),
+                              border:
+                                  Border.all(color: const Color(0xFFE0E0E0)),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withOpacity(0.05),
@@ -2735,14 +3710,13 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                                   style: TextStyle(
                                     fontSize: 12,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade700,
+                                    color: const Color(0xFF757575),
                                   ),
                                 ),
                                 const SizedBox(height: 8),
                                 ConstrainedBox(
-                                  constraints: BoxConstraints(
+                                  constraints: const BoxConstraints(
                                     maxHeight: 200,
-                                    maxWidth: screenWidth * 0.7,
                                   ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(8),
@@ -2757,14 +3731,16 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                                                 MainAxisAlignment.center,
                                             children: [
                                               Icon(Icons.error,
-                                                  color: Colors.red.shade400,
+                                                  color:
+                                                      const Color(0xFFEF5350),
                                                   size: 40),
                                               const SizedBox(height: 8),
                                               Text(
                                                 'Unable to load receipt',
                                                 style: TextStyle(
                                                   fontSize: 12,
-                                                  color: Colors.grey.shade600,
+                                                  color:
+                                                      const Color(0xFF9E9E9E),
                                                 ),
                                               ),
                                             ],
@@ -2791,7 +3767,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                           padding: const EdgeInsets.symmetric(
                               vertical: 10, horizontal: 12),
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
+                            color: const Color(0xFFF5F5F5),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Row(
@@ -2803,7 +3779,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                                   style: TextStyle(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade800,
+                                    color: const Color(0xFF424242),
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -2813,7 +3789,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                                     ? Icons.expand_less
                                     : Icons.expand_more,
                                 size: 18,
-                                color: Colors.grey.shade700,
+                                color: const Color(0xFF757575),
                               ),
                             ],
                           ),
@@ -2827,7 +3803,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey.shade300),
+                            border: Border.all(color: const Color(0xFFE0E0E0)),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.05),
@@ -2839,16 +3815,16 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _rateRow('Residential',
+                              _buildRateRow('Residential',
                                   'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
                               const SizedBox(height: 6),
-                              _rateRow('Commercial',
+                              _buildRateRow('Commercial',
                                   'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
                               const SizedBox(height: 6),
-                              _rateRow('Non Residence',
+                              _buildRateRow('Non Residence',
                                   'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
                               const SizedBox(height: 6),
-                              _rateRow('Industrial',
+                              _buildRateRow('Industrial',
                                   'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
                             ],
                           ),
@@ -2863,21 +3839,21 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.amber.shade50,
+                          color: const Color(0xFFFFF8E1),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.amber.shade200),
+                          border: Border.all(color: const Color(0xFFFFF59D)),
                         ),
                         child: Row(
                           children: [
                             Icon(Icons.info_outline,
-                                color: Colors.amber.shade700, size: 18),
+                                color: const Color(0xFFF57C00), size: 18),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 'Please correct the issue mentioned above and resubmit your payment.',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: Colors.amber.shade900,
+                                  color: const Color(0xFFEF6C00),
                                 ),
                               ),
                             ),
@@ -2888,14 +3864,14 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
+                          color: const Color(0xFFE0F7FA),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.blue.shade200),
+                          border: Border.all(color: const Color(0xFFB2EBF2)),
                         ),
                         child: Row(
                           children: [
                             Icon(Icons.phone,
-                                color: Colors.blue.shade700, size: 18),
+                                color: const Color(0xFF00BCD4), size: 18),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Column(
@@ -2906,14 +3882,14 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold,
-                                      color: Colors.blue.shade800,
+                                      color: const Color(0xFF006064),
                                     ),
                                   ),
                                   Text(
                                     '09853886411',
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: Colors.blue.shade900,
+                                      color: const Color(0xFF00838F),
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -2947,7 +3923,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                             ),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue.shade700,
+                            backgroundColor: const Color(0xFF00BCD4),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -2968,7 +3944,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
                             ),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.grey.shade600,
+                            backgroundColor: const Color(0xFF757575),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                             padding: const EdgeInsets.symmetric(vertical: 14),
@@ -2994,7 +3970,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
             (i) => Expanded(
               child: Container(
                 height: 1,
-                color: i.isEven ? Colors.grey[300] : Colors.transparent,
+                color: i.isEven ? const Color(0xFFE0E0E0) : Colors.transparent,
               ),
             ),
           ),
@@ -3004,37 +3980,38 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
   Widget _receiptRow(String label, String value,
       {Color? valueColor, bool isBold = false, double fontSize = 12}) {
     return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                  color: Colors.black87,
-                ),
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            flex: 2,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+                color: Color(0xFF424242),
               ),
             ),
-            Expanded(
-              flex: 3,
-              child: Text(
-                value,
-                style: TextStyle(
-                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-                  fontSize: fontSize,
-                  color: valueColor ?? Colors.grey[800],
-                ),
-                textAlign: TextAlign.right,
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                fontSize: fontSize,
+                color: valueColor ?? const Color(0xFF424242),
               ),
+              textAlign: TextAlign.right,
             ),
-          ],
-        ));
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _rateRow(String category, String details) => Row(
+  Widget _buildRateRow(String category, String details) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Flexible(
@@ -3043,7 +4020,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
               style: const TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 11,
-                color: Colors.black87,
+                color: Color(0xFF424242),
               ),
             ),
           ),
@@ -3053,7 +4030,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
               details,
               style: const TextStyle(
                 fontSize: 11,
-                color: Colors.grey,
+                color: Color(0xFF757575),
               ),
             ),
           ),
@@ -3061,7 +4038,7 @@ class _RejectedPaymentDialogState extends State<_RejectedPaymentDialog> {
       );
 }
 
-// FIXED: PaidBillDialog with proper overflow handling
+// FIXED: PaidBillDialog with proper scrolling
 class _PaidBillDialog extends StatefulWidget {
   final Map<String, dynamic> billDetails;
 
@@ -3093,7 +4070,7 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Receipt saved to gallery successfully!'),
-              backgroundColor: Colors.green,
+              backgroundColor: Color(0xFF43A047),
             ),
           );
           Navigator.of(context).pop();
@@ -3101,7 +4078,7 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Failed to save receipt to gallery.'),
-              backgroundColor: Colors.red,
+              backgroundColor: Color(0xFFE53935),
             ),
           );
         }
@@ -3138,14 +4115,11 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
         ? DateFormat.yMMMd().format(processedDate)
         : DateFormat.yMMMd().format(DateTime.now());
 
-    final screenWidth = MediaQuery.of(context).size.width;
-
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: const EdgeInsets.all(16),
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxWidth: screenWidth * 0.9,
           maxHeight: MediaQuery.of(context).size.height * 0.9,
         ),
         child: SingleChildScrollView(
@@ -3167,10 +4141,10 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.green,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF43A047),
                     borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(16)),
+                        BorderRadius.vertical(top: Radius.circular(16)),
                   ),
                   child: const Center(
                     child: Text(
@@ -3199,8 +4173,16 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                               Flexible(
                                 child: Row(
                                   children: [
-                                    Image.asset('assets/images/icon.png',
-                                        height: 36),
+                                    Container(
+                                      width: 36,
+                                      height: 36,
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF00BCD4),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: const Icon(Icons.water_drop,
+                                          color: Colors.white),
+                                    ),
                                     const SizedBox(width: 8),
                                     Flexible(
                                       child: Column(
@@ -3212,14 +4194,13 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                                             style: TextStyle(
                                               fontSize: 14,
                                               fontWeight: FontWeight.bold,
-                                              color: Color(0xFF4A90E2),
                                             ),
                                           ),
                                           Text(
                                             purok,
                                             style: const TextStyle(
                                               fontSize: 10,
-                                              color: Colors.green,
+                                              color: Color(0xFF43A047),
                                               fontWeight: FontWeight.bold,
                                             ),
                                           ),
@@ -3237,30 +4218,31 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF4A90E2),
+                              color: Color(0xFF00BCD4),
                               letterSpacing: 0.5,
                             ),
                           ),
                           const SizedBox(height: 8),
                           _dashedDivider(),
-                          _receiptRow('Name', fullName),
-                          _receiptRow('Address', address),
-                          _receiptRow('Contact', contactNumber),
-                          _receiptRow('Meter No.', meterNumber),
-                          _receiptRow(
+                          _buildReceiptRow('Name', fullName),
+                          _buildReceiptRow('Address', address),
+                          _buildReceiptRow('Contact', contactNumber),
+                          _buildReceiptRow('Meter No.', meterNumber),
+                          _buildReceiptRow(
                               'Billing Period Start', formattedPeriodStart),
-                          _receiptRow('Issue Date', formattedProcessedDate),
+                          _buildReceiptRow(
+                              'Issue Date', formattedProcessedDate),
                           _dashedDivider(),
-                          _receiptRow('Previous Reading',
+                          _buildReceiptRow('Previous Reading',
                               '${previousReading.toStringAsFixed(2)} m³'),
-                          _receiptRow('Current Reading',
+                          _buildReceiptRow('Current Reading',
                               '${currentReading.toStringAsFixed(2)} m³'),
-                          _receiptRow('Cubic Meter Used',
+                          _buildReceiptRow('Cubic Meter Used',
                               '${cubicMeterUsed.toStringAsFixed(2)} m³'),
                           _dashedDivider(),
-                          _receiptRow(
+                          _buildReceiptRow(
                               'Amount Paid', '₱${amount.toStringAsFixed(2)}',
-                              valueColor: Colors.green,
+                              valueColor: const Color(0xFF43A047),
                               isBold: true,
                               fontSize: 13),
                           const SizedBox(height: 12),
@@ -3272,7 +4254,7 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                               padding: const EdgeInsets.symmetric(
                                   vertical: 8, horizontal: 12),
                               decoration: BoxDecoration(
-                                color: Colors.grey[100],
+                                color: const Color(0xFFF5F5F5),
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Row(
@@ -3285,7 +4267,7 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                                       style: TextStyle(
                                         fontSize: 12,
                                         fontWeight: FontWeight.bold,
-                                        color: Color(0xFF4A90E2),
+                                        color: Color(0xFF00BCD4),
                                       ),
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -3295,7 +4277,7 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                                         ? Icons.expand_less
                                         : Icons.expand_more,
                                     size: 16,
-                                    color: const Color(0xFF4A90E2),
+                                    color: const Color(0xFF00BCD4),
                                   ),
                                 ],
                               ),
@@ -3310,7 +4292,7 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
-                                    color: Colors.grey[200]!, width: 1),
+                                    color: const Color(0xFFE0E0E0), width: 1),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.05),
@@ -3322,16 +4304,16 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _rateRow('Residential',
+                                  _buildPaidRateRow('Residential',
                                       'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
                                   const SizedBox(height: 6),
-                                  _rateRow('Commercial',
+                                  _buildPaidRateRow('Commercial',
                                       'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
                                   const SizedBox(height: 6),
-                                  _rateRow('Non Residence',
+                                  _buildPaidRateRow('Non Residence',
                                       'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
                                   const SizedBox(height: 6),
-                                  _rateRow('Industrial',
+                                  _buildPaidRateRow('Industrial',
                                       'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
                                 ],
                               ),
@@ -3347,7 +4329,7 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                             'Thank you for your timely payment!',
                             style: TextStyle(
                               fontSize: 9,
-                              color: Colors.green,
+                              color: Color(0xFF43A047),
                               fontStyle: FontStyle.italic,
                             ),
                             textAlign: TextAlign.center,
@@ -3357,16 +4339,16 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                           Container(
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.1),
+                              color: const Color(0xFFE8F5E9),
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(
-                                  color: Colors.green.withOpacity(0.3)),
+                              border:
+                                  Border.all(color: const Color(0xFFA5D6A7)),
                             ),
                             child: Row(
                               children: [
                                 const Icon(
                                   Icons.check_circle,
-                                  color: Colors.green,
+                                  color: Color(0xFF43A047),
                                   size: 18,
                                 ),
                                 const SizedBox(width: 8),
@@ -3380,14 +4362,14 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                                         style: TextStyle(
                                           fontSize: 11,
                                           fontWeight: FontWeight.bold,
-                                          color: Colors.green,
+                                          color: Color(0xFF43A047),
                                         ),
                                       ),
                                       const Text(
                                         'Your payment has been confirmed.',
                                         style: TextStyle(
                                           fontSize: 9,
-                                          color: Colors.grey,
+                                          color: Color(0xFF757575),
                                         ),
                                       ),
                                     ],
@@ -3418,7 +4400,7 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                             ),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue.shade700,
+                            backgroundColor: const Color(0xFF00BCD4),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -3439,7 +4421,7 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
                             ),
                           ),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
+                            backgroundColor: const Color(0xFF43A047),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
                             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -3465,47 +4447,48 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
             (i) => Expanded(
               child: Container(
                 height: 1,
-                color: i.isEven ? Colors.grey[300] : Colors.transparent,
+                color: i.isEven ? const Color(0xFFE0E0E0) : Colors.transparent,
               ),
             ),
           ),
         ),
       );
 
-  Widget _receiptRow(String label, String value,
+  Widget _buildReceiptRow(String label, String value,
       {Color? valueColor, bool isBold = false, double fontSize = 11}) {
     return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11,
-                  color: Colors.black,
-                ),
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+                color: Color(0xFF424242),
               ),
             ),
-            Expanded(
-              child: Text(
-                value,
-                style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-                  fontSize: fontSize,
-                  color: valueColor ?? Colors.grey[700],
-                ),
-                textAlign: TextAlign.right,
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                fontSize: fontSize,
+                color: valueColor ?? const Color(0xFF757575),
               ),
+              textAlign: TextAlign.right,
             ),
-          ],
-        ));
+          ),
+        ],
+      ),
+    );
   }
 
-  Widget _rateRow(String category, String details) => Row(
+  Widget _buildPaidRateRow(String category, String details) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Flexible(
@@ -3514,7 +4497,7 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
               style: const TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 10,
-                color: Colors.black,
+                color: Color(0xFF424242),
               ),
             ),
           ),
@@ -3524,7 +4507,7 @@ class _PaidBillDialogState extends State<_PaidBillDialog> {
               details,
               style: const TextStyle(
                 fontSize: 9,
-                color: Colors.grey,
+                color: Color(0xFF757575),
               ),
             ),
           ),

@@ -385,20 +385,19 @@ class _MonitorPageState extends State<MonitorPage> {
     );
   }
 
-  // Show report modal with modern design
+  // Show report modal with modern design - UPDATED to allow plumber assignment for Illegal Tapping
   void _showReportModal(
       BuildContext context, Map<String, dynamic> data, String reportId) async {
     // FIXED: Safe null check for boolean
     final isIllegalTapping = (data['isIllegalTapping'] == true);
 
-    // For regular reports: plumber assignment variables
+    // COMMON variables for ALL report types (including Illegal Tapping)
     String? selectedPlumberUid = data['assignedPlumber'] as String?;
     DateTime? selectedDate = data['monitoringDate'] is Timestamp
         ? (data['monitoringDate'] as Timestamp).toDate()
         : null;
     bool isButtonDisabled = data['assignedPlumber'] != null;
-    List<Map<String, dynamic>> plumbers =
-        isIllegalTapping ? [] : await _fetchPlumbers();
+    List<Map<String, dynamic>> plumbers = await _fetchPlumbers();
 
     // Get images data
     final imageCount = data['imageCount'] ?? 0;
@@ -430,11 +429,11 @@ class _MonitorPageState extends State<MonitorPage> {
           throw Exception('Report document does not exist');
         }
 
-        // Update for regular reports
+        // Update for ALL report types (including Illegal Tapping)
         await docRef.update({
           'assignedPlumber': selectedPlumberUid,
           'monitoringDate': Timestamp.fromDate(selectedDate!),
-          'status': 'Monitoring',
+          'status': 'Monitoring', // Set status to Monitoring when assigned
         });
 
         // Add notification for the assigned plumber
@@ -444,15 +443,22 @@ class _MonitorPageState extends State<MonitorPage> {
           'userId': selectedPlumberUid,
           'reportId': reportId,
           'type': 'assignment',
-          'title': 'New Assignment',
-          'message':
-              'You have been assigned to monitor the report: ${data['issueDescription']?.toString() ?? 'No description'} by ${data['fullName']?.toString() ?? 'Unknown'}',
+          'title': isIllegalTapping
+              ? 'Illegal Tapping Assignment'
+              : 'New Assignment',
+          'message': isIllegalTapping
+              ? '🚨 HIGH PRIORITY: You have been assigned to investigate an illegal tapping report. Please investigate immediately.'
+              : 'You have been assigned to monitor the report: ${data['issueDescription']?.toString() ?? 'No description'} by ${data['fullName']?.toString() ?? 'Unknown'}',
           'timestamp': Timestamp.now(),
           'read': false,
+          'isHighPriority':
+              isIllegalTapping, // Mark as high priority for illegal tapping
         });
         print('Notification added successfully');
 
-        _showErrorOverlay('Plumber assigned successfully.');
+        _showErrorOverlay(isIllegalTapping
+            ? 'Plumber assigned to investigate illegal tapping.'
+            : 'Plumber assigned successfully.');
         setDialogState(() {
           isButtonDisabled = true;
         });
@@ -472,7 +478,7 @@ class _MonitorPageState extends State<MonitorPage> {
           throw Exception('Report document does not exist');
         }
 
-        // Update status to Fixed
+        // Update status to Fixed for ALL report types
         await docRef.update({
           'status': 'Fixed',
           'fixedAt': Timestamp.now(),
@@ -481,14 +487,17 @@ class _MonitorPageState extends State<MonitorPage> {
         // Add notification
         await FirebaseFirestore.instance.collection('notifications').add({
           'type': 'report_fixed',
-          'title': 'Report Fixed',
-          'message':
-              'Report "${data['issueDescription']?.toString() ?? 'Unknown'}" has been marked as Fixed.',
+          'title': isIllegalTapping ? 'Illegal Tapping Fixed' : 'Report Fixed',
+          'message': isIllegalTapping
+              ? '🚨 Illegal tapping report "${data['issueDescription']?.toString() ?? 'Unknown'}" has been resolved and marked as Fixed.'
+              : 'Report "${data['issueDescription']?.toString() ?? 'Unknown'}" has been marked as Fixed.',
           'timestamp': Timestamp.now(),
           'read': false,
         });
 
-        _showErrorOverlay('Report marked as Fixed.');
+        _showErrorOverlay(isIllegalTapping
+            ? 'Illegal tapping marked as Fixed.'
+            : 'Report marked as Fixed.');
         Navigator.of(context).pop();
       } catch (e) {
         print('Error marking report as fixed: $e');
@@ -949,12 +958,10 @@ class _MonitorPageState extends State<MonitorPage> {
                           ],
                         ),
 
-                        // FIXED: Safe null checks for assignedPlumber (only show for regular reports)
-                        if (!isIllegalTapping &&
-                            data['assignedPlumber'] != null)
+                        // FIXED: Safe null checks for assignedPlumber (show for ALL report types)
+                        if (data['assignedPlumber'] != null)
                           const SizedBox(height: 16),
-                        if (!isIllegalTapping &&
-                            data['assignedPlumber'] != null)
+                        if (data['assignedPlumber'] != null)
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
@@ -1008,264 +1015,265 @@ class _MonitorPageState extends State<MonitorPage> {
                             ),
                           ),
 
-                        // DIFFERENT SECTIONS FOR REGULAR VS ILLEGAL TAPPING REPORTS
-                        if (!isIllegalTapping && data['isPublic'] != true) ...[
-                          // REGULAR REPORTS: Plumber assignment section
-                          const SizedBox(height: 20),
-                          const Divider(height: 1, color: Colors.grey),
-                          const SizedBox(height: 20),
-                          Column(
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: DropdownButtonFormField<String>(
-                                      decoration: InputDecoration(
-                                        labelText: 'Assign Plumber',
-                                        labelStyle: GoogleFonts.poppins(
-                                          fontSize: 14,
-                                          color: Colors.grey[700],
-                                        ),
-                                        filled: true,
-                                        fillColor: lightBlue,
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                                horizontal: 12, vertical: 10),
-                                        border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          borderSide: const BorderSide(
-                                              color: Colors.grey, width: 1),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          borderSide: const BorderSide(
-                                              color: primaryBlue, width: 1.5),
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          borderSide: const BorderSide(
-                                              color: Colors.grey, width: 1),
-                                        ),
+                        // PLUMBER ASSIGNMENT SECTION FOR ALL REPORT TYPES (including Illegal Tapping)
+                        const SizedBox(height: 20),
+                        const Divider(height: 1, color: Colors.grey),
+                        const SizedBox(height: 20),
+                        Column(
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    decoration: InputDecoration(
+                                      labelText: isIllegalTapping
+                                          ? 'Assign Investigator'
+                                          : 'Assign Plumber',
+                                      labelStyle: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        color: Colors.grey[700],
                                       ),
-                                      value: selectedPlumberUid,
-                                      dropdownColor: Colors.white,
-                                      items: plumbers.isNotEmpty
-                                          ? plumbers.map((plumber) {
-                                              return DropdownMenuItem<String>(
-                                                value: plumber['uid'],
-                                                child: Text(
-                                                  plumber['fullName'],
-                                                  style: GoogleFonts.poppins(
-                                                      fontSize: 14),
-                                                ),
-                                              );
-                                            }).toList()
-                                          : [
-                                              DropdownMenuItem<String>(
-                                                value: null,
-                                                child: Text(
-                                                  'No plumbers available',
-                                                  style: GoogleFonts.poppins(
-                                                    color: Colors.grey,
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                      onChanged: plumbers.isNotEmpty
-                                          ? (value) {
-                                              setDialogState(() {
-                                                selectedPlumberUid = value;
-                                                isButtonDisabled = false;
-                                              });
-                                            }
-                                          : null,
+                                      filled: true,
+                                      fillColor: lightBlue,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 10),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: const BorderSide(
+                                            color: Colors.grey, width: 1),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: const BorderSide(
+                                            color: primaryBlue, width: 1.5),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: const BorderSide(
+                                            color: Colors.grey, width: 1),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: TextFormField(
-                                      readOnly: true,
-                                      decoration: InputDecoration(
-                                        labelText: 'Monitoring Date',
-                                        labelStyle: GoogleFonts.poppins(
-                                          fontSize: 14,
-                                          color: Colors.grey[700],
-                                        ),
-                                        filled: true,
-                                        fillColor: lightBlue,
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                                horizontal: 12, vertical: 10),
-                                        border: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          borderSide: const BorderSide(
-                                              color: Colors.grey, width: 1),
-                                        ),
-                                        focusedBorder: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          borderSide: const BorderSide(
-                                              color: primaryBlue, width: 1.5),
-                                        ),
-                                        enabledBorder: OutlineInputBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(12),
-                                          borderSide: const BorderSide(
-                                              color: Colors.grey, width: 1),
-                                        ),
-                                        suffixIcon: const Icon(
-                                          Icons.calendar_today,
-                                          color: primaryBlue,
-                                          size: 20,
-                                        ),
-                                      ),
-                                      controller: TextEditingController(
-                                        text: selectedDate != null
-                                            ? DateFormat.yMMMd()
-                                                .format(selectedDate!)
-                                            : '',
-                                      ),
-                                      onTap: () async {
-                                        final pickedDate = await showDatePicker(
-                                          context: context,
-                                          initialDate:
-                                              selectedDate ?? DateTime.now(),
-                                          firstDate: DateTime.now(),
-                                          lastDate: DateTime.now()
-                                              .add(const Duration(days: 365)),
-                                          builder: (context, child) {
-                                            return Theme(
-                                              data: Theme.of(context).copyWith(
-                                                colorScheme:
-                                                    const ColorScheme.light(
-                                                  primary: primaryBlue,
-                                                  onPrimary: Colors.white,
-                                                  onSurface: Colors.black87,
-                                                ),
-                                                textButtonTheme:
-                                                    TextButtonThemeData(
-                                                  style: TextButton.styleFrom(
-                                                    foregroundColor:
-                                                        primaryBlue,
-                                                  ),
-                                                ),
+                                    value: selectedPlumberUid,
+                                    dropdownColor: Colors.white,
+                                    items: plumbers.isNotEmpty
+                                        ? plumbers.map((plumber) {
+                                            return DropdownMenuItem<String>(
+                                              value: plumber['uid'],
+                                              child: Text(
+                                                plumber['fullName'],
+                                                style: GoogleFonts.poppins(
+                                                    fontSize: 14),
                                               ),
-                                              child: child!,
                                             );
-                                          },
-                                        );
-                                        if (pickedDate != null) {
-                                          setDialogState(() {
-                                            selectedDate = pickedDate;
-                                          });
-                                        }
-                                      },
-                                    ),
+                                          }).toList()
+                                        : [
+                                            DropdownMenuItem<String>(
+                                              value: null,
+                                              child: Text(
+                                                'No plumbers available',
+                                                style: GoogleFonts.poppins(
+                                                  color: Colors.grey,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                    onChanged: plumbers.isNotEmpty
+                                        ? (value) {
+                                            setDialogState(() {
+                                              selectedPlumberUid = value;
+                                              isButtonDisabled = false;
+                                            });
+                                          }
+                                        : null,
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 20),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton(
-                                  onPressed: isButtonDisabled
-                                      ? null
-                                      : () => _assignPlumber(setDialogState),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: isButtonDisabled
-                                        ? Colors.grey[400]
-                                        : primaryBlue,
-                                    padding: const EdgeInsets.symmetric(
-                                        vertical: 14),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    elevation: isButtonDisabled ? 0 : 4,
-                                    shadowColor: Colors.black26,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        isButtonDisabled
-                                            ? Icons.check_circle
-                                            : Icons.person_add,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextFormField(
+                                    readOnly: true,
+                                    decoration: InputDecoration(
+                                      labelText: isIllegalTapping
+                                          ? 'Investigation Date'
+                                          : 'Monitoring Date',
+                                      labelStyle: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        color: Colors.grey[700],
+                                      ),
+                                      filled: true,
+                                      fillColor: lightBlue,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 10),
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: const BorderSide(
+                                            color: Colors.grey, width: 1),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: const BorderSide(
+                                            color: primaryBlue, width: 1.5),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: const BorderSide(
+                                            color: Colors.grey, width: 1),
+                                      ),
+                                      suffixIcon: const Icon(
+                                        Icons.calendar_today,
+                                        color: primaryBlue,
                                         size: 20,
-                                        color: Colors.white,
                                       ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        isButtonDisabled
-                                            ? 'Already Assigned'
-                                            : (data['assignedPlumber'] != null
-                                                ? 'Re-assign Plumber'
-                                                : 'Assign Plumber'),
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ],
+                                    ),
+                                    controller: TextEditingController(
+                                      text: selectedDate != null
+                                          ? DateFormat.yMMMd()
+                                              .format(selectedDate!)
+                                          : '',
+                                    ),
+                                    onTap: () async {
+                                      final pickedDate = await showDatePicker(
+                                        context: context,
+                                        initialDate:
+                                            selectedDate ?? DateTime.now(),
+                                        firstDate: DateTime.now(),
+                                        lastDate: DateTime.now()
+                                            .add(const Duration(days: 365)),
+                                        builder: (context, child) {
+                                          return Theme(
+                                            data: Theme.of(context).copyWith(
+                                              colorScheme:
+                                                  const ColorScheme.light(
+                                                primary: primaryBlue,
+                                                onPrimary: Colors.white,
+                                                onSurface: Colors.black87,
+                                              ),
+                                              textButtonTheme:
+                                                  TextButtonThemeData(
+                                                style: TextButton.styleFrom(
+                                                  foregroundColor: primaryBlue,
+                                                ),
+                                              ),
+                                            ),
+                                            child: child!,
+                                          );
+                                        },
+                                      );
+                                      if (pickedDate != null) {
+                                        setDialogState(() {
+                                          selectedDate = pickedDate;
+                                        });
+                                      }
+                                    },
                                   ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ] else if (isIllegalTapping) ...[
-                          // ILLEGAL TAPPING REPORTS: Mark as Fixed button only
-                          const SizedBox(height: 20),
-                          const Divider(height: 1, color: Colors.grey),
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: data['status'] == 'Fixed'
-                                  ? null
-                                  : () => _markAsFixed(),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: data['status'] == 'Fixed'
-                                    ? Colors.grey[400]
-                                    : Colors.green,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: data['status'] == 'Fixed' ? 0 : 4,
-                                shadowColor: Colors.black26,
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    data['status'] == 'Fixed'
-                                        ? Icons.check_circle
-                                        : Icons.check,
-                                    size: 20,
-                                    color: Colors.white,
+                              ],
+                            ),
+                            const SizedBox(height: 20),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton(
+                                onPressed: isButtonDisabled
+                                    ? null
+                                    : () => _assignPlumber(setDialogState),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isButtonDisabled
+                                      ? Colors.grey[400]
+                                      : (isIllegalTapping
+                                          ? Colors.red
+                                          : primaryBlue),
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    data['status'] == 'Fixed'
-                                        ? 'Already Fixed'
-                                        : 'Mark as Fixed',
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
+                                  elevation: isButtonDisabled ? 0 : 4,
+                                  shadowColor: Colors.black26,
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      isButtonDisabled
+                                          ? Icons.check_circle
+                                          : (isIllegalTapping
+                                              ? Icons.warning
+                                              : Icons.person_add),
+                                      size: 20,
                                       color: Colors.white,
                                     ),
-                                  ),
-                                ],
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      isButtonDisabled
+                                          ? 'Already Assigned'
+                                          : (isIllegalTapping
+                                              ? 'Assign Investigator'
+                                              : (data['assignedPlumber'] != null
+                                                  ? 'Re-assign Plumber'
+                                                  : 'Assign Plumber')),
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
+                          ],
+                        ),
+
+                        // Mark as Fixed button for ALL report types
+                        const SizedBox(height: 20),
+                        const Divider(height: 1, color: Colors.grey),
+                        const SizedBox(height: 20),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: data['status'] == 'Fixed'
+                                ? null
+                                : () => _markAsFixed(),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: data['status'] == 'Fixed'
+                                  ? Colors.grey[400]
+                                  : Colors.green,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: data['status'] == 'Fixed' ? 0 : 4,
+                              shadowColor: Colors.black26,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  data['status'] == 'Fixed'
+                                      ? Icons.check_circle
+                                      : Icons.check,
+                                  size: 20,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  data['status'] == 'Fixed'
+                                      ? 'Already Fixed'
+                                      : (isIllegalTapping
+                                          ? 'Mark as Investigated'
+                                          : 'Mark as Fixed'),
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
+                        ),
 
                         // Navigation for multiple reports
                         // FIXED: Safe null check for isPublic
@@ -1298,22 +1306,19 @@ class _MonitorPageState extends State<MonitorPage> {
                                                 _currentReportIndex];
                                             reportId = _userReports[
                                                 _currentReportIndex]['id'];
-                                            // Only update assignment variables for regular reports
-                                            if (!isIllegalTapping) {
-                                              selectedPlumberUid =
-                                                  data['assignedPlumber']
-                                                      as String?;
-                                              selectedDate =
-                                                  data['monitoringDate']
-                                                          is Timestamp
-                                                      ? (data['monitoringDate']
-                                                              as Timestamp)
-                                                          .toDate()
-                                                      : null;
-                                              isButtonDisabled =
-                                                  data['assignedPlumber'] !=
-                                                      null;
-                                            }
+                                            // Update assignment variables
+                                            selectedPlumberUid =
+                                                data['assignedPlumber']
+                                                    as String?;
+                                            selectedDate =
+                                                data['monitoringDate']
+                                                        is Timestamp
+                                                    ? (data['monitoringDate']
+                                                            as Timestamp)
+                                                        .toDate()
+                                                    : null;
+                                            isButtonDisabled =
+                                                data['assignedPlumber'] != null;
                                           });
                                         }
                                       : null,
@@ -1341,22 +1346,19 @@ class _MonitorPageState extends State<MonitorPage> {
                                                 _currentReportIndex];
                                             reportId = _userReports[
                                                 _currentReportIndex]['id'];
-                                            // Only update assignment variables for regular reports
-                                            if (!isIllegalTapping) {
-                                              selectedPlumberUid =
-                                                  data['assignedPlumber']
-                                                      as String?;
-                                              selectedDate =
-                                                  data['monitoringDate']
-                                                          is Timestamp
-                                                      ? (data['monitoringDate']
-                                                              as Timestamp)
-                                                          .toDate()
-                                                      : null;
-                                              isButtonDisabled =
-                                                  data['assignedPlumber'] !=
-                                                      null;
-                                            }
+                                            // Update assignment variables
+                                            selectedPlumberUid =
+                                                data['assignedPlumber']
+                                                    as String?;
+                                            selectedDate =
+                                                data['monitoringDate']
+                                                        is Timestamp
+                                                    ? (data['monitoringDate']
+                                                            as Timestamp)
+                                                        .toDate()
+                                                    : null;
+                                            isButtonDisabled =
+                                                data['assignedPlumber'] != null;
                                           });
                                         }
                                       : null,

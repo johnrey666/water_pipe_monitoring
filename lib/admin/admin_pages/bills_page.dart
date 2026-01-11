@@ -1,3 +1,5 @@
+// ignore_for_file: unused_field, unused_local_variable
+
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -307,7 +309,6 @@ class _BillsPageState extends State<BillsPage> {
                               fullName: fullName,
                               address: address,
                               contactNumber: contactNumber,
-                              onBillCreated: _fetchTotalPages,
                             );
                           },
                         ),
@@ -324,7 +325,7 @@ class _BillsPageState extends State<BillsPage> {
     );
   }
 
-  // NEW: Show Reported Bills Modal
+  // Show Reported Bills Modal
   void _showReportedBillsModal(BuildContext context) {
     final screenSize = MediaQuery.of(context).size;
     final sideLength =
@@ -345,7 +346,6 @@ class _BillsPageState extends State<BillsPage> {
   }
 }
 
-// Replace the entire ReportedBillsModal class with this improved version:
 class ReportedBillsModal extends StatefulWidget {
   @override
   State<ReportedBillsModal> createState() => _ReportedBillsModalState();
@@ -358,7 +358,6 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
   Map<String, Map<String, dynamic>> _residentDetails = {};
   Map<String, Map<String, dynamic>> _billDetails = {};
   Map<String, bool> _expandedReports = {};
-  // ignore: unused_field
   int _currentPage = 0;
   final int _itemsPerPage = 5;
   bool _hasMoreReports = true;
@@ -453,114 +452,153 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
     }
   }
 
-  Future<void> _updateReportStatus(
-      String reportId, String status, String adminNotes) async {
+  Future<void> _updateBillAndResolveReport(String reportId,
+      Map<String, dynamic> report, double newReading, String notes) async {
     try {
-      await FirebaseFirestore.instance
-          .collection('bill_reports')
-          .doc(reportId)
-          .update({
-        'status': status,
-        'reviewedBy': 'Admin',
-        'reviewedAt': Timestamp.now(),
-        'adminNotes': adminNotes,
-      });
-      // Send notification to resident WITH ADMIN NOTES
-      final report =
-          _reportedBills.firstWhere((r) => r['reportId'] == reportId);
-      String message;
-      if (status == 'resolved') {
-        message = 'Your bill report has been resolved.';
-        if (adminNotes.isNotEmpty) {
-          message += '\n\nAdmin Notes: $adminNotes';
-        }
-      } else {
-        message = 'Your bill report has been marked as reviewed.';
-        if (adminNotes.isNotEmpty) {
-          message += '\n\nAdmin Notes: $adminNotes';
-        }
+      final billId = report['billId'] as String?;
+      final residentId = report['residentId'] as String?;
+
+      if (billId == null || residentId == null) {
+        throw Exception('Invalid report data');
       }
-      final notificationData = {
-        'userId': report['residentId'],
-        'type': 'report',
-        'title': 'Report ${status[0].toUpperCase()}${status.substring(1)}',
-        'message': message, // INCLUDES ADMIN NOTES
-        'reportId': reportId,
-        'billId': report['billId'],
-        'status': status,
-        'adminNotes': adminNotes, // Store admin notes separately too
-        'read': false,
-        'timestamp': FieldValue.serverTimestamp(),
-      };
-      await FirebaseFirestore.instance
-          .collection('notifications')
-          .add(notificationData);
-      // Refresh the list
-      await _loadReportedBills();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Report $status successfully!'),
-          backgroundColor: status == 'resolved' ? Colors.green : Colors.orange,
-        ),
-      );
-    } catch (e) {
-      print('Error updating report status: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error updating report: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
 
-  Future<void> _deleteReport(String reportId) async {
-    try {
-      await FirebaseFirestore.instance
-          .collection('bill_reports')
-          .doc(reportId)
-          .delete();
-      // Remove from local list
-      setState(() {
-        _reportedBills.removeWhere((report) => report['reportId'] == reportId);
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Report deleted successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } catch (e) {
-      print('Error deleting report: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error deleting report: $e'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  Future<void> _showUpdateBillDialog(
-      String reportId, Map<String, dynamic> report) async {
-    final TextEditingController notesController = TextEditingController();
-    final TextEditingController newReadingController = TextEditingController();
-    final billId = report['billId'] as String?;
-    final residentId = report['residentId'] as String?;
-    bool _updating = false;
-    // Get current bill details
-    Map<String, dynamic>? currentBill;
-    if (billId != null && residentId != null) {
+      // Get the current bill
       final billDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(residentId)
           .collection('bills')
           .doc(billId)
           .get();
-      if (billDoc.exists) {
-        currentBill = billDoc.data()!;
+
+      if (!billDoc.exists) {
+        throw Exception('Bill not found');
+      }
+
+      final billData = billDoc.data()!;
+      final previousReading =
+          billData['previousConsumedWaterMeter']?.toDouble() ?? 0.0;
+      final purok = billData['purok'] ?? 'PUROK 1';
+
+      // Calculate new values
+      final cubicMeterUsed =
+          newReading > previousReading ? newReading - previousReading : 0.0;
+
+      // Recalculate bill based on purok
+      double baseRate = 30.00;
+      double ratePerCubicMeter = 5.00;
+      switch (purok) {
+        case 'COMMERCIAL':
+          baseRate = 75.00;
+          ratePerCubicMeter = 10.00;
+          break;
+        case 'NON-RESIDENCE':
+          baseRate = 100.00;
+          ratePerCubicMeter = 10.00;
+          break;
+        case 'INDUSTRIAL':
+          baseRate = 100.00;
+          ratePerCubicMeter = 15.00;
+          break;
+      }
+      final excess = cubicMeterUsed > 10 ? cubicMeterUsed - 10 : 0;
+      final newBillAmount = baseRate + (excess * ratePerCubicMeter);
+
+      // Run transaction to update all related documents
+      await FirebaseFirestore.instance.runTransaction((transaction) async {
+        // Update the bill
+        final billRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(residentId)
+            .collection('bills')
+            .doc(billId);
+        transaction.update(billRef, {
+          'currentConsumedWaterMeter': newReading,
+          'cubicMeterUsed': cubicMeterUsed,
+          'currentMonthBill': newBillAmount,
+          'updatedAt': Timestamp.now(),
+        });
+
+        // Update meter readings
+        final meterRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(residentId)
+            .collection('meter_readings')
+            .doc('latest');
+        transaction.set(
+            meterRef,
+            {
+              'currentConsumedWaterMeter': newReading,
+              'updatedAt': Timestamp.now(),
+            },
+            SetOptions(merge: true));
+
+        // Mark report as resolved
+        final reportRef =
+            FirebaseFirestore.instance.collection('bill_reports').doc(reportId);
+        transaction.update(reportRef, {
+          'status': 'resolved',
+          'reviewedBy': 'Admin',
+          'reviewedAt': Timestamp.now(),
+          'adminNotes': 'Bill updated and resolved. $notes',
+        });
+      });
+
+      // Send notification to resident
+      final periodStart = billData['periodStart'] as Timestamp?;
+      final month = periodStart != null
+          ? DateFormat('MMM yyyy').format(periodStart.toDate())
+          : 'Current Month';
+
+      final notificationData = {
+        'userId': residentId,
+        'type': 'report_resolved',
+        'title': 'Report Resolved',
+        'message':
+            'Your bill report for $month has been resolved. The bill has been updated.',
+        'billId': billId,
+        'reportId': reportId,
+        'status': 'resolved',
+        'read': false,
+        'timestamp': FieldValue.serverTimestamp(),
+      };
+      await FirebaseFirestore.instance
+          .collection('notifications')
+          .add(notificationData);
+
+      // Refresh the list
+      await _loadReportedBills();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Bill updated and report resolved!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error updating bill and resolving report: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
+  }
+
+  void _showUpdateBillDialog(String reportId, Map<String, dynamic> report) {
+    final TextEditingController notesController = TextEditingController();
+    final TextEditingController newReadingController = TextEditingController();
+    final billId = report['billId'] as String?;
+    final residentId = report['residentId'] as String?;
+    bool _updating = false;
+
+    // Get current bill details
+    Map<String, dynamic>? currentBill;
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -569,7 +607,7 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             title: Text(
-              'Update Resident Bill',
+              'Update Bill & Resolve Report',
               style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -585,43 +623,114 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
                     style: GoogleFonts.poppins(fontSize: 14),
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    'Report Reason: ${report['reportReason']}',
-                    style:
-                        GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.report_problem,
+                                size: 16, color: Colors.red.shade700),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Report Reason:',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.red.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          report['reportReason'] as String? ??
+                              'No reason provided',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: Colors.grey.shade800,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  // Current Bill Info
-                  if (currentBill != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.blue.shade200),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Current Bill Details',
-                            style: GoogleFonts.poppins(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.blue.shade800,
+                  // Current Bill Info (if available)
+                  if (billId != null && residentId != null) ...[
+                    FutureBuilder<DocumentSnapshot>(
+                      future: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(residentId)
+                          .collection('bills')
+                          .doc(billId)
+                          .get(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError ||
+                            !snapshot.hasData ||
+                            !snapshot.data!.exists) {
+                          return Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(8),
                             ),
+                            child: Text(
+                              'Bill not found',
+                              style: GoogleFonts.poppins(
+                                  fontSize: 12, color: Colors.grey),
+                            ),
+                          );
+                        }
+
+                        final billData =
+                            snapshot.data!.data() as Map<String, dynamic>;
+                        currentBill = billData;
+                        final currentReading =
+                            billData['currentConsumedWaterMeter']?.toDouble() ??
+                                0.0;
+
+                        return Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue.shade200),
                           ),
-                          const SizedBox(height: 8),
-                          _infoRow('Previous Reading',
-                              '${currentBill['previousConsumedWaterMeter']?.toStringAsFixed(2) ?? '0.00'} m³'),
-                          _infoRow('Current Reading',
-                              '${currentBill['currentConsumedWaterMeter']?.toStringAsFixed(2) ?? '0.00'} m³'),
-                          _infoRow('Cubic Meter Used',
-                              '${currentBill['cubicMeterUsed']?.toStringAsFixed(2) ?? '0.00'} m³'),
-                          _infoRow('Current Bill',
-                              '₱${currentBill['currentMonthBill']?.toStringAsFixed(2) ?? '0.00'}'),
-                        ],
-                      ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Current Bill Details',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.blue.shade800,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              _infoRow('Previous Reading',
+                                  '${billData['previousConsumedWaterMeter']?.toStringAsFixed(2) ?? '0.00'} m³'),
+                              _infoRow('Current Reading',
+                                  '${currentReading.toStringAsFixed(2)} m³'),
+                              _infoRow('Cubic Meter Used',
+                                  '${billData['cubicMeterUsed']?.toStringAsFixed(2) ?? '0.00'} m³'),
+                              _infoRow('Current Bill',
+                                  '₱${billData['currentMonthBill']?.toStringAsFixed(2) ?? '0.00'}'),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
                   ],
@@ -630,9 +739,7 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
                     controller: newReadingController,
                     decoration: InputDecoration(
                       labelText: 'New Current Reading (m³)',
-                      hintText: currentBill?['currentConsumedWaterMeter']
-                              ?.toString() ??
-                          '0.00',
+                      hintText: 'Enter updated meter reading',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -652,6 +759,15 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Note: After updating the bill, the report will be marked as resolved.',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      color: Colors.grey,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -666,133 +782,34 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
                     : () async {
                         final newReading =
                             double.tryParse(newReadingController.text);
-                        final currentReading =
-                            currentBill?['currentConsumedWaterMeter']
-                                    ?.toDouble() ??
-                                0.0;
-                        if (newReading == null ||
-                            newReading == currentReading) {
+                        if (newReading == null) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                                content: Text(
-                                    'Please enter a new valid reading different from current')),
+                                content: Text('Please enter a valid reading')),
                           );
                           return;
                         }
+
+                        if (notesController.text.trim().isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                                content: Text('Please provide update notes')),
+                          );
+                          return;
+                        }
+
                         setState(() => _updating = true);
                         try {
-                          // Update the bill in Firestore
-                          await FirebaseFirestore.instance
-                              .runTransaction((transaction) async {
-                            // Get the current bill
-                            final billRef = FirebaseFirestore.instance
-                                .collection('users')
-                                .doc(residentId!)
-                                .collection('bills')
-                                .doc(billId!);
-                            final billDoc = await transaction.get(billRef);
-                            if (billDoc.exists) {
-                              final billData = billDoc.data()!;
-                              final previousReading =
-                                  billData['previousConsumedWaterMeter']
-                                          ?.toDouble() ??
-                                      0.0;
-                              final cubicMeterUsed =
-                                  newReading > previousReading
-                                      ? newReading - previousReading
-                                      : 0.0;
-                              // Recalculate bill based on purok
-                              final purok = billData['purok'] ?? 'PUROK 1';
-                              double baseRate = 30.00;
-                              double ratePerCubicMeter = 5.00;
-                              switch (purok) {
-                                case 'COMMERCIAL':
-                                  baseRate = 75.00;
-                                  ratePerCubicMeter = 10.00;
-                                  break;
-                                case 'NON-RESIDENCE':
-                                  baseRate = 100.00;
-                                  ratePerCubicMeter = 10.00;
-                                  break;
-                                case 'INDUSTRIAL':
-                                  baseRate = 100.00;
-                                  ratePerCubicMeter = 15.00;
-                                  break;
-                              }
-                              final excess =
-                                  cubicMeterUsed > 10 ? cubicMeterUsed - 10 : 0;
-                              final newBillAmount =
-                                  baseRate + (excess * ratePerCubicMeter);
-                              // Update bill
-                              transaction.update(billRef, {
-                                'currentConsumedWaterMeter': newReading,
-                                'cubicMeterUsed': cubicMeterUsed,
-                                'currentMonthBill': newBillAmount,
-                                'updatedAt': Timestamp.now(),
-                              });
-                              // Update meter readings
-                              final meterRef = FirebaseFirestore.instance
-                                  .collection('users')
-                                  .doc(residentId)
-                                  .collection('meter_readings')
-                                  .doc('latest');
-                              transaction.set(
-                                  meterRef,
-                                  {
-                                    'currentConsumedWaterMeter': newReading,
-                                    'updatedAt': Timestamp.now(),
-                                  },
-                                  SetOptions(merge: true));
-                              // Mark report as resolved
-                              final reportRef = FirebaseFirestore.instance
-                                  .collection('bill_reports')
-                                  .doc(reportId);
-                              transaction.update(reportRef, {
-                                'status': 'resolved',
-                                'reviewedBy': 'Admin',
-                                'reviewedAt': Timestamp.now(),
-                                'adminNotes':
-                                    'Bill updated. ${notesController.text}',
-                              });
-                            }
-                          });
-                          // Send notification to resident about updated bill
-                          final periodStart =
-                              currentBill?['periodStart'] as Timestamp?;
-                          final month = periodStart != null
-                              ? DateFormat('MMM yyyy')
-                                  .format(periodStart.toDate())
-                              : 'Current Month';
-                          final notificationData = {
-                            'userId': residentId,
-                            'type': 'bill_updated',
-                            'title': 'Bill Updated',
-                            'message':
-                                'Your bill for $month has been updated by the admin.',
-                            'billId': billId,
-                            'month': month,
-                            'status': 'updated',
-                            'read': false,
-                            'timestamp': FieldValue.serverTimestamp(),
-                          };
-                          await FirebaseFirestore.instance
-                              .collection('notifications')
-                              .add(notificationData);
-                          Navigator.pop(context);
-                          await _loadReportedBills();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Bill updated successfully!'),
-                              backgroundColor: Colors.green,
-                            ),
+                          await _updateBillAndResolveReport(
+                            reportId,
+                            report,
+                            newReading,
+                            notesController.text.trim(),
                           );
+                          Navigator.pop(context);
                         } catch (e) {
-                          print('Error updating bill: $e');
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Error updating bill: $e'),
-                              backgroundColor: Colors.red,
-                            ),
+                            SnackBar(content: Text('Error: $e')),
                           );
                         } finally {
                           setState(() => _updating = false);
@@ -811,86 +828,11 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
                           color: Colors.white,
                         ),
                       )
-                    : Text('Update Bill & Resolve'),
+                    : Text('Update & Resolve'),
               ),
             ],
           );
         },
-      ),
-    );
-  }
-
-  void _showActionDialog(String reportId, Map<String, dynamic> report) {
-    final TextEditingController notesController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Manage Report',
-          style: GoogleFonts.poppins(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Resident: ${report['residentName']}',
-                style: GoogleFonts.poppins(fontSize: 14),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Report Reason:',
-                style: GoogleFonts.poppins(
-                    fontSize: 12, fontWeight: FontWeight.w600),
-              ),
-              Text(
-                report['reportReason'] as String? ?? 'No reason provided',
-                style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: notesController,
-                maxLines: 3,
-                decoration: InputDecoration(
-                  labelText: 'Admin Notes (Will be sent to resident)',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => _showUpdateBillDialog(reportId, report),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.blue,
-              foregroundColor: Colors.white,
-            ),
-            child: Text('Update Bill'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _deleteReport(reportId);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-            ),
-            child: Text('Delete Report'),
-          ),
-        ],
       ),
     );
   }
@@ -1390,52 +1332,25 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
                                                 _buildBillReceipt(billDetails),
                                               ],
                                             ],
-                                            // Action buttons
+                                            // Update Bill button only
                                             const SizedBox(height: 16),
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: OutlinedButton.icon(
-                                                    onPressed: () =>
-                                                        _showActionDialog(
-                                                            reportId, report),
-                                                    icon: Icon(Icons.more_vert,
-                                                        size: 16),
-                                                    label: Text('Actions'),
-                                                    style: OutlinedButton
-                                                        .styleFrom(
-                                                      foregroundColor:
-                                                          Colors.blue,
-                                                      side: BorderSide(
-                                                          color: Colors.blue),
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          vertical: 8),
-                                                    ),
-                                                  ),
+                                            SizedBox(
+                                              width: double.infinity,
+                                              child: ElevatedButton.icon(
+                                                onPressed: () =>
+                                                    _showUpdateBillDialog(
+                                                        reportId, report),
+                                                icon:
+                                                    Icon(Icons.edit, size: 16),
+                                                label: Text(
+                                                    'Update Bill & Resolve Report'),
+                                                style: ElevatedButton.styleFrom(
+                                                  backgroundColor: Colors.blue,
+                                                  foregroundColor: Colors.white,
+                                                  padding: const EdgeInsets
+                                                      .symmetric(vertical: 12),
                                                 ),
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: ElevatedButton.icon(
-                                                    onPressed: () =>
-                                                        _showUpdateBillDialog(
-                                                            reportId, report),
-                                                    icon: Icon(Icons.edit,
-                                                        size: 16),
-                                                    label: Text('Update Bill'),
-                                                    style: ElevatedButton
-                                                        .styleFrom(
-                                                      backgroundColor:
-                                                          Colors.blue,
-                                                      foregroundColor:
-                                                          Colors.white,
-                                                      padding: const EdgeInsets
-                                                          .symmetric(
-                                                          vertical: 8),
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -1481,35 +1396,34 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
   Widget _receiptRow(String label, String value,
       {Color? valueColor, bool isBold = false, double fontSize = 11}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 2,
-            child: Text(
-              label,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-                color: Colors.grey.shade700,
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 2,
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 11,
+                  color: Colors.grey.shade700,
+                ),
               ),
             ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Text(
-              value,
-              style: TextStyle(
-                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-                fontSize: fontSize,
-                color: valueColor ?? Colors.grey.shade800,
+            Expanded(
+              flex: 3,
+              child: Text(
+                value,
+                style: TextStyle(
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                  fontSize: fontSize,
+                  color: valueColor ?? Colors.grey.shade800,
+                ),
+                textAlign: TextAlign.right,
               ),
-              textAlign: TextAlign.right,
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ));
   }
 
   Widget _dashedDivider() => Padding(
@@ -1530,14 +1444,12 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
 
 class _ResidentCard extends StatefulWidget {
   final String residentId, fullName, address, contactNumber;
-  final VoidCallback onBillCreated;
 
   const _ResidentCard({
     required this.residentId,
     required this.fullName,
     required this.address,
     required this.contactNumber,
-    required this.onBillCreated,
   });
 
   @override
@@ -1548,6 +1460,7 @@ class _ResidentCardState extends State<_ResidentCard> {
   bool _showPayments = false;
   bool _hasBills = false;
   bool _isCheckingBills = true;
+  bool _hasUnpaidBills = false;
 
   @override
   void initState() {
@@ -1557,15 +1470,40 @@ class _ResidentCardState extends State<_ResidentCard> {
 
   Future<void> _checkForExistingBills() async {
     try {
+      // Check if resident has any bills
       final billSnapshot = await FirebaseFirestore.instance
           .collection('users')
           .doc(widget.residentId)
           .collection('bills')
           .limit(1)
           .get();
+
+      _hasBills = billSnapshot.docs.isNotEmpty;
+
+      // Check if resident has unpaid bills (bills without approved payments)
+      if (_hasBills) {
+        final paidBillIds = await FirebaseFirestore.instance
+            .collection('payments')
+            .where('residentId', isEqualTo: widget.residentId)
+            .where('status', isEqualTo: 'approved')
+            .get()
+            .then((snapshot) =>
+                snapshot.docs.map((doc) => doc['billId'] as String).toSet());
+
+        final unpaidBillSnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.residentId)
+            .collection('bills')
+            .where(FieldPath.documentId,
+                whereNotIn: paidBillIds.isEmpty ? null : paidBillIds.toList())
+            .limit(1)
+            .get();
+
+        _hasUnpaidBills = unpaidBillSnapshot.docs.isNotEmpty;
+      }
+
       if (mounted) {
         setState(() {
-          _hasBills = billSnapshot.docs.isNotEmpty;
           _isCheckingBills = false;
         });
       }
@@ -1629,6 +1567,96 @@ class _ResidentCardState extends State<_ResidentCard> {
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // Bill Status Indicator (replaces Create/Update button)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _isCheckingBills
+                          ? Colors.grey.shade200
+                          : (_hasUnpaidBills
+                              ? Colors.orange.shade100
+                              : Colors.green.shade100),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: _isCheckingBills
+                            ? Colors.grey.shade300
+                            : (_hasUnpaidBills
+                                ? Colors.orange.shade300
+                                : Colors.green.shade300),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_isCheckingBills) ...[
+                          SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Checking...',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
+                        ] else if (_hasUnpaidBills) ...[
+                          Icon(
+                            Icons.pending_actions,
+                            size: 14,
+                            color: Colors.orange.shade700,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Unpaid Bill',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.orange.shade700,
+                            ),
+                          ),
+                        ] else if (_hasBills) ...[
+                          Icon(
+                            Icons.check_circle,
+                            size: 14,
+                            color: Colors.green.shade700,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Paid',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.green.shade700,
+                            ),
+                          ),
+                        ] else ...[
+                          Icon(
+                            Icons.credit_card_off,
+                            size: 14,
+                            color: Colors.grey.shade600,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'No Bill',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
                   IconButton(
                     icon: Icon(
                       _showPayments ? Icons.expand_less : Icons.expand_more,
@@ -1637,65 +1665,6 @@ class _ResidentCardState extends State<_ResidentCard> {
                     ),
                     onPressed: () =>
                         setState(() => _showPayments = !_showPayments),
-                  ),
-                  const SizedBox(width: 8),
-                  AnimatedScale(
-                    scale: 1.0,
-                    duration: const Duration(milliseconds: 200),
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF1E88E5),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 10),
-                        textStyle: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        elevation: 2,
-                      ),
-                      onPressed: _isCheckingBills
-                          ? null
-                          : () {
-                              showDialog(
-                                context: context,
-                                barrierColor: Colors.black54,
-                                builder: (context) => Dialog(
-                                  backgroundColor: Colors.transparent,
-                                  elevation: 0,
-                                  insetPadding: const EdgeInsets.all(10),
-                                  child: _BillReceiptForm(
-                                    residentId: widget.residentId,
-                                    fullName: widget.fullName,
-                                    address: widget.address,
-                                    contactNumber: widget.contactNumber,
-                                  ),
-                                ),
-                              ).then((value) {
-                                widget.onBillCreated();
-                                _checkForExistingBills();
-                              });
-                            },
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_hasBills && !_isCheckingBills) ...[
-                            const Icon(
-                              Icons.check_circle,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 6),
-                          ],
-                          Text(_isCheckingBills
-                              ? 'Loading...'
-                              : (_hasBills ? 'Update Bill' : 'Create Bill')),
-                        ],
-                      ),
-                    ),
                   ),
                 ],
               ),
@@ -2498,858 +2467,4 @@ class _PaymentSectionState extends State<_PaymentSection> {
         return 'Pending';
     }
   }
-}
-
-class _BillReceiptForm extends StatefulWidget {
-  final String fullName, address, contactNumber, residentId;
-
-  const _BillReceiptForm({
-    required this.fullName,
-    required this.address,
-    required this.contactNumber,
-    required this.residentId,
-  });
-
-  @override
-  State<_BillReceiptForm> createState() => _BillReceiptFormState();
-}
-
-class _BillReceiptFormState extends State<_BillReceiptForm> {
-  final _formKey = GlobalKey<FormState>();
-  double current = 0.0;
-  double previous = 0.0;
-  bool _loading = true;
-  DateTime? periodStart;
-  DateTime? periodDue;
-  String selectedPurok = 'PUROK 1';
-  String meterNumber = '';
-  String? _error;
-
-  double get cubicMeterUsed => current >= previous ? current - previous : 0.0;
-
-  double get currentBill => calculateCurrentBill();
-
-  Future<void> _addConsumptionHistory({
-    required String userId,
-    required DateTime periodStart,
-    required double cubicMeterUsed,
-  }) async {
-    try {
-      final year = periodStart.year;
-      final month = periodStart.month;
-      final docId = '$year-${month.toString().padLeft(2, '0')}';
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('consumption_history')
-          .doc(docId)
-          .set({
-        'periodStart': Timestamp.fromDate(periodStart),
-        'cubicMeterUsed': cubicMeterUsed,
-        'year': year,
-        'month': month,
-        'createdAt': Timestamp.now(),
-      }, SetOptions(merge: true));
-      print(
-          'Added consumption history for $userId: $docId, $cubicMeterUsed m³');
-    } catch (e) {
-      print('Error saving consumption history: $e');
-      if (mounted) {
-        setState(() {
-          _error = 'Error saving consumption history: $e';
-        });
-      }
-    }
-  }
-
-  Future<void> _selectDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: periodStart ?? DateTime.now(),
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (picked != null && mounted) {
-      setState(() {
-        periodStart = picked;
-        periodDue = picked.add(const Duration(days: 30));
-      });
-    }
-  }
-
-  double calculateCurrentBill() {
-    double baseRate = getMinimumRate();
-    double excess = cubicMeterUsed > 10 ? cubicMeterUsed - 10 : 0;
-    return baseRate + (excess * getRatePerCubicMeter());
-  }
-
-  double getMinimumRate() {
-    switch (selectedPurok) {
-      case 'PUROK 1':
-      case 'PUROK 2':
-      case 'PUROK 3':
-      case 'PUROK 4':
-      case 'PUROK 5':
-        return 30.00;
-      case 'COMMERCIAL':
-        return 75.00;
-      case 'NON-RESIDENCE':
-        return 100.00;
-      case 'INDUSTRIAL':
-        return 100.00;
-      default:
-        return 0.00;
-    }
-  }
-
-  double getRatePerCubicMeter() {
-    switch (selectedPurok) {
-      case 'PUROK 1':
-      case 'PUROK 2':
-      case 'PUROK 3':
-      case 'PUROK 4':
-      case 'PUROK 5':
-        return 5.00;
-      case 'COMMERCIAL':
-        return 10.00;
-      case 'NON-RESIDENCE':
-        return 10.00;
-      case 'INDUSTRIAL':
-        return 15.00;
-      default:
-        return 0.00;
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPreviousReading();
-  }
-
-  Future<void> _loadPreviousReading() async {
-    try {
-      print('Loading data for resident: ${widget.residentId}');
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
-      // Fetch meter reading
-      final meterSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.residentId)
-          .collection('meter_readings')
-          .doc('latest')
-          .get();
-      print('Meter reading document exists: ${meterSnapshot.exists}');
-      if (meterSnapshot.exists && mounted) {
-        final data = meterSnapshot.data()!;
-        setState(() {
-          previous = data['currentConsumedWaterMeter']?.toDouble() ?? 0.0;
-          print('Previous reading set to: $previous');
-        });
-      } else {
-        setState(() {
-          previous = 0.0;
-          print('No previous reading found, defaulting to 0.0');
-        });
-      }
-      // Fetch meter number from user document
-      final userSnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.residentId)
-          .get();
-      if (userSnapshot.exists &&
-          userSnapshot.data()!.containsKey('meterNumber') &&
-          mounted) {
-        setState(() {
-          meterNumber = userSnapshot.data()!['meterNumber'] ?? '';
-          print('Meter number from user document: $meterNumber');
-        });
-      } else {
-        print('No meter number in user document, checking latest bill');
-        // Fallback to latest bill
-        final billSnapshot = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(widget.residentId)
-            .collection('bills')
-            .orderBy('periodStart', descending: true)
-            .limit(1)
-            .get();
-        if (billSnapshot.docs.isNotEmpty && mounted) {
-          setState(() {
-            meterNumber = billSnapshot.docs.first.data()['meterNumber'] ?? '';
-            print('Meter number from latest bill: $meterNumber');
-          });
-        } else {
-          print('No meter number found in bills');
-          setState(() {
-            meterNumber = '';
-          });
-        }
-      }
-      if (mounted) {
-        setState(() {
-          _loading = false;
-        });
-      }
-    } catch (e) {
-      print('Error loading previous reading or meter number: $e');
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = 'Error loading data: $e';
-        });
-      }
-    }
-  }
-
-  Future<void> _recordTransactionHistory({
-    required String residentId,
-    required String type,
-    required String status,
-    required double amount,
-    required String description,
-    required String? billId,
-    required String? month,
-  }) async {
-    try {
-      final transactionData = {
-        'residentId': residentId,
-        'type': type,
-        'status': status,
-        'amount': amount,
-        'description': description,
-        'billId': billId,
-        'month': month,
-        'timestamp': FieldValue.serverTimestamp(),
-        'createdAt': FieldValue.serverTimestamp(),
-      };
-      await FirebaseFirestore.instance
-          .collection('transaction_history')
-          .add(transactionData);
-      print('Transaction history recorded for bill creation: $transactionData');
-    } catch (e) {
-      print('Error recording transaction history: $e');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 650),
-        margin: const EdgeInsets.symmetric(vertical: 16),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFEDF2F7), width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFFFFFF), Color(0xFFF5F7FA)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Image.asset('assets/images/icon.png', height: 36),
-                          const SizedBox(height: 4),
-                          Text(
-                            'San Jose Water Services\nSajowasa',
-                            style: GoogleFonts.inter(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                              letterSpacing: 0.5,
-                              color: const Color(0xFF2D3748),
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            DateFormat.yMMMd().format(DateTime.now()),
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: const Color(0xFF718096),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      width: 120,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: const Color(0xFFEDF2F7)),
-                        borderRadius: BorderRadius.circular(8),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: DropdownButton<String>(
-                        value: selectedPurok,
-                        onChanged: (String? newValue) {
-                          if (newValue != null) {
-                            setState(() {
-                              selectedPurok = newValue;
-                            });
-                          }
-                        },
-                        items: <String>[
-                          'PUROK 1',
-                          'PUROK 2',
-                          'PUROK 3',
-                          'PUROK 4',
-                          'PUROK 5',
-                          'COMMERCIAL',
-                          'NON-RESIDENCE',
-                          'INDUSTRIAL'
-                        ].map<DropdownMenuItem<String>>((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(
-                              value,
-                              style: GoogleFonts.inter(
-                                  fontSize: 12, color: const Color(0xFF2D3748)),
-                            ),
-                          );
-                        }).toList(),
-                        underline: const SizedBox(),
-                        isExpanded: true,
-                        icon: const Icon(Icons.arrow_drop_down,
-                            color: Color(0xFF1E88E5), size: 20),
-                        dropdownColor: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        elevation: 6,
-                      ),
-                    ),
-                  ],
-                ),
-                _dashedDivider(),
-                _receiptRow('NAME', widget.fullName),
-                _receiptRow(
-                  'METER NUMBER',
-                  null,
-                  trailing: SizedBox(
-                    width: 120,
-                    child: _loading
-                        ? Text(
-                            '...',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: const Color(0xFF718096),
-                            ),
-                          )
-                        : TextFormField(
-                            initialValue: meterNumber,
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              color: const Color(0xFF2D3748),
-                            ),
-                            decoration: InputDecoration(
-                              hintText: meterNumber.isEmpty
-                                  ? 'Enter meter number'
-                                  : meterNumber,
-                              isDense: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                  vertical: 8, horizontal: 12),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide:
-                                    const BorderSide(color: Color(0xFFEDF2F7)),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                                borderSide:
-                                    const BorderSide(color: Color(0xFF1E88E5)),
-                              ),
-                            ),
-                            validator: (v) => v == null || v.isEmpty
-                                ? 'Enter meter number'
-                                : null,
-                            onChanged: (v) => setState(() => meterNumber = v),
-                          ),
-                  ),
-                ),
-                if (_error != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Text(
-                      _error!,
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: Colors.redAccent,
-                      ),
-                    ),
-                  ),
-                _receiptRow(
-                  'BILLING PERIOD START',
-                  null,
-                  trailing: SizedBox(
-                    width: 120,
-                    child: TextFormField(
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: const Color(0xFF2D3748),
-                      ),
-                      decoration: InputDecoration(
-                        hintText: periodStart == null
-                            ? 'Select Date'
-                            : DateFormat('MM-dd-yyyy').format(periodStart!),
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                            vertical: 8, horizontal: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide:
-                              const BorderSide(color: Color(0xFFEDF2F7)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide:
-                              const BorderSide(color: Color(0xFF1E88E5)),
-                        ),
-                      ),
-                      readOnly: true,
-                      onTap: () => _selectDate(context),
-                      validator: (v) =>
-                          periodStart == null ? 'Select a date' : null,
-                    ),
-                  ),
-                ),
-                _receiptRow(
-                  'BILLING PERIOD DUE DATE',
-                  periodDue != null
-                      ? DateFormat('MM-dd-yyyy').format(periodDue!)
-                      : 'Select Billing Period Start',
-                  trailing: const SizedBox(),
-                ),
-                _dashedDivider(),
-                _receiptRow(
-                  'PREVIOUS READING',
-                  _loading ? 'Loading...' : '${previous.toStringAsFixed(2)} m³',
-                ),
-                _receiptRow(
-                  'CURRENT READING',
-                  null,
-                  trailing: SizedBox(
-                    width: 100,
-                    child: TextFormField(
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        color: const Color(0xFF2D3748),
-                      ),
-                      decoration: InputDecoration(
-                        hintText: '0.00',
-                        suffixText: 'm³',
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                            vertical: 8, horizontal: 12),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide:
-                              const BorderSide(color: Color(0xFFEDF2F7)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide:
-                              const BorderSide(color: Color(0xFF1E88E5)),
-                        ),
-                      ),
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                      validator: (v) {
-                        if (v == null || v.isEmpty)
-                          return 'Enter current reading';
-                        final d = double.tryParse(v);
-                        if (d == null) return 'Invalid number';
-                        if (d < previous) {
-                          return 'Current must be ≥ $previous';
-                        }
-                        return null;
-                      },
-                      onChanged: (v) {
-                        setState(() => current = double.tryParse(v) ?? 0.0);
-                      },
-                    ),
-                  ),
-                ),
-
-                // ADDED: Warning message when current reading is lower than previous
-                if (current < previous && current > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4, bottom: 8),
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.orange.shade200),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.warning_amber,
-                              color: Colors.orange.shade700, size: 16),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '⚠️ Warning: Current reading ($current m³) is lower than previous reading ($previous m³). '
-                              'The system requires the current meter reading to exceed the previous reading for proper computation.',
-                              style: GoogleFonts.inter(
-                                fontSize: 11,
-                                color: Colors.orange.shade900,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                _receiptRow(
-                  'CUBIC METER USED',
-                  current < previous
-                      ? '0.00 m³ (Invalid: Current < Previous)'
-                      : '${cubicMeterUsed.toStringAsFixed(2)} m³',
-                  isBold: true,
-                  valueColor: current < previous ? Colors.red : null,
-                ),
-                _dashedDivider(),
-                _receiptRow(
-                  'CURRENT BILL',
-                  '₱${currentBill.toStringAsFixed(2)}',
-                  valueColor: const Color(0xFF718096),
-                  isBold: true,
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  decoration: BoxDecoration(
-                    border:
-                        Border.all(color: const Color(0xFFEDF2F7), width: 1),
-                    borderRadius: BorderRadius.circular(8),
-                    color: Colors.white,
-                  ),
-                  padding: const EdgeInsets.all(10),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _rateRow('Residential:',
-                              'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
-                          const SizedBox(width: 8),
-                          _rateRow('Commercial:',
-                              'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          _rateRow('Non Residence:',
-                              'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
-                          const SizedBox(width: 8),
-                          _rateRow('Industrial:',
-                              'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    AnimatedScale(
-                      scale: 1.0,
-                      duration: const Duration(milliseconds: 200),
-                      child: TextButton(
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
-                          textStyle: GoogleFonts.inter(
-                              fontSize: 13, fontWeight: FontWeight.w600),
-                          foregroundColor: const Color(0xFF1E88E5),
-                          side: const BorderSide(color: Color(0xFF1E88E5)),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    AnimatedScale(
-                      scale: 1.0,
-                      duration: const Duration(milliseconds: 200),
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _loading
-                              ? Colors.grey.shade400
-                              : const Color(0xFF1E88E5),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
-                          textStyle: GoogleFonts.inter(
-                              fontWeight: FontWeight.w600, fontSize: 13),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
-                          elevation: 2,
-                        ),
-                        onPressed: _loading
-                            ? null
-                            : () async {
-                                if (_formKey.currentState!.validate()) {
-                                  // Additional validation for current reading
-                                  if (current < previous) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          'Error: Current reading must be greater than or equal to previous reading ($previous m³)',
-                                          style:
-                                              GoogleFonts.inter(fontSize: 13),
-                                        ),
-                                        backgroundColor: Colors.red,
-                                        duration: const Duration(seconds: 3),
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  try {
-                                    setState(() {
-                                      _loading = true;
-                                      _error = null;
-                                    });
-                                    final periodStartDate = periodStart!;
-                                    final month = DateFormat('MMM yyyy')
-                                        .format(periodStartDate);
-                                    final billData = {
-                                      'residentId': widget.residentId,
-                                      'fullName': widget.fullName,
-                                      'address': widget.address,
-                                      'contactNumber': widget.contactNumber,
-                                      'meterNumber': meterNumber,
-                                      'periodStart':
-                                          Timestamp.fromDate(periodStartDate),
-                                      'periodDue': periodDue != null
-                                          ? Timestamp.fromDate(periodDue!)
-                                          : FieldValue.serverTimestamp(),
-                                      'currentConsumedWaterMeter': current,
-                                      'previousConsumedWaterMeter': previous,
-                                      'cubicMeterUsed': cubicMeterUsed,
-                                      'currentMonthBill': currentBill,
-                                      'issueDate': FieldValue.serverTimestamp(),
-                                      'purok': selectedPurok,
-                                    };
-                                    print('Creating bill with data: $billData');
-                                    // Save bill to Firestore
-                                    final billRef = await FirebaseFirestore
-                                        .instance
-                                        .collection('users')
-                                        .doc(widget.residentId)
-                                        .collection('bills')
-                                        .add(billData);
-                                    // Record transaction history for bill creation
-                                    await _recordTransactionHistory(
-                                      residentId: widget.residentId,
-                                      type: 'Bill',
-                                      status: 'created',
-                                      amount: currentBill,
-                                      description: 'Bill created for $month',
-                                      billId: billRef.id,
-                                      month: month,
-                                    );
-                                    // Save meter number to user document
-                                    await FirebaseFirestore.instance
-                                        .collection('users')
-                                        .doc(widget.residentId)
-                                        .set({
-                                      'meterNumber': meterNumber,
-                                    }, SetOptions(merge: true));
-                                    print(
-                                        'Saved meter number ${meterNumber} to user document');
-                                    // Add to consumption history
-                                    await _addConsumptionHistory(
-                                      userId: widget.residentId,
-                                      periodStart: periodStartDate,
-                                      cubicMeterUsed: cubicMeterUsed,
-                                    );
-                                    // Update meter readings with current as latest
-                                    await FirebaseFirestore.instance
-                                        .collection('users')
-                                        .doc(widget.residentId)
-                                        .collection('meter_readings')
-                                        .doc('latest')
-                                        .set({
-                                      'currentConsumedWaterMeter': current,
-                                      'updatedAt': FieldValue.serverTimestamp(),
-                                    });
-                                    print(
-                                        'Updated meter readings with current: $current');
-                                    if (mounted) {
-                                      Navigator.pop(context);
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                              'Bill created successfully!',
-                                              style: GoogleFonts.inter(
-                                                  fontSize: 13)),
-                                          backgroundColor:
-                                              const Color(0xFF1E88E5),
-                                          duration: const Duration(seconds: 2),
-                                          behavior: SnackBarBehavior.floating,
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8)),
-                                        ),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    print('Error creating bill: $e');
-                                    if (mounted) {
-                                      setState(() {
-                                        _error = 'Error creating bill: $e';
-                                      });
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                              'Error creating bill: $e',
-                                              style: GoogleFonts.inter(
-                                                  fontSize: 13)),
-                                          backgroundColor: Colors.redAccent,
-                                          duration: const Duration(seconds: 3),
-                                          behavior: SnackBarBehavior.floating,
-                                          shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8)),
-                                        ),
-                                      );
-                                    }
-                                  } finally {
-                                    if (mounted) {
-                                      setState(() {
-                                        _loading = false;
-                                      });
-                                    }
-                                  }
-                                }
-                              },
-                        child: Text(
-                          _loading ? 'Creating...' : 'Create Bill',
-                          style: GoogleFonts.inter(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _dashedDivider() => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Row(
-          children: List.generate(
-            30,
-            (i) => Expanded(
-              child: Container(
-                height: 1,
-                color: i.isEven ? const Color(0xFFEDF2F7) : Colors.transparent,
-              ),
-            ),
-          ),
-        ),
-      );
-
-  Widget _receiptRow(String label, String? value,
-          {Widget? trailing, Color? valueColor, bool isBold = false}) =>
-      Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 12,
-                  color: const Color(0xFF2D3748),
-                ),
-              ),
-            ),
-            if (value != null)
-              Text(
-                value,
-                style: GoogleFonts.inter(
-                  fontWeight: isBold ? FontWeight.w700 : FontWeight.w600,
-                  fontSize: 12,
-                  color: valueColor ?? const Color(0xFF718096),
-                ),
-              ),
-            if (trailing != null) trailing,
-          ],
-        ),
-      );
-
-  Widget _rateRow(String category, String details) => Expanded(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              category,
-              style: GoogleFonts.inter(
-                fontWeight: FontWeight.w600,
-                fontSize: 11,
-                color: const Color(0xFF2D3748),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                details,
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  color: const Color(0xFF718096),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
 }

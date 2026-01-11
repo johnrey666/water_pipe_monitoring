@@ -311,8 +311,10 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                 ['Unfixed Reports', 'Monitoring'],
                 _monitoringPage,
                 (page) => setState(() => _monitoringPage = page),
-                showIllegalTapping: false,
+                showIllegalTapping:
+                    false, // Don't show illegal tapping in monitoring tab
               ),
+              // UPDATED: Show only illegal tapping reports assigned to this plumber
               _buildIllegalTappingList(
                 user.uid,
                 _illegalTappingPage,
@@ -642,12 +644,17 @@ class _ViewReportsPageState extends State<ViewReportsPage>
     );
   }
 
+  // UPDATED: Show only illegal tapping reports assigned to this plumber
   Widget _buildIllegalTappingList(
       String userId, int currentPage, Function(int) onPageChange) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('reports')
           .where('isIllegalTapping', isEqualTo: true)
+          .where('assignedPlumber',
+              isEqualTo: userId) // Only show assigned to this plumber
+          .where('status',
+              isNotEqualTo: 'Fixed') // Don't show fixed illegal tapping reports
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
@@ -686,7 +693,7 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'No illegal tapping reports',
+                  'No assigned illegal tapping reports',
                   style: GoogleFonts.poppins(
                     fontSize: 18,
                     color: Colors.grey[600],
@@ -695,7 +702,7 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'All reports are currently legal and authorized',
+                  'You have not been assigned to investigate any illegal tapping cases',
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     color: Colors.grey[500],
@@ -729,7 +736,7 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      '🚨 HIGH PRIORITY: These reports require immediate investigation',
+                      '🚨 HIGH PRIORITY: These illegal tapping reports require immediate investigation',
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -760,8 +767,8 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                   final formattedDate = createdAt != null
                       ? DateFormat.yMMMd().format(createdAt)
                       : 'Unknown date';
-                  final isAssigned = data['assignedPlumber'] != null;
-                  final assignedPlumberId = data['assignedPlumber'] as String?;
+                  final status =
+                      data['status']?.toString() ?? 'Unfixed Reports';
 
                   return FadeInUp(
                     duration: const Duration(milliseconds: 300),
@@ -806,26 +813,32 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            if (isAssigned && assignedPlumberId == userId)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.shade100,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border:
-                                      Border.all(color: Colors.green.shade300),
-                                ),
-                                child: Text(
-                                  'ASSIGNED',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 10,
-                                    color: Colors.green.shade800,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                  maxLines: 1,
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: status == 'Monitoring'
+                                    ? Colors.orange.shade100
+                                    : Colors.red.shade100,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: status == 'Monitoring'
+                                      ? Colors.orange.shade300
+                                      : Colors.red.shade300,
                                 ),
                               ),
+                              child: Text(
+                                status.toUpperCase(),
+                                style: GoogleFonts.poppins(
+                                  fontSize: 10,
+                                  color: status == 'Monitoring'
+                                      ? Colors.orange.shade800
+                                      : Colors.red.shade800,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                maxLines: 1,
+                              ),
+                            ),
                           ],
                         ),
                         subtitle: Column(
@@ -883,26 +896,6 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                if (!isAssigned)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.blue.shade50,
-                                      borderRadius: BorderRadius.circular(4),
-                                      border: Border.all(
-                                          color: Colors.blue.shade200),
-                                    ),
-                                    child: Text(
-                                      'UNASSIGNED',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 10,
-                                        color: Colors.blue.shade800,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                    ),
-                                  ),
                               ],
                             ),
                           ],
