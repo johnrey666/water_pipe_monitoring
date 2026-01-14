@@ -1461,6 +1461,8 @@ class _ResidentCardState extends State<_ResidentCard> {
   bool _hasBills = false;
   bool _isCheckingBills = true;
   bool _hasUnpaidBills = false;
+  Map<String, dynamic>? _unpaidBillData;
+  bool _loadingBill = false;
 
   @override
   void initState() {
@@ -1496,10 +1498,19 @@ class _ResidentCardState extends State<_ResidentCard> {
             .collection('bills')
             .where(FieldPath.documentId,
                 whereNotIn: paidBillIds.isEmpty ? null : paidBillIds.toList())
+            .orderBy('periodStart', descending: true)
             .limit(1)
             .get();
 
         _hasUnpaidBills = unpaidBillSnapshot.docs.isNotEmpty;
+        
+        // Get the unpaid bill data for the view bill modal
+        if (_hasUnpaidBills) {
+          _unpaidBillData = {
+            ...unpaidBillSnapshot.docs.first.data(),
+            'billId': unpaidBillSnapshot.docs.first.id,
+          };
+        }
       }
 
       if (mounted) {
@@ -1517,170 +1528,427 @@ class _ResidentCardState extends State<_ResidentCard> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-        margin: const EdgeInsets.symmetric(vertical: 8),
+  void _showViewBillModal() {
+    if (_unpaidBillData == null) return;
+
+    final bill = _unpaidBillData!;
+    final currentConsumed = bill['currentConsumedWaterMeter']?.toDouble() ?? 0.0;
+    final previousConsumed = bill['previousConsumedWaterMeter']?.toDouble() ?? 0.0;
+    final cubicMeterUsed = bill['cubicMeterUsed']?.toDouble() ?? 0.0;
+    final currentMonthBill = bill['currentMonthBill']?.toDouble() ?? 0.0;
+    final periodStart = bill['periodStart'] as Timestamp?;
+    final periodDue = bill['periodDue'] as Timestamp?;
+    final issueDate = bill['issueDate'] as Timestamp?;
+    final formattedPeriodStart = periodStart != null
+        ? DateFormat('MM-dd-yyyy').format(periodStart.toDate())
+        : 'N/A';
+    final formattedPeriodDue = periodDue != null
+        ? DateFormat('MM-dd-yyyy').format(periodDue.toDate())
+        : 'N/A';
+    final formattedIssueDate = issueDate != null
+        ? DateFormat('MMM dd, yyyy').format(issueDate.toDate())
+        : 'N/A';
+    final isOverdue = periodDue != null && DateTime.now().isAfter(periodDue.toDate());
+    final dueColor = isOverdue ? Colors.red : Colors.black;
+    final recordedByName = bill['recordedByName'] ?? 'Meter Reader';
+    final purok = bill['purok'] ?? 'PUROK 1';
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        elevation: 6,
-        shadowColor: Colors.black.withOpacity(0.1),
-        color: Colors.white,
-        child: Column(
-          children: [
-            ListTile(
-              contentPadding: const EdgeInsets.all(16),
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF1E88E5), Color(0xFF64B5F6)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 6,
-                      offset: const Offset(0, 2),
+        child: Container(
+          constraints: BoxConstraints(maxWidth: 500),
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            Icons.receipt_long,
+                            color: Colors.blue.shade700,
+                            size: 20,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'View Bill',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF4A90E2),
+                              ),
+                            ),
+                            Text(
+                              widget.fullName,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Color(0xFF4A90E2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        purok,
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ],
                 ),
-                child: const Icon(Icons.person, color: Colors.white, size: 20),
-              ),
-              title: Text(
-                widget.fullName,
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 16,
-                  color: const Color(0xFF2D3748),
-                ),
-              ),
-              subtitle: Text(
-                '${widget.address}\n${widget.contactNumber}',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: const Color(0xFF718096),
-                  height: 1.4,
-                ),
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Bill Status Indicator (replaces Create/Update button)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: _isCheckingBills
-                          ? Colors.grey.shade200
-                          : (_hasUnpaidBills
-                              ? Colors.orange.shade100
-                              : Colors.green.shade100),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: _isCheckingBills
-                            ? Colors.grey.shade300
-                            : (_hasUnpaidBills
-                                ? Colors.orange.shade300
-                                : Colors.green.shade300),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                SizedBox(height: 16),
+                
+                // Bill Details Card
+                Card(
+                  elevation: 2,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (_isCheckingBills) ...[
-                          SizedBox(
-                            width: 12,
-                            height: 12,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.grey.shade600,
+                        Text(
+                          'WATER BILL STATEMENT',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF4A90E2),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        _dashedDivider(),
+                        _receiptRow('Name', widget.fullName),
+                        _receiptRow('Address', widget.address),
+                        _receiptRow('Contact', widget.contactNumber),
+                        _receiptRow('Meter No.', bill['meterNumber'] ?? 'N/A'),
+                        _receiptRow('Recorded By', recordedByName),
+                        _receiptRow('Billing Period Start', formattedPeriodStart),
+                        _receiptRow('Billing Period Due', formattedPeriodDue),
+                        _receiptRow('Issue Date', formattedIssueDate),
+                        _dashedDivider(),
+                        _receiptRow('Previous Reading', '${previousConsumed.toStringAsFixed(2)} m³'),
+                        _receiptRow('Current Reading', '${currentConsumed.toStringAsFixed(2)} m³'),
+                        _receiptRow('Cubic Meter Used', '${cubicMeterUsed.toStringAsFixed(2)} m³', isBold: true),
+                        _dashedDivider(),
+                        _receiptRow('Current Bill', '₱${currentMonthBill.toStringAsFixed(2)}',
+                            valueColor: Colors.red, isBold: true, fontSize: 14),
+                        _receiptRow('Due Date', formattedPeriodDue, valueColor: dueColor),
+                        
+                        if (isOverdue)
+                          Padding(
+                            padding: EdgeInsets.only(top: 8),
+                            child: Row(
+                              children: [
+                                Icon(Icons.warning_amber, color: Colors.red, size: 14),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Overdue: Pay immediately to avoid penalties.',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Checking...',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade700,
-                            ),
-                          ),
-                        ] else if (_hasUnpaidBills) ...[
-                          Icon(
-                            Icons.pending_actions,
-                            size: 14,
-                            color: Colors.orange.shade700,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Unpaid Bill',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.orange.shade700,
-                            ),
-                          ),
-                        ] else if (_hasBills) ...[
-                          Icon(
-                            Icons.check_circle,
-                            size: 14,
-                            color: Colors.green.shade700,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'Paid',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.green.shade700,
-                            ),
-                          ),
-                        ] else ...[
-                          Icon(
-                            Icons.credit_card_off,
-                            size: 14,
-                            color: Colors.grey.shade600,
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'No Bill',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  IconButton(
-                    icon: Icon(
-                      _showPayments ? Icons.expand_less : Icons.expand_more,
-                      color: const Color(0xFF1E88E5),
-                      size: 20,
+                ),
+                
+                SizedBox(height: 16),
+                
+                // Footer
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(
+                        'Close',
+                        style: TextStyle(color: Color(0xFF4A90E2)),
+                      ),
                     ),
-                    onPressed: () =>
-                        setState(() => _showPayments = !_showPayments),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _receiptRow(String label, String value,
+      {Color? valueColor, bool isBold = false, double fontSize = 12}) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: fontSize,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+                fontSize: fontSize,
+                color: valueColor ?? Colors.grey.shade800,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _dashedDivider() => Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: List.generate(
+            30,
+            (i) => Expanded(
+              child: Container(
+                height: 1,
+                color: i.isEven ? Colors.grey.shade300 : Colors.transparent,
+              ),
+            ),
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      elevation: 6,
+      shadowColor: Colors.black.withOpacity(0.1),
+      color: Colors.white,
+      child: Column(
+        children: [
+          ListTile(
+            contentPadding: EdgeInsets.all(16),
+            leading: Container(
+              padding: EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [Color(0xFF1E88E5), Color(0xFF64B5F6)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
                   ),
                 ],
               ),
+              child: Icon(Icons.person, color: Colors.white, size: 20),
             ),
-            AnimatedCrossFade(
-              firstChild: const SizedBox.shrink(),
-              secondChild: _PaymentSection(
-                  residentId: widget.residentId, fullName: widget.fullName),
-              crossFadeState: _showPayments
-                  ? CrossFadeState.showSecond
-                  : CrossFadeState.showFirst,
-              duration: const Duration(milliseconds: 500),
-              sizeCurve: Curves.easeInOutCubic,
+            title: Text(
+              widget.fullName,
+              style: GoogleFonts.inter(
+                fontWeight: FontWeight.w700,
+                fontSize: 16,
+                color: Color(0xFF2D3748),
+              ),
             ),
-          ],
-        ));
+            subtitle: Text(
+              '${widget.address}\n${widget.contactNumber}',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: Color(0xFF718096),
+                height: 1.4,
+              ),
+            ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Bill Status Indicator with View Bill button
+                if (_hasUnpaidBills && !_isCheckingBills)
+                  Container(
+                    margin: EdgeInsets.only(right: 8),
+                    child: ElevatedButton.icon(
+                      onPressed: _showViewBillModal,
+                      icon: Icon(Icons.visibility, size: 14),
+                      label: Text('View Bill'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFF4A90E2),
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        textStyle: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                
+                // Status indicator container
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _isCheckingBills
+                        ? Colors.grey.shade200
+                        : (_hasUnpaidBills
+                            ? Colors.orange.shade100
+                            : Colors.green.shade100),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _isCheckingBills
+                          ? Colors.grey.shade300
+                          : (_hasUnpaidBills
+                              ? Colors.orange.shade300
+                              : Colors.green.shade300),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_isCheckingBills) ...[
+                        SizedBox(
+                          width: 12,
+                          height: 12,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Checking...',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ] else if (_hasUnpaidBills) ...[
+                        Icon(
+                          Icons.pending_actions,
+                          size: 14,
+                          color: Colors.orange.shade700,
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Unpaid',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.orange.shade700,
+                          ),
+                        ),
+                      ] else if (_hasBills) ...[
+                        Icon(
+                          Icons.check_circle,
+                          size: 14,
+                          color: Colors.green.shade700,
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Paid',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.green.shade700,
+                          ),
+                        ),
+                      ] else ...[
+                        Icon(
+                          Icons.credit_card_off,
+                          size: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'No Bill',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                SizedBox(width: 12),
+                IconButton(
+                  icon: Icon(
+                    _showPayments ? Icons.expand_less : Icons.expand_more,
+                    color: Color(0xFF1E88E5),
+                    size: 20,
+                  ),
+                  onPressed: () =>
+                      setState(() => _showPayments = !_showPayments),
+                ),
+              ],
+            ),
+          ),
+          AnimatedCrossFade(
+            firstChild: SizedBox.shrink(),
+            secondChild: _PaymentSection(
+                residentId: widget.residentId, fullName: widget.fullName),
+            crossFadeState: _showPayments
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: Duration(milliseconds: 500),
+            sizeCurve: Curves.easeInOutCubic,
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -1986,7 +2254,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
                 style: GoogleFonts.inter(fontSize: 13),
               ),
               backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
+              duration: Duration(seconds: 2),
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
@@ -2026,10 +2294,10 @@ class _PaymentSectionState extends State<_PaymentSection> {
                 style: GoogleFonts.inter(fontSize: 13),
               ),
               backgroundColor: Colors.red,
-              duration: const Duration(seconds: 2),
+              duration: Duration(seconds: 2),
               behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+              shape:
+                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           );
         }
@@ -2046,7 +2314,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
               style: GoogleFonts.inter(fontSize: 13),
             ),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 2),
+            duration: Duration(seconds: 2),
             behavior: SnackBarBehavior.floating,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -2068,7 +2336,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
           'Reject Payment',
           style: GoogleFonts.inter(
             fontSize: 16,
-            color: const Color(0xFF2D3748),
+            color: Color(0xFF2D3748),
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -2080,10 +2348,10 @@ class _PaymentSectionState extends State<_PaymentSection> {
               'Please provide a reason for rejecting this payment:',
               style: GoogleFonts.inter(
                 fontSize: 13,
-                color: const Color(0xFF718096),
+                color: Color(0xFF718096),
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             TextField(
               controller: reasonController,
               maxLines: 3,
@@ -2091,11 +2359,11 @@ class _PaymentSectionState extends State<_PaymentSection> {
                 hintText: 'Enter reason for rejection...',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFFEDF2F7)),
+                  borderSide: BorderSide(color: Color(0xFFEDF2F7)),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF1E88E5)),
+                  borderSide: BorderSide(color: Color(0xFF1E88E5)),
                 ),
               ),
             ),
@@ -2108,7 +2376,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
               'Cancel',
               style: GoogleFonts.inter(
                 fontSize: 13,
-                color: const Color(0xFF1E88E5),
+                color: Color(0xFF1E88E5),
               ),
             ),
           ),
@@ -2117,7 +2385,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
               backgroundColor: Colors.red,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               textStyle:
                   GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
             ),
@@ -2126,7 +2394,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
               if (reason.isEmpty) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
+                    SnackBar(
                       content: Text('Please provide a reason for rejection'),
                       backgroundColor: Colors.red,
                     ),
@@ -2151,23 +2419,23 @@ class _PaymentSectionState extends State<_PaymentSection> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F7FA),
-        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
-        border: Border.all(color: const Color(0xFFEDF2F7), width: 1),
+        color: Color(0xFFF5F7FA),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
+        border: Border.all(color: Color(0xFFEDF2F7), width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
             blurRadius: 8,
-            offset: const Offset(0, 2),
+            offset: Offset(0, 2),
           ),
         ],
       ),
       child: Column(
         children: [
           if (_isLoading)
-            const Padding(
+            Padding(
               padding: EdgeInsets.all(8.0),
               child: CircularProgressIndicator(
                 valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF1E88E5)),
@@ -2175,7 +2443,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
             )
           else if (_error != null)
             Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding: EdgeInsets.all(8.0),
               child: Text(
                 _error!,
                 style: GoogleFonts.inter(fontSize: 13, color: Colors.redAccent),
@@ -2183,17 +2451,17 @@ class _PaymentSectionState extends State<_PaymentSection> {
             )
           else if (_paymentData.isEmpty)
             Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding: EdgeInsets.all(8.0),
               child: Text(
                 'No payment history for this resident.',
                 style: GoogleFonts.inter(
-                    fontSize: 13, color: const Color(0xFF718096)),
+                    fontSize: 13, color: Color(0xFF718096)),
               ),
             )
           else
             ListView.builder(
               shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+              physics: NeverScrollableScrollPhysics(),
               itemCount: _paymentData.length,
               itemBuilder: (context, index) {
                 final payment = _paymentData[index];
@@ -2208,18 +2476,18 @@ class _PaymentSectionState extends State<_PaymentSection> {
                 final processedDate = payment['processedDate'] as Timestamp?;
                 final rejectionReason = payment['rejectionReason'] as String?;
                 return Container(
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  padding: const EdgeInsets.all(12),
+                  margin: EdgeInsets.symmetric(vertical: 4),
+                  padding: EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border:
-                        Border.all(color: const Color(0xFFEDF2F7), width: 1),
+                        Border.all(color: Color(0xFFEDF2F7), width: 1),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.05),
                         blurRadius: 6,
-                        offset: const Offset(0, 2),
+                        offset: Offset(0, 2),
                       ),
                     ],
                   ),
@@ -2227,7 +2495,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: EdgeInsets.all(8),
                         decoration: BoxDecoration(
                           color: _getStatusColor(status).withOpacity(0.1),
                           shape: BoxShape.circle,
@@ -2238,7 +2506,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
                           size: 20,
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2248,14 +2516,14 @@ class _PaymentSectionState extends State<_PaymentSection> {
                               style: GoogleFonts.inter(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: const Color(0xFF2D3748),
+                                color: Color(0xFF2D3748),
                               ),
                             ),
                             Text(
                               'Amount: ₱${amount.toStringAsFixed(2)}',
                               style: GoogleFonts.inter(
                                 fontSize: 12,
-                                color: const Color(0xFF718096),
+                                color: Color(0xFF718096),
                               ),
                             ),
                             Text(
@@ -2270,13 +2538,13 @@ class _PaymentSectionState extends State<_PaymentSection> {
                               'Billing Date: $billingDate',
                               style: GoogleFonts.inter(
                                 fontSize: 12,
-                                color: const Color(0xFF718096),
+                                color: Color(0xFF718096),
                               ),
                             ),
                             if (rejectionReason != null &&
                                 rejectionReason.isNotEmpty)
                               Padding(
-                                padding: const EdgeInsets.only(top: 4),
+                                padding: EdgeInsets.only(top: 4),
                                 child: Text(
                                   'Reason: $rejectionReason',
                                   style: GoogleFonts.inter(
@@ -2288,7 +2556,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
                               ),
                             if (submissionDate != null)
                               Padding(
-                                padding: const EdgeInsets.only(top: 2),
+                                padding: EdgeInsets.only(top: 2),
                                 child: Text(
                                   'Submitted: ${DateFormat('MMM dd, yyyy').format(submissionDate.toDate())}',
                                   style: GoogleFonts.inter(
@@ -2299,7 +2567,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
                               ),
                             if (processedDate != null && status != 'pending')
                               Padding(
-                                padding: const EdgeInsets.only(top: 2),
+                                padding: EdgeInsets.only(top: 2),
                                 child: Text(
                                   'Processed: ${DateFormat('MMM dd, yyyy').format(processedDate.toDate())}',
                                   style: GoogleFonts.inter(
@@ -2319,14 +2587,14 @@ class _PaymentSectionState extends State<_PaymentSection> {
                           if (receiptImage != null)
                             AnimatedScale(
                               scale: 1.0,
-                              duration: const Duration(milliseconds: 200),
+                              duration: Duration(milliseconds: 200),
                               child: TextButton(
                                 onPressed: () {
                                   showDialog(
                                     context: context,
                                     builder: (context) => Dialog(
                                       backgroundColor: Colors.transparent,
-                                      insetPadding: const EdgeInsets.all(20),
+                                      insetPadding: EdgeInsets.all(20),
                                       child: Stack(
                                         alignment: Alignment.topRight,
                                         children: [
@@ -2334,7 +2602,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
                                             imageUrl:
                                                 'data:image/jpeg;base64,$receiptImage',
                                             placeholder: (context, url) =>
-                                                const Center(
+                                                Center(
                                               child: CircularProgressIndicator(
                                                 valueColor:
                                                     AlwaysStoppedAnimation<
@@ -2344,7 +2612,7 @@ class _PaymentSectionState extends State<_PaymentSection> {
                                             ),
                                             errorWidget:
                                                 (context, url, error) =>
-                                                    const Icon(
+                                                    Icon(
                                               Icons.error,
                                               color: Colors.red,
                                               size: 30,
@@ -2354,11 +2622,11 @@ class _PaymentSectionState extends State<_PaymentSection> {
                                             fit: BoxFit.contain,
                                           ),
                                           IconButton(
-                                            icon: const Icon(Icons.close,
+                                            icon: Icon(Icons.close,
                                                 color: Colors.white, size: 24),
                                             onPressed: () =>
                                                 Navigator.pop(context),
-                                            padding: const EdgeInsets.all(8),
+                                            padding: EdgeInsets.all(8),
                                             visualDensity:
                                                 VisualDensity.compact,
                                           ),
@@ -2368,58 +2636,58 @@ class _PaymentSectionState extends State<_PaymentSection> {
                                   );
                                 },
                                 style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
+                                  padding: EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 8),
                                   textStyle: GoogleFonts.inter(
                                       fontSize: 12,
-                                      color: const Color(0xFF1E88E5)),
+                                      color: Color(0xFF1E88E5)),
                                 ),
-                                child: const Text('View Receipt'),
+                                child: Text('View Receipt'),
                               ),
                             ),
                           if (status == 'pending') ...[
-                            const SizedBox(width: 8),
+                            SizedBox(width: 8),
                             AnimatedScale(
                               scale: 1.0,
-                              duration: const Duration(milliseconds: 200),
+                              duration: Duration(milliseconds: 200),
                               child: ElevatedButton(
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF81D4FA),
+                                  backgroundColor: Color(0xFF81D4FA),
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
+                                  padding: EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 8),
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8)),
-                                  minimumSize: const Size(60, 36),
+                                  minimumSize: Size(60, 36),
                                   textStyle: GoogleFonts.inter(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600),
                                 ),
                                 onPressed: () => _updatePaymentStatus(context,
                                     paymentId, 'approved', billId, null),
-                                child: const Text('Accept'),
+                                child: Text('Accept'),
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            SizedBox(width: 8),
                             AnimatedScale(
                               scale: 1.0,
-                              duration: const Duration(milliseconds: 200),
+                              duration: Duration(milliseconds: 200),
                               child: ElevatedButton(
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: Colors.red,
                                   foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
+                                  padding: EdgeInsets.symmetric(
                                       horizontal: 12, vertical: 8),
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8)),
-                                  minimumSize: const Size(60, 36),
+                                  minimumSize: Size(60, 36),
                                   textStyle: GoogleFonts.inter(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600),
                                 ),
                                 onPressed: () => _showRejectDialog(
                                     context, paymentId, billId),
-                                child: const Text('Reject'),
+                                child: Text('Reject'),
                               ),
                             ),
                           ],

@@ -1,3 +1,5 @@
+// ignore_for_file: unnecessary_null_comparison, use_build_context_synchronously
+
 import 'dart:convert';
 // ignore: unused_import
 import 'dart:typed_data';
@@ -227,7 +229,7 @@ class _ViewReportsPageState extends State<ViewReportsPage>
         'action': 'Reported Public Report',
         'userId': user.uid,
         'details':
-            'Plumber $plumberName reported public report #$reportId. Reason: ${reason.length > 50 ? reason.substring(0, 50) + '...' : reason}',
+            'Plumber $plumberName reported public report #$reportId. Reason: ${reason.length > 50 ? '${reason.substring(0, 50)}...' : reason}',
         'timestamp': FieldValue.serverTimestamp(),
       });
 
@@ -1204,7 +1206,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
           'action': 'Report Fixed',
           'userId': plumber?.uid,
           'details':
-              'Report "${issueDescription.length > 30 ? issueDescription.substring(0, 30) + '...' : issueDescription}" marked as Fixed by $plumberName.',
+              'Report "${issueDescription.length > 30 ? '${issueDescription.substring(0, 30)}...' : issueDescription}" marked as Fixed by $plumberName.',
           'timestamp': FieldValue.serverTimestamp(),
         });
       }
@@ -1297,7 +1299,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                   backgroundColor: const Color(0xFF87CEEB),
                 ),
                 child: _isUpdating
-                    ? SizedBox(
+                    ? const SizedBox(
                         width: 20,
                         height: 20,
                         child: CircularProgressIndicator(
@@ -1345,16 +1347,16 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                     // Header
                     Container(
                       padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF87CEEB),
-                        borderRadius: const BorderRadius.only(
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF87CEEB),
+                        borderRadius: BorderRadius.only(
                           topLeft: Radius.circular(16),
                           topRight: Radius.circular(16),
                         ),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.check_circle,
+                          const Icon(Icons.check_circle,
                               color: Colors.white, size: 24),
                           const SizedBox(width: 12),
                           Expanded(
@@ -1368,7 +1370,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                             ),
                           ),
                           IconButton(
-                            icon: Icon(Icons.close,
+                            icon: const Icon(Icons.close,
                                 color: Colors.white, size: 24),
                             onPressed: () {
                               Navigator.pop(context);
@@ -1532,7 +1534,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                               ),
                             ),
                             child: _isUpdating
-                                ? SizedBox(
+                                ? const SizedBox(
                                     width: 20,
                                     height: 20,
                                     child: CircularProgressIndicator(
@@ -1607,7 +1609,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.photo_library, size: 20),
+              const Icon(Icons.photo_library, size: 20),
               const SizedBox(width: 8),
               Text(
                 'Add Images',
@@ -1663,11 +1665,11 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                       onTap: () => onRemoveImage(index),
                       child: Container(
                         padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.black54,
                           shape: BoxShape.circle,
                         ),
-                        child: Icon(
+                        child: const Icon(
                           Icons.close,
                           size: 12,
                           color: Colors.white,
@@ -2692,7 +2694,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                           width: double.infinity,
                           child: ElevatedButton.icon(
                             onPressed: _showAssessmentInputDialog,
-                            icon: Icon(Icons.assessment_outlined, size: 20),
+                            icon: const Icon(Icons.assessment_outlined, size: 20),
                             label: Text(
                               assessment != null && assessment.isNotEmpty
                                   ? 'Edit Assessment'
@@ -2722,7 +2724,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
                           child: ElevatedButton.icon(
                             onPressed:
                                 _isUpdating ? null : _showMarkFixedDialog,
-                            icon: Icon(Icons.check_circle_outline, size: 20),
+                            icon: const Icon(Icons.check_circle_outline, size: 20),
                             label: Text(
                               'Mark as Fixed',
                               style: GoogleFonts.poppins(
