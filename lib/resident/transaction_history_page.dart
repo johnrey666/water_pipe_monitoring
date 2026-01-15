@@ -16,6 +16,13 @@ class TransactionHistoryPage extends StatefulWidget {
 }
 
 class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
+  // UPDATED COLORS TO MATCH HOMEPAGE
+  final Color primaryColor = const Color(0xFF00BCD4); // Aqua Blue
+  final Color accentColor = const Color(0xFF4DD0E1); // Lighter Aqua Blue
+  final Color backgroundColor =
+      const Color(0xFFE0F7FA); // Light aqua background
+  final Color darkAqua = const Color(0xFF00838F); // Dark aqua for text
+
   List<Map<String, dynamic>> _transactions = [];
   bool _isLoading = true;
   String _filterType = 'All';
@@ -77,7 +84,7 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
             icon = Icons.payment;
             displayType = 'Payment';
             if (status.toLowerCase() == 'approved') {
-              iconColor = Colors.green;
+              iconColor = primaryColor; // Aqua blue for approved
             } else if (status.toLowerCase() == 'rejected') {
               iconColor = Colors.red;
             } else {
@@ -87,13 +94,13 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
             icon = Icons.receipt;
             displayType = 'Bill';
             if (status.toLowerCase() == 'paid') {
-              iconColor = Colors.green;
+              iconColor = primaryColor; // Aqua blue for paid
             } else {
-              iconColor = Colors.blue;
+              iconColor = darkAqua; // Dark aqua for unpaid
             }
           } else {
             icon = Icons.receipt;
-            iconColor = Colors.grey;
+            iconColor = darkAqua;
           }
 
           allTransactions.add({
@@ -171,7 +178,7 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
             'status': status,
             'icon': Icons.payment,
             'iconColor': status == 'approved'
-                ? Colors.green
+                ? primaryColor // Aqua blue
                 : status == 'rejected'
                     ? Colors.red
                     : Colors.orange,
@@ -235,7 +242,9 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                 'Water bill for $month - ${cubicMeterUsed.toStringAsFixed(2)} m³',
             'status': status,
             'icon': Icons.receipt,
-            'iconColor': status == 'paid' ? Colors.green : Colors.red,
+            'iconColor': status == 'paid'
+                ? primaryColor
+                : Colors.red, // Aqua blue for paid
             'billId': doc.id,
             'month': month,
             'processedBy': 'System',
@@ -317,7 +326,7 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
     switch (status.toLowerCase()) {
       case 'approved':
       case 'paid':
-        return Colors.green;
+        return primaryColor; // Aqua blue for approved/paid
       case 'pending':
         return Colors.orange;
       case 'rejected':
@@ -325,7 +334,7 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
       case 'unpaid':
         return Colors.red;
       default:
-        return Colors.grey;
+        return darkAqua;
     }
   }
 
@@ -358,6 +367,10 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Color(0xFFE0F7FA),
+              width: 1,
+            ),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -372,11 +385,11 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                       style: GoogleFonts.poppins(
                         fontSize: 18,
                         fontWeight: FontWeight.w600,
-                        color: Colors.black87,
+                        color: darkAqua,
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close, color: Colors.grey),
+                      icon: Icon(Icons.close, color: accentColor),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -387,7 +400,7 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                 margin: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: Color(0xFFB2EBF2)),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
@@ -399,14 +412,14 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.error_outline,
-                                size: 48, color: Colors.red),
+                            Icon(Icons.error_outline,
+                                size: 48, color: primaryColor),
                             const SizedBox(height: 16),
                             Text(
                               'Unable to load receipt',
                               style: GoogleFonts.poppins(
                                 fontSize: 14,
-                                color: Colors.grey.shade600,
+                                color: accentColor,
                               ),
                             ),
                           ],
@@ -424,14 +437,20 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(context),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade700,
+                      backgroundColor: primaryColor,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text('Close'),
+                    child: Text(
+                      'Close',
+                      style: GoogleFonts.poppins(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -461,11 +480,23 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: primaryColor.withOpacity(0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
+        border: Border.all(
+          color: Color(0xFFE0F7FA),
+          width: 1,
+        ),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white,
+            Color(0xFFF5FDFF),
+          ],
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -501,7 +532,7 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                   DateFormat('MMM dd, yyyy').format(date),
                   style: GoogleFonts.poppins(
                     fontSize: 12,
-                    color: Colors.grey.shade600,
+                    color: accentColor,
                   ),
                 ),
               ],
@@ -512,7 +543,7 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Colors.black87,
+                color: darkAqua,
               ),
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
@@ -553,7 +584,7 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                 month,
                 style: GoogleFonts.poppins(
                   fontSize: 12,
-                  color: Colors.grey.shade600,
+                  color: accentColor,
                 ),
               ),
             ],
@@ -579,19 +610,20 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                               horizontal: 10, vertical: 6),
                           margin: const EdgeInsets.only(right: 8),
                           decoration: BoxDecoration(
-                            color: Colors.blue.withOpacity(0.1),
+                            color: primaryColor.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.receipt, size: 12, color: Colors.blue),
+                              Icon(Icons.receipt,
+                                  size: 12, color: primaryColor),
                               const SizedBox(width: 4),
                               Text(
                                 'Receipt',
                                 style: GoogleFonts.poppins(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.blue,
+                                  color: primaryColor,
                                 ),
                               ),
                             ],
@@ -629,20 +661,42 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
     final filteredTransactions = _getFilteredTransactions();
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: backgroundColor,
       body: Column(
         children: [
-          // Filter chips
+          // Filter chips section
           Container(
             padding: const EdgeInsets.all(16),
-            color: Colors.white,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.only(
+                bottomLeft: Radius.circular(12),
+                bottomRight: Radius.circular(12),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: primaryColor.withOpacity(0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+              border: Border.all(
+                color: Color(0xFFE0F7FA),
+                width: 1,
+              ),
+            ),
             child: Wrap(
               spacing: 8,
               runSpacing: 8,
               children: _filterTypes.map((type) {
                 final isSelected = _filterType == type;
                 return ChoiceChip(
-                  label: Text(type),
+                  label: Text(
+                    type,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                    ),
+                  ),
                   selected: isSelected,
                   onSelected: (selected) {
                     if (selected) {
@@ -651,20 +705,24 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                       });
                     }
                   },
-                  selectedColor: Colors.blue.shade700,
-                  backgroundColor: Colors.grey.shade200,
+                  selectedColor: primaryColor,
+                  backgroundColor: Color(0xFFE0F7FA),
                   labelStyle: GoogleFonts.poppins(
-                    color: isSelected ? Colors.white : Colors.black87,
+                    color: isSelected ? Colors.white : darkAqua,
                     fontSize: 12,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
                   ),
                 );
               }).toList(),
             ),
           ),
 
-          // Transaction count
-          Padding(
-            padding: const EdgeInsets.all(16),
+          // Transaction count and refresh
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            color: Colors.transparent,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -672,13 +730,25 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                   '${filteredTransactions.length} transactions',
                   style: GoogleFonts.poppins(
                     fontSize: 14,
-                    color: Colors.grey.shade700,
+                    color: darkAqua,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                IconButton(
-                  onPressed: _loadTransactions,
-                  icon: const Icon(Icons.refresh, size: 20),
-                  color: Colors.blue.shade700,
+                InkWell(
+                  onTap: _loadTransactions,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: primaryColor.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.refresh,
+                      size: 20,
+                      color: primaryColor,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -691,16 +761,16 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const CircularProgressIndicator(
+                        CircularProgressIndicator(
                           valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.blue),
+                              AlwaysStoppedAnimation<Color>(primaryColor),
                         ),
                         const SizedBox(height: 16),
                         Text(
                           'Loading transactions...',
                           style: GoogleFonts.poppins(
                             fontSize: 14,
-                            color: Colors.grey.shade600,
+                            color: accentColor,
                           ),
                         ),
                       ],
@@ -714,14 +784,15 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                             Icon(
                               Icons.receipt_long,
                               size: 64,
-                              color: Colors.grey.shade400,
+                              color: Color(0xFF80DEEA),
                             ),
                             const SizedBox(height: 16),
                             Text(
                               'No transactions found',
                               style: GoogleFonts.poppins(
                                 fontSize: 16,
-                                color: Colors.grey.shade600,
+                                color: darkAqua,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                             const SizedBox(height: 8),
@@ -731,22 +802,33 @@ class _TransactionHistoryPageState extends State<TransactionHistoryPage> {
                                   : 'You have no transactions yet',
                               style: GoogleFonts.poppins(
                                 fontSize: 14,
-                                color: Colors.grey.shade500,
+                                color: accentColor,
                               ),
                             ),
                             const SizedBox(height: 16),
                             TextButton(
                               onPressed: _loadTransactions,
-                              child: const Text('Refresh'),
+                              style: TextButton.styleFrom(
+                                foregroundColor: primaryColor,
+                              ),
+                              child: Text(
+                                'Refresh',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ],
                         ),
                       )
                     : RefreshIndicator(
                         onRefresh: _loadTransactions,
-                        color: Colors.blue,
+                        color: primaryColor,
+                        backgroundColor: Colors.white,
                         child: ListView.builder(
                           physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.only(bottom: 16),
                           itemCount: filteredTransactions.length,
                           itemBuilder: (context, index) {
                             return _buildTransactionCard(

@@ -52,9 +52,12 @@ class _ReportProblemPageState extends State<ReportProblemPage>
   // Add PageStorageKey to preserve ListView state (scroll, focus)
   final PageStorageKey _listKey = PageStorageKey('report_problem_list');
 
-  final Color primaryColor = const Color(0xFF87CEEB);
-  final Color accentColor = const Color(0xFF0288D1);
-  final Color iconGrey = Colors.grey;
+  // UPDATED COLORS TO MATCH HOMEPAGE
+  final Color primaryColor = const Color(0xFF00BCD4); // Aqua Blue
+  final Color accentColor = const Color(0xFF4DD0E1); // Lighter Aqua Blue
+  final Color iconGrey = Color(0xFF00838F); // Darker aqua for icons
+  final Color backgroundColor =
+      const Color(0xFFE0F7FA); // Light aqua background
 
   @override
   void initState() {
@@ -462,7 +465,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
         SnackBar(
           content: Text(
               'Report submitted successfully with ${imageFilesSnapshot.length} images'),
-          backgroundColor: Colors.green,
+          backgroundColor: Color(0xFF00BCD4), // Aqua blue
           duration: Duration(seconds: 2),
         ),
       );
@@ -593,7 +596,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                               style: GoogleFonts.poppins(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.red[900],
+                                color: Color(0xFF00BCD4), // Aqua blue
                               ),
                               overflow: TextOverflow.ellipsis,
                               textAlign: TextAlign.center,
@@ -605,9 +608,9 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                             point: tempLocation!,
                             width: 36,
                             height: 36,
-                            child: const Icon(
+                            child: Icon(
                               Icons.location_pin,
-                              color: Colors.red,
+                              color: Color(0xFF00BCD4), // Aqua blue
                               size: 36,
                             ),
                           ),
@@ -629,7 +632,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                       hintStyle: GoogleFonts.poppins(color: Colors.grey),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: Colors.grey),
+                        borderSide: BorderSide(color: Color(0xFF00BCD4)),
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -637,17 +640,19 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(color: Color(0xFF4DD0E1)),
                       ),
-                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                      prefixIcon: Icon(Icons.search, color: Color(0xFF00BCD4)),
                       suffixIcon: _isSearchingLocation
-                          ? const Padding(
+                          ? Padding(
                               padding: EdgeInsets.all(12),
                               child: SizedBox(
                                 width: 20,
                                 height: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Color(0xFF00BCD4),
+                                ),
                               ),
                             )
                           : null,
@@ -734,14 +739,14 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                             }
                           : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: accentColor,
+                        backgroundColor: primaryColor, // Aqua blue
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                         elevation: 2,
-                        shadowColor: Colors.grey.withOpacity(0.5),
+                        shadowColor: Color(0xFF00BCD4).withOpacity(0.5),
                       ),
                       child: Text(
                         'Confirm Location',
@@ -785,7 +790,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
           onTap: onTap,
           maxLines: maxLines,
           validator: validator,
-          cursorColor: accentColor,
+          cursorColor: primaryColor,
           style: GoogleFonts.poppins(fontSize: 15, color: Colors.black87),
           // Disable autocorrect and suggestions to prevent lag
           autocorrect: false,
@@ -795,14 +800,15 @@ class _ReportProblemPageState extends State<ReportProblemPage>
               maxLines > 1 ? TextInputType.multiline : TextInputType.text,
           decoration: InputDecoration(
             labelText: label.replaceAll('*', '').trim(),
-            labelStyle: GoogleFonts.poppins(color: iconGrey, fontSize: 13),
+            labelStyle: GoogleFonts.poppins(
+                color: Color(0xFF00BCD4), fontSize: 13), // Aqua blue label
             hintText: hint,
-            hintStyle: GoogleFonts.poppins(color: Colors.grey),
-            prefixIcon: Icon(icon, size: 22, color: iconGrey),
+            hintStyle: GoogleFonts.poppins(color: Color(0xFF80DEEA)),
+            prefixIcon: Icon(icon, size: 22, color: Color(0xFF00BCD4)),
             suffixIcon: suffixIcon,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Colors.grey),
+              borderSide: BorderSide(color: Color(0xFF4DD0E1)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -810,7 +816,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey.shade300),
+              borderSide: BorderSide(color: Color(0xFF80DEEA)),
             ),
             filled: true,
             fillColor: Colors.white,
@@ -844,19 +850,20 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
-                    color: Colors.black87,
+                    color: Color(0xFF00838F), // Dark aqua
                   ),
                 ),
                 const Spacer(),
                 if (_imageFiles.isNotEmpty)
                   TextButton.icon(
                     onPressed: _clearAllImages,
-                    icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                    icon:
+                        Icon(Icons.delete, size: 16, color: Color(0xFF00BCD4)),
                     label: Text(
                       'Clear All',
                       style: GoogleFonts.poppins(
                         fontSize: 12,
-                        color: Colors.red,
+                        color: Color(0xFF00BCD4),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -891,12 +898,13 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                                 height: 120,
                                 width: 120,
                                 decoration: BoxDecoration(
-                                  color: Colors.grey.shade200,
+                                  color: Color(0xFFE0F7FA),
                                   borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: Color(0xFFB2EBF2)),
                                 ),
-                                child: const Icon(
+                                child: Icon(
                                   Icons.broken_image,
-                                  color: Colors.grey,
+                                  color: Color(0xFF4DD0E1),
                                   size: 40,
                                 ),
                               );
@@ -915,14 +923,14 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                                 shape: BoxShape.circle,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.black.withOpacity(0.2),
+                                    color: Color(0xFF00BCD4).withOpacity(0.2),
                                     blurRadius: 4,
                                     offset: const Offset(0, 2),
                                   ),
                                 ],
                               ),
-                              child: const Icon(Icons.close,
-                                  size: 16, color: Colors.red),
+                              child: Icon(Icons.close,
+                                  size: 16, color: Color(0xFF00BCD4)),
                             ),
                           ),
                         ),
@@ -933,7 +941,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.6),
+                              color: Color(0xFF00BCD4).withOpacity(0.8),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
@@ -970,25 +978,45 @@ class _ReportProblemPageState extends State<ReportProblemPage>
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
+              color: Color(0xFF00BCD4).withOpacity(0.1),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
+          border: Border.all(
+            color: Color(0xFFB2EBF2),
+            width: 1,
+          ),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Color(0xFFE0F7FA),
+              Colors.white,
+            ],
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                Icon(Icons.collections_bookmark, color: accentColor, size: 24),
+                Container(
+                  padding: EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Color(0xFF00BCD4),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.collections_bookmark,
+                      color: Colors.white, size: 24),
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'View All Reports',
                   style: GoogleFonts.poppins(
                     fontSize: 18,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    color: Color(0xFF00838F),
                   ),
                 ),
               ],
@@ -998,7 +1026,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
               'View complete details of all your submitted reports including status, images, location, and more.',
               style: GoogleFonts.poppins(
                 fontSize: 14,
-                color: Colors.grey.shade600,
+                color: Color(0xFF4DD0E1),
               ),
             ),
             const SizedBox(height: 16),
@@ -1022,14 +1050,14 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                   ),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: accentColor,
+                  backgroundColor: primaryColor,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                   elevation: 2,
-                  shadowColor: Colors.grey.withOpacity(0.5),
+                  shadowColor: Color(0xFF00BCD4).withOpacity(0.5),
                 ),
               ),
             ),
@@ -1045,7 +1073,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
         .build(context); // Important: Required by AutomaticKeepAliveClientMixin
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: backgroundColor,
       body: SafeArea(
         child: Form(
           key: _formKey,
@@ -1060,7 +1088,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                   children: [
                     Icon(
                       Icons.report_problem_outlined,
-                      color: accentColor,
+                      color: primaryColor,
                       size: 32,
                     ),
                     const SizedBox(width: 8),
@@ -1069,7 +1097,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                       style: GoogleFonts.poppins(
                         fontSize: 20,
                         fontWeight: FontWeight.w600,
-                        color: Color.fromARGB(255, 43, 43, 43),
+                        color: Color(0xFF00838F), // Dark aqua
                       ),
                     ),
                   ],
@@ -1092,6 +1120,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                           offset: const Offset(0, 2),
                         ),
                       ],
+                      border: Border.all(color: Colors.red.shade300),
                     ),
                     child: Text(
                       _errorMessage!,
@@ -1113,11 +1142,23 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.grey.withOpacity(0.1),
+                      color: Color(0xFF00BCD4).withOpacity(0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
                   ],
+                  border: Border.all(
+                    color: Color(0xFFE0F7FA),
+                    width: 1,
+                  ),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white,
+                      Color(0xFFF5FDFF),
+                    ],
+                  ),
                 ),
                 child: Column(
                   children: [
@@ -1140,7 +1181,14 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                           style: GoogleFonts.poppins(
                             fontSize: 15,
                             fontWeight: FontWeight.w500,
-                            color: Colors.black87,
+                            color: Color(0xFF00838F),
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Visible to all plumbers in the area',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: Color(0xFF4DD0E1),
                           ),
                         ),
                         value: _isPublicReport,
@@ -1154,10 +1202,14 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                             }
                           });
                         },
-                        activeColor: accentColor,
+                        activeColor: primaryColor,
                         checkColor: Colors.white,
                         contentPadding:
                             const EdgeInsets.symmetric(horizontal: 8),
+                        tileColor: Color(0xFFE0F7FA),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                     ),
                     if (_isPublicReport)
@@ -1172,17 +1224,19 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                             ? 'Please select a location'
                             : null,
                         suffixIcon: _isSearchingLocation
-                            ? const Padding(
+                            ? Padding(
                                 padding: EdgeInsets.all(12),
                                 child: SizedBox(
                                   width: 20,
                                   height: 20,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: primaryColor,
+                                  ),
                                 ),
                               )
                             : IconButton(
-                                icon: Icon(Icons.map, color: iconGrey),
+                                icon: Icon(Icons.map, color: primaryColor),
                                 onPressed: _openMapPicker,
                               ),
                       ),
@@ -1218,10 +1272,17 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                               height: 48,
                               width: 48,
                               decoration: BoxDecoration(
-                                color: accentColor,
+                                color: primaryColor,
                                 borderRadius: BorderRadius.circular(12),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Color(0xFF00BCD4).withOpacity(0.3),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.add_photo_alternate,
                                 color: Colors.white,
                                 size: 24,
@@ -1241,13 +1302,13 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                                   child: Row(
                                     children: [
                                       Icon(Icons.photo_library,
-                                          color: accentColor, size: 20),
+                                          color: primaryColor, size: 20),
                                       const SizedBox(width: 8),
                                       Text(
                                         'Choose from Gallery',
                                         style: GoogleFonts.poppins(
                                           fontSize: 14,
-                                          color: Colors.black87,
+                                          color: Color(0xFF00838F),
                                         ),
                                       ),
                                     ],
@@ -1258,13 +1319,13 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                                   child: Row(
                                     children: [
                                       Icon(Icons.camera_alt,
-                                          color: accentColor, size: 20),
+                                          color: primaryColor, size: 20),
                                       const SizedBox(width: 8),
                                       Text(
                                         'Take Photo',
                                         style: GoogleFonts.poppins(
                                           fontSize: 14,
-                                          color: Colors.black87,
+                                          color: Color(0xFF00838F),
                                         ),
                                       ),
                                     ],
@@ -1291,14 +1352,14 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                         child: ElevatedButton(
                           onPressed: _isSubmitting ? null : _submitReport,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: accentColor,
+                            backgroundColor: primaryColor,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
                             elevation: 2,
-                            shadowColor: Colors.grey.withOpacity(0.5),
+                            shadowColor: Color(0xFF00BCD4).withOpacity(0.5),
                           ),
                           child: Text(
                             _isSubmitting ? 'Submitting...' : 'Submit Report',
@@ -1318,7 +1379,7 @@ class _ReportProblemPageState extends State<ReportProblemPage>
                         'Fields marked with * are required',
                         style: GoogleFonts.poppins(
                           fontSize: 12,
-                          color: Colors.red.shade700,
+                          color: Color(0xFFE53935),
                           fontStyle: FontStyle.italic,
                         ),
                         textAlign: TextAlign.center,
@@ -1346,7 +1407,12 @@ class ReportsCompilationPage extends StatefulWidget {
 }
 
 class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
-  final Color accentColor = const Color(0xFF0288D1);
+  // UPDATED COLORS TO MATCH HOMEPAGE
+  final Color primaryColor = const Color(0xFF00BCD4); // Aqua Blue
+  final Color accentColor = const Color(0xFF4DD0E1); // Lighter Aqua Blue
+  final Color backgroundColor =
+      const Color(0xFFE0F7FA); // Light aqua background
+
   final user = FirebaseAuth.instance.currentUser;
   String _searchQuery = '';
   String _selectedStatus = 'All';
@@ -1363,20 +1429,21 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
       return Container(
         height: 150,
         decoration: BoxDecoration(
-          color: Colors.grey.shade200,
+          color: Color(0xFFE0F7FA),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Color(0xFFB2EBF2)),
         ),
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.image, size: 40, color: Colors.grey.shade500),
+              Icon(Icons.image, size: 40, color: Color(0xFF80DEEA)),
               const SizedBox(height: 8),
               Text(
                 'No $title images',
                 style: GoogleFonts.poppins(
                   fontSize: 14,
-                  color: Colors.grey.shade600,
+                  color: Color(0xFF4DD0E1),
                 ),
               ),
             ],
@@ -1393,7 +1460,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
           style: GoogleFonts.poppins(
             fontSize: 15,
             fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: Color(0xFF00838F),
           ),
         ),
         const SizedBox(height: 8),
@@ -1421,7 +1488,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                 borderRadius: BorderRadius.circular(8),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: Color(0xFF00BCD4).withOpacity(0.1),
                     blurRadius: 6,
                     offset: const Offset(0, 3),
                   ),
@@ -1435,19 +1502,19 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                   width: double.infinity,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
-                      color: Colors.grey.shade300,
+                      color: Color(0xFFE0F7FA),
                       child: Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(Icons.broken_image,
-                                size: 40, color: Colors.grey),
+                            Icon(Icons.broken_image,
+                                size: 40, color: Color(0xFF4DD0E1)),
                             const SizedBox(height: 8),
                             Text(
                               'Image ${index + 1}',
                               style: GoogleFonts.poppins(
                                 fontSize: 12,
-                                color: Colors.grey.shade600,
+                                color: Color(0xFF4DD0E1),
                               ),
                             ),
                           ],
@@ -1466,13 +1533,13 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.swipe, size: 16, color: Colors.grey.shade600),
+                Icon(Icons.swipe, size: 16, color: Color(0xFF4DD0E1)),
                 const SizedBox(width: 4),
                 Text(
                   'Swipe to view ${base64Images.length} images',
                   style: GoogleFonts.poppins(
                     fontSize: 12,
-                    color: Colors.grey.shade600,
+                    color: Color(0xFF4DD0E1),
                     fontStyle: FontStyle.italic,
                   ),
                 ),
@@ -1494,7 +1561,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
             style: GoogleFonts.poppins(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: Color(0xFF00838F),
             ),
           ),
           const SizedBox(height: 8),
@@ -1504,7 +1571,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
               borderRadius: BorderRadius.circular(8),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.1),
+                  color: Color(0xFF00BCD4).withOpacity(0.1),
                   blurRadius: 6,
                   offset: const Offset(0, 3),
                 ),
@@ -1518,19 +1585,19 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                 width: double.infinity,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
-                    color: Colors.grey.shade300,
+                    color: Color(0xFFE0F7FA),
                     child: Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          const Icon(Icons.broken_image,
-                              size: 40, color: Colors.grey),
+                          Icon(Icons.broken_image,
+                              size: 40, color: Color(0xFF4DD0E1)),
                           const SizedBox(height: 8),
                           Text(
                             'Image not available',
                             style: GoogleFonts.poppins(
                               fontSize: 12,
-                              color: Colors.grey.shade600,
+                              color: Color(0xFF4DD0E1),
                             ),
                           ),
                         ],
@@ -1552,27 +1619,28 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
             style: GoogleFonts.poppins(
               fontSize: 15,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: Color(0xFF00838F),
             ),
           ),
           const SizedBox(height: 8),
           Container(
             height: 180,
             decoration: BoxDecoration(
-              color: Colors.grey.shade300,
+              color: Color(0xFFE0F7FA),
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Color(0xFFB2EBF2)),
             ),
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline, size: 40, color: Colors.grey),
+                  Icon(Icons.error_outline, size: 40, color: Color(0xFF4DD0E1)),
                   const SizedBox(height: 8),
                   Text(
                     'Failed to load image',
                     style: GoogleFonts.poppins(
                       fontSize: 12,
-                      color: Colors.grey.shade600,
+                      color: Color(0xFF4DD0E1),
                     ),
                   ),
                 ],
@@ -1587,20 +1655,21 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: backgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
+        foregroundColor: Color(0xFF00838F),
         elevation: 0,
         title: Text(
           'Reports Compilation',
           style: GoogleFonts.poppins(
             fontSize: 18,
             fontWeight: FontWeight.w600,
+            color: Color(0xFF00838F),
           ),
         ),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_rounded),
+          icon: Icon(Icons.arrow_back_rounded, color: Color(0xFF00BCD4)),
           onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
@@ -1621,11 +1690,15 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                   },
                   decoration: InputDecoration(
                     hintText: 'Search reports...',
-                    hintStyle: GoogleFonts.poppins(color: Colors.grey),
-                    prefixIcon: Icon(Icons.search, color: accentColor),
+                    hintStyle: GoogleFonts.poppins(color: Color(0xFF80DEEA)),
+                    prefixIcon: Icon(Icons.search, color: primaryColor),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
+                      borderSide: BorderSide(color: Color(0xFF4DD0E1)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(color: primaryColor),
                     ),
                     filled: true,
                     fillColor: Colors.white,
@@ -1652,13 +1725,14 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                             status,
                             style: GoogleFonts.poppins(
                               fontSize: 13,
-                              color: isSelected ? Colors.white : Colors.black87,
+                              color:
+                                  isSelected ? Colors.white : Color(0xFF00838F),
                               fontWeight: FontWeight.w500,
                             ),
                           ),
                           selected: isSelected,
-                          selectedColor: accentColor,
-                          backgroundColor: Colors.grey.shade200,
+                          selectedColor: primaryColor,
+                          backgroundColor: Color(0xFFE0F7FA),
                           onSelected: (selected) {
                             setState(() {
                               _selectedStatus = selected ? status : 'All';
@@ -1691,7 +1765,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return Center(
                     child: CircularProgressIndicator(
-                      color: accentColor,
+                      color: primaryColor,
                     ),
                   );
                 }
@@ -1717,14 +1791,14 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                         Icon(
                           Icons.description_outlined,
                           size: 64,
-                          color: Colors.grey.shade400,
+                          color: Color(0xFF80DEEA),
                         ),
                         const SizedBox(height: 16),
                         Text(
                           'No reports found',
                           style: GoogleFonts.poppins(
                             fontSize: 18,
-                            color: Colors.grey.shade600,
+                            color: Color(0xFF4DD0E1),
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -1733,7 +1807,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                           'Submit your first report to see it here',
                           style: GoogleFonts.poppins(
                             fontSize: 14,
-                            color: Colors.grey.shade500,
+                            color: Color(0xFF80DEEA),
                           ),
                         ),
                       ],
@@ -1784,14 +1858,14 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                         Icon(
                           Icons.search_off_rounded,
                           size: 64,
-                          color: Colors.grey.shade400,
+                          color: Color(0xFF80DEEA),
                         ),
                         const SizedBox(height: 16),
                         Text(
                           'No matching reports',
                           style: GoogleFonts.poppins(
                             fontSize: 18,
-                            color: Colors.grey.shade600,
+                            color: Color(0xFF4DD0E1),
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -1800,7 +1874,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                           'Try a different search or filter',
                           style: GoogleFonts.poppins(
                             fontSize: 14,
-                            color: Colors.grey.shade500,
+                            color: Color(0xFF80DEEA),
                           ),
                         ),
                       ],
@@ -1856,12 +1930,12 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
     final beforeFixImageCount = data['beforeFixImageCount'] ?? 0;
     final afterFixImageCount = data['afterFixImageCount'] ?? 0;
 
-    // Status color
-    Color statusColor = Colors.orange.shade800; // Default for 'Monitoring'
+    // Status color - UPDATED to aqua theme
+    Color statusColor = Color(0xFFFF9800); // Orange for 'Monitoring'
     if (status == 'Fixed') {
-      statusColor = Colors.green.shade700;
+      statusColor = Color(0xFF00BCD4); // Aqua blue for Fixed
     } else if (status == 'Unfixed Reports') {
-      statusColor = Colors.red.shade700;
+      statusColor = Color(0xFFF44336); // Red for Unfixed
     }
 
     return FadeInUp(
@@ -1873,11 +1947,23 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
+              color: Color(0xFF00BCD4).withOpacity(0.1),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
+          border: Border.all(
+            color: Color(0xFFE0F7FA),
+            width: 1,
+          ),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.white,
+              Color(0xFFF5FDFF),
+            ],
+          ),
         ),
         child: ExpansionTile(
           tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1885,12 +1971,12 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: accentColor.withOpacity(0.1),
+              color: Color(0xFF00BCD4).withOpacity(0.1),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Icon(
               Icons.report_problem_outlined,
-              color: accentColor,
+              color: Color(0xFF00BCD4),
               size: 24,
             ),
           ),
@@ -1901,7 +1987,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
             style: GoogleFonts.poppins(
               fontSize: 15,
               fontWeight: FontWeight.w500,
-              color: Colors.black87,
+              color: Color(0xFF00838F),
             ),
           ),
           subtitle: Column(
@@ -1912,7 +1998,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                 DateFormat('MMM dd, yyyy • hh:mm a').format(dateTime),
                 style: GoogleFonts.poppins(
                   fontSize: 12,
-                  color: Colors.grey.shade600,
+                  color: Color(0xFF4DD0E1),
                 ),
               ),
             ],
@@ -1933,7 +2019,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
           ),
           children: [
-            Divider(height: 1, color: Colors.grey.shade200),
+            Divider(height: 1, color: Color(0xFFE0F7FA)),
             Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
@@ -1943,14 +2029,14 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                   Row(
                     children: [
                       Icon(Icons.fingerprint,
-                          size: 16, color: Colors.grey.shade600),
+                          size: 16, color: Color(0xFF4DD0E1)),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Report ID: $reportId',
                           style: GoogleFonts.poppins(
                             fontSize: 12,
-                            color: Colors.grey.shade600,
+                            color: Color(0xFF4DD0E1),
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1965,7 +2051,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                     style: GoogleFonts.poppins(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                      color: Color(0xFF00838F),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -1973,7 +2059,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                     issueDesc,
                     style: GoogleFonts.poppins(
                       fontSize: 14,
-                      color: Colors.black87,
+                      color: Color(0xFF00838F),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1983,7 +2069,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(Icons.location_on_outlined,
-                          size: 16, color: Colors.grey.shade600),
+                          size: 16, color: Color(0xFF4DD0E1)),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Column(
@@ -1994,14 +2080,14 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                               style: GoogleFonts.poppins(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w600,
-                                color: Colors.black87,
+                                color: Color(0xFF00838F),
                               ),
                             ),
                             Text(
                               placeName,
                               style: GoogleFonts.poppins(
                                 fontSize: 14,
-                                color: Colors.black87,
+                                color: Color(0xFF00838F),
                               ),
                             ),
                             if (additionalInfo.isNotEmpty) ...[
@@ -2010,7 +2096,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                                 'Additional Info: $additionalInfo',
                                 style: GoogleFonts.poppins(
                                   fontSize: 13,
-                                  color: Colors.grey.shade600,
+                                  color: Color(0xFF4DD0E1),
                                 ),
                               ),
                             ],
@@ -2025,13 +2111,13 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                   Row(
                     children: [
                       Icon(Icons.public_outlined,
-                          size: 16, color: Colors.grey.shade600),
+                          size: 16, color: Color(0xFF4DD0E1)),
                       const SizedBox(width: 8),
                       Text(
                         'Report Type: ${isPublic ? 'Public' : 'Private'}',
                         style: GoogleFonts.poppins(
                           fontSize: 13,
-                          color: Colors.grey.shade600,
+                          color: Color(0xFF4DD0E1),
                         ),
                       ),
                     ],
@@ -2076,13 +2162,13 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                     Row(
                       children: [
                         Icon(Icons.image_outlined,
-                            size: 16, color: Colors.grey.shade600),
+                            size: 16, color: Color(0xFF4DD0E1)),
                         const SizedBox(width: 8),
                         Text(
                           'Images: $imageCount',
                           style: GoogleFonts.poppins(
                             fontSize: 13,
-                            color: Colors.grey.shade600,
+                            color: Color(0xFF4DD0E1),
                           ),
                         ),
                       ],
@@ -2119,13 +2205,13 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                     Row(
                       children: [
                         Icon(Icons.verified_user,
-                            size: 16, color: Colors.green.shade600),
+                            size: 16, color: Color(0xFF00BCD4)),
                         const SizedBox(width: 8),
                         Text(
                           'Fixed By: $fixedByName',
                           style: GoogleFonts.poppins(
                             fontSize: 13,
-                            color: Colors.green.shade800,
+                            color: Color(0xFF00838F),
                             fontWeight: FontWeight.w500,
                           ),
                         ),
@@ -2137,14 +2223,13 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                   if (status == 'Fixed' && fixedAt != null) ...[
                     Row(
                       children: [
-                        Icon(Icons.timer,
-                            size: 16, color: Colors.green.shade600),
+                        Icon(Icons.timer, size: 16, color: Color(0xFF00BCD4)),
                         const SizedBox(width: 8),
                         Text(
                           'Fixed At: ${DateFormat('MMM dd, yyyy • hh:mm a').format(fixedAt)}',
                           style: GoogleFonts.poppins(
                             fontSize: 13,
-                            color: Colors.green.shade800,
+                            color: Color(0xFF00838F),
                           ),
                         ),
                       ],
@@ -2157,9 +2242,9 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.amber.shade50,
+                        color: Color(0xFFE0F7FA),
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.amber.shade200),
+                        border: Border.all(color: Color(0xFFB2EBF2)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2169,7 +2254,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                               Icon(
                                 Icons.assessment_outlined,
                                 size: 16,
-                                color: Colors.amber.shade700,
+                                color: Color(0xFF00BCD4),
                               ),
                               const SizedBox(width: 8),
                               Text(
@@ -2177,7 +2262,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                                 style: GoogleFonts.poppins(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.amber.shade800,
+                                  color: Color(0xFF00838F),
                                 ),
                               ),
                             ],
@@ -2187,7 +2272,7 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                             assessment,
                             style: GoogleFonts.poppins(
                               fontSize: 13,
-                              color: Colors.amber.shade900,
+                              color: Color(0xFF00838F),
                             ),
                           ),
                         ],
@@ -2201,13 +2286,13 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                     Row(
                       children: [
                         Icon(Icons.person_outline,
-                            size: 16, color: Colors.grey.shade600),
+                            size: 16, color: Color(0xFF4DD0E1)),
                         const SizedBox(width: 8),
                         Text(
                           'Assigned Plumber: ${assignedPlumber.substring(0, 8)}...',
                           style: GoogleFonts.poppins(
                             fontSize: 13,
-                            color: Colors.grey.shade600,
+                            color: Color(0xFF4DD0E1),
                           ),
                         ),
                       ],
@@ -2220,13 +2305,13 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                     Row(
                       children: [
                         Icon(Icons.calendar_today_outlined,
-                            size: 16, color: Colors.grey.shade600),
+                            size: 16, color: Color(0xFF4DD0E1)),
                         const SizedBox(width: 8),
                         Text(
                           'Monitoring Date: ${DateFormat('MMM dd, yyyy').format(monitoringDate)}',
                           style: GoogleFonts.poppins(
                             fontSize: 13,
-                            color: Colors.grey.shade600,
+                            color: Color(0xFF4DD0E1),
                           ),
                         ),
                       ],
@@ -2238,14 +2323,14 @@ class _ReportsCompilationPageState extends State<ReportsCompilationPage> {
                   Row(
                     children: [
                       Icon(Icons.calendar_today_outlined,
-                          size: 16, color: Colors.grey.shade600),
+                          size: 16, color: Color(0xFF4DD0E1)),
                       const SizedBox(width: 8),
                       Text(
                         DateFormat('EEEE, MMMM dd, yyyy • hh:mm:ss a')
                             .format(dateTime),
                         style: GoogleFonts.poppins(
                           fontSize: 12,
-                          color: Colors.grey.shade600,
+                          color: Color(0xFF4DD0E1),
                         ),
                       ),
                     ],
@@ -2296,7 +2381,7 @@ class CustomLoadingDialog extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Color(0xFF00BCD4).withOpacity(0.2),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -2310,8 +2395,8 @@ class CustomLoadingDialog extends StatelessWidget {
             children: [
               Spin(
                 duration: const Duration(milliseconds: 800),
-                child: const CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF87CEEB)),
+                child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF00BCD4)),
                   strokeWidth: 5,
                 ),
               ),
@@ -2321,7 +2406,7 @@ class CustomLoadingDialog extends StatelessWidget {
                 style: GoogleFonts.poppins(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+                  color: Color(0xFF00838F),
                 ),
               ),
             ],

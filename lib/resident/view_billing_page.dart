@@ -29,6 +29,13 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   double? _previousReading;
   Map<String, dynamic>? _userData;
 
+  // UPDATED COLORS TO MATCH HOMEPAGE
+  final Color primaryColor = const Color(0xFF00BCD4); // Aqua Blue
+  final Color accentColor = const Color(0xFF4DD0E1); // Lighter Aqua Blue
+  final Color backgroundColor =
+      const Color(0xFFE0F7FA); // Light aqua background
+  final Color darkAqua = const Color(0xFF00838F); // Dark aqua for text
+
   // Report feature variables
   TextEditingController _reportReasonController = TextEditingController();
   bool _submittingReport = false;
@@ -177,7 +184,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   Future<void> _uploadReceipt() async {
     if (_receiptImage == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('Please select a receipt image first'),
           backgroundColor: Colors.red,
         ),
@@ -187,7 +194,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
 
     if (_selectedBillId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text('No bill selected for payment'),
           backgroundColor: Colors.red,
         ),
@@ -199,9 +206,9 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (context) => const Center(
+        builder: (context) => Center(
           child: CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4A90E2)),
+            valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
           ),
         ),
       );
@@ -230,10 +237,10 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
       Navigator.pop(context);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content:
               Text('Payment submitted successfully! Awaiting admin approval.'),
-          backgroundColor: Color(0xFF4A90E2),
+          backgroundColor: primaryColor,
         ),
       );
 
@@ -265,7 +272,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
           style: GoogleFonts.poppins(
             fontSize: 18,
             fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: darkAqua,
           ),
         ),
         content: Column(
@@ -276,7 +283,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
               'Please describe the issue with your bill:',
               style: GoogleFonts.poppins(
                 fontSize: 14,
-                color: Colors.grey.shade600,
+                color: accentColor,
               ),
             ),
             const SizedBox(height: 12),
@@ -287,10 +294,14 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                 hintText: 'Example: Incorrect reading, wrong calculation, etc.',
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
+                  borderSide: BorderSide(color: Color(0xFFB2EBF2)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: primaryColor),
                 ),
                 filled: true,
-                fillColor: Colors.grey.shade50,
+                fillColor: Color(0xFFE0F7FA),
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
@@ -308,7 +319,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
               'Cancel',
               style: GoogleFonts.poppins(
                 fontSize: 14,
-                color: Colors.blue.shade700,
+                color: primaryColor,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -316,7 +327,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
           ElevatedButton(
             onPressed: _submitReport,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
+              backgroundColor: Color(0xFFE53935),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
@@ -399,7 +410,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Report submitted successfully! Admin will review it.'),
-          backgroundColor: Colors.green,
+          backgroundColor: Color(0xFF00BCD4),
         ),
       );
     } catch (e) {
@@ -417,7 +428,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEDF7FF),
+      backgroundColor: backgroundColor,
       body: _loading
           ? _buildLoadingState()
           : _error != null
@@ -425,7 +436,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
               : _hasNoBill
                   ? RefreshIndicator(
                       onRefresh: _loadLatestBill,
-                      color: const Color(0xFF4A90E2),
+                      color: primaryColor,
                       child: SingleChildScrollView(
                         physics: const AlwaysScrollableScrollPhysics(),
                         child: _buildNoBillTemplate(),
@@ -435,7 +446,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                       ? _buildNoBillsState()
                       : RefreshIndicator(
                           onRefresh: _loadLatestBill,
-                          color: const Color(0xFF4A90E2),
+                          color: primaryColor,
                           child: SingleChildScrollView(
                             physics: const AlwaysScrollableScrollPhysics(),
                             child: _buildBillingContent(),
@@ -445,9 +456,9 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   }
 
   Widget _buildLoadingState() {
-    return const Center(
+    return Center(
       child: CircularProgressIndicator(
-        valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF4A90E2)),
+        valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
       ),
     );
   }
@@ -470,7 +481,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     : Icons.error_outline,
                 size: 40,
                 color: _error == 'No existing bill. Your account is up to date!'
-                    ? Colors.green
+                    ? Color(0xFF00BCD4)
                     : Colors.red[400],
               ),
               const SizedBox(height: 8),
@@ -478,28 +489,29 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                 _error == 'No existing bill. Your account is up to date!'
                     ? 'No Existing Bill'
                     : 'Error Loading Bill',
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF4A90E2),
+                  color: darkAqua,
                 ),
               ),
               const SizedBox(height: 6),
               Text(
                 _error!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 10,
-                  color: Colors.grey,
+                  color: accentColor,
                 ),
               ),
               const SizedBox(height: 12),
               ElevatedButton.icon(
                 onPressed: _loadLatestBill,
-                icon: const Icon(Icons.refresh, size: 16),
-                label: const Text('Refresh', style: TextStyle(fontSize: 12)),
+                icon: Icon(Icons.refresh, size: 16, color: Colors.white),
+                label: Text('Refresh',
+                    style: TextStyle(fontSize: 12, color: Colors.white)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4A90E2),
+                  backgroundColor: primaryColor,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
@@ -528,36 +540,37 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
+                Icon(
                   Icons.check_circle,
                   size: 40,
-                  color: Colors.green,
+                  color: primaryColor,
                 ),
                 const SizedBox(height: 8),
-                const Text(
+                Text(
                   'No Existing Bill',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF4A90E2),
+                    color: darkAqua,
                   ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
+                Text(
                   'Your account is up to date! No unpaid bills found.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 10,
-                    color: Colors.grey,
+                    color: accentColor,
                   ),
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton.icon(
                   onPressed: _loadLatestBill,
-                  icon: const Icon(Icons.refresh, size: 16),
-                  label: const Text('Refresh', style: TextStyle(fontSize: 12)),
+                  icon: Icon(Icons.refresh, size: 16, color: Colors.white),
+                  label: Text('Refresh',
+                      style: TextStyle(fontSize: 12, color: Colors.white)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF4A90E2),
+                    backgroundColor: primaryColor,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -596,14 +609,14 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
       padding: const EdgeInsets.all(10.0),
       child: Column(
         children: [
-          const Padding(
-            padding: EdgeInsets.all(16.0),
+          Padding(
+            padding: const EdgeInsets.all(16.0),
             child: Text(
               'You Currently Don\'t Have a BILL!',
-              style: TextStyle(
+              style: GoogleFonts.poppins(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey,
+                color: accentColor,
               ),
               textAlign: TextAlign.center,
             ),
@@ -612,23 +625,27 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
             elevation: 6,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            color: Colors.grey[100],
+            color: Color(0xFFE0F7FA),
             child: Container(
               constraints: const BoxConstraints(maxWidth: 500),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFF0F0F0), Color(0xFFE8E8E8)],
+                gradient: LinearGradient(
+                  colors: [Color(0xFFE0F7FA), Color(0xFFB2EBF2)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black12.withOpacity(0.05),
+                    color: primaryColor.withOpacity(0.1),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
                 ],
+                border: Border.all(
+                  color: Color(0xFFB2EBF2),
+                  width: 1,
+                ),
               ),
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -643,7 +660,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                             width: 36,
                             height: 36,
                             decoration: BoxDecoration(
-                              color: Colors.blue[50],
+                              color: primaryColor.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Image.asset(
@@ -654,27 +671,28 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                               errorBuilder: (context, error, stackTrace) =>
                                   Icon(
                                 Icons.water_drop,
-                                color: Colors.blue[700],
+                                color: primaryColor,
                                 size: 20,
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          const Column(
+                          Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 'San Jose Water Services',
-                                style: TextStyle(
+                                style: GoogleFonts.poppins(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
+                                  color: darkAqua,
                                 ),
                               ),
                               Text(
                                 'Sajowasa',
-                                style: TextStyle(
+                                style: GoogleFonts.poppins(
                                   fontSize: 10,
-                                  color: Colors.grey,
+                                  color: accentColor,
                                   fontStyle: FontStyle.italic,
                                 ),
                               ),
@@ -686,12 +704,12 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Colors.grey[400],
+                          color: primaryColor,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           selectedPurok ?? 'PUROK 1',
-                          style: const TextStyle(
+                          style: GoogleFonts.poppins(
                             fontSize: 9,
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -701,12 +719,12 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'WATER BILL STATEMENT',
-                    style: TextStyle(
+                    style: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF4A90E2),
+                      color: primaryColor,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -726,8 +744,8 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   _receiptRow('Cubic Meter Used', '0.00 m³', isBold: true),
                   _dashedDivider(),
                   _receiptRow('Current Bill', '₱0.00',
-                      valueColor: Colors.grey, isBold: true, fontSize: 13),
-                  _receiptRow('Due Date', 'N/A', valueColor: Colors.grey),
+                      valueColor: accentColor, isBold: true, fontSize: 13),
+                  _receiptRow('Due Date', 'N/A', valueColor: accentColor),
                   const SizedBox(height: 12),
                   GestureDetector(
                     onTap: () => setState(() => _showRates = !_showRates),
@@ -735,24 +753,24 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                       padding: const EdgeInsets.symmetric(
                           vertical: 8, horizontal: 12),
                       decoration: BoxDecoration(
-                        color: Colors.grey[200],
+                        color: Color(0xFFB2EBF2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
+                          Text(
                             'Rate Information',
-                            style: TextStyle(
+                            style: GoogleFonts.poppins(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF4A90E2),
+                              color: darkAqua,
                             ),
                           ),
                           Icon(
                             _showRates ? Icons.expand_less : Icons.expand_more,
                             size: 16,
-                            color: const Color(0xFF4A90E2),
+                            color: darkAqua,
                           ),
                         ],
                       ),
@@ -764,12 +782,12 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                       margin: const EdgeInsets.only(top: 8),
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.grey[50],
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey[300]!, width: 1),
+                        border: Border.all(color: Color(0xFFE0F7FA), width: 1),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black12.withOpacity(0.05),
+                            color: primaryColor.withOpacity(0.05),
                             blurRadius: 4,
                             offset: const Offset(0, 2),
                           ),
@@ -799,11 +817,11 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     sizeCurve: Curves.easeInOut,
                   ),
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'Ensure timely payment to maintain uninterrupted water supply.',
-                    style: TextStyle(
+                    style: GoogleFonts.poppins(
                       fontSize: 9,
-                      color: Colors.grey,
+                      color: accentColor,
                       fontStyle: FontStyle.italic,
                     ),
                     textAlign: TextAlign.center,
@@ -826,21 +844,25 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black12.withOpacity(0.05),
+                      color: primaryColor.withOpacity(0.05),
                       blurRadius: 6,
                       offset: const Offset(0, 2),
                     ),
                   ],
+                  border: Border.all(
+                    color: Color(0xFFE0F7FA),
+                    width: 1,
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'PAYMENT OPTIONS',
-                      style: TextStyle(
+                      style: GoogleFonts.poppins(
                         fontSize: 14,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF4A90E2),
+                        color: primaryColor,
                         letterSpacing: 0.5,
                       ),
                     ),
@@ -848,54 +870,55 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.05),
+                        color: Color(0xFFE0F7FA),
                         borderRadius: BorderRadius.circular(8),
                         border:
-                            Border.all(color: Colors.green.withOpacity(0.3)),
+                            Border.all(color: primaryColor.withOpacity(0.3)),
                       ),
                       child: Row(
                         children: [
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.1),
+                              color: primaryColor.withOpacity(0.1),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.phone_android,
-                                color: Colors.green, size: 16),
+                            child: Icon(Icons.phone_android,
+                                color: primaryColor, size: 16),
                           ),
                           const SizedBox(width: 8),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   'GCash Payment',
-                                  style: TextStyle(
+                                  style: GoogleFonts.poppins(
                                     fontSize: 10,
-                                    color: Colors.grey,
+                                    color: accentColor,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
                                 Text(
                                   '09853886411',
-                                  style: TextStyle(
+                                  style: GoogleFonts.poppins(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.black,
+                                    color: darkAqua,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.content_copy,
-                                color: Color(0xFF4A90E2), size: 16),
+                            icon: Icon(Icons.content_copy,
+                                color: primaryColor, size: 16),
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text('GCash number copied!'),
                                   duration: Duration(seconds: 2),
+                                  backgroundColor: primaryColor,
                                 ),
                               );
                             },
@@ -906,9 +929,9 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     const SizedBox(height: 12),
                     Text(
                       'No bill to pay at the moment. Check back later!',
-                      style: TextStyle(
+                      style: GoogleFonts.poppins(
                         fontSize: 12,
-                        color: Colors.grey[600],
+                        color: accentColor,
                         fontStyle: FontStyle.italic,
                       ),
                       textAlign: TextAlign.center,
@@ -945,7 +968,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         : 'N/A';
     final isOverdue =
         periodDue != null && DateTime.now().isAfter(periodDue.toDate());
-    final dueColor = isOverdue ? Colors.red : Colors.black;
+    final dueColor = isOverdue ? Colors.red : darkAqua;
 
     return Padding(
       padding: const EdgeInsets.all(10.0),
@@ -959,18 +982,22 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
               constraints: const BoxConstraints(maxWidth: 500),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(16),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFFFFFFF), Color(0xFFEDF7FF)],
+                gradient: LinearGradient(
+                  colors: [Colors.white, Color(0xFFE0F7FA)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black12.withOpacity(0.05),
+                    color: primaryColor.withOpacity(0.1),
                     blurRadius: 8,
                     offset: const Offset(0, 3),
                   ),
                 ],
+                border: Border.all(
+                  color: Color(0xFFE0F7FA),
+                  width: 1,
+                ),
               ),
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -985,7 +1012,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                             width: 36,
                             height: 36,
                             decoration: BoxDecoration(
-                              color: Colors.blue[50],
+                              color: primaryColor.withOpacity(0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Image.asset(
@@ -996,28 +1023,28 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                               errorBuilder: (context, error, stackTrace) =>
                                   Icon(
                                 Icons.water_drop,
-                                color: Colors.blue[700],
+                                color: primaryColor,
                                 size: 20,
                               ),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          const Column(
+                          Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
                                 'San Jose Water Services',
-                                style: TextStyle(
+                                style: GoogleFonts.poppins(
                                   fontSize: 14,
                                   fontWeight: FontWeight.bold,
-                                  color: Color(0xFF4A90E2),
+                                  color: darkAqua,
                                 ),
                               ),
                               Text(
                                 'Sajowasa',
-                                style: TextStyle(
+                                style: GoogleFonts.poppins(
                                   fontSize: 10,
-                                  color: Colors.grey,
+                                  color: accentColor,
                                   fontStyle: FontStyle.italic,
                                 ),
                               ),
@@ -1029,11 +1056,11 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF4A90E2),
+                          color: primaryColor,
                           borderRadius: BorderRadius.circular(6),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black12.withOpacity(0.05),
+                              color: primaryColor.withOpacity(0.2),
                               blurRadius: 4,
                               offset: const Offset(0, 2),
                             ),
@@ -1041,7 +1068,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                         ),
                         child: Text(
                           selectedPurok ?? 'PUROK 1',
-                          style: const TextStyle(
+                          style: GoogleFonts.poppins(
                             fontSize: 9,
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -1051,12 +1078,12 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     ],
                   ),
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'WATER BILL STATEMENT',
-                    style: TextStyle(
+                    style: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF4A90E2),
+                      color: primaryColor,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -1085,16 +1112,16 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   _receiptRow('Due Date', formattedPeriodDue,
                       valueColor: dueColor),
                   if (isOverdue)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 6),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
                       child: Row(
                         children: [
                           Icon(Icons.warning_amber,
                               color: Colors.red, size: 14),
-                          SizedBox(width: 4),
+                          const SizedBox(width: 4),
                           Text(
                             'Overdue: Pay immediately to avoid penalties.',
-                            style: TextStyle(
+                            style: GoogleFonts.poppins(
                               fontSize: 10,
                               color: Colors.red,
                               fontWeight: FontWeight.w600,
@@ -1110,24 +1137,24 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                       padding: const EdgeInsets.symmetric(
                           vertical: 8, horizontal: 12),
                       decoration: BoxDecoration(
-                        color: Colors.grey[100],
+                        color: Color(0xFFB2EBF2),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text(
+                          Text(
                             'Rate Information',
-                            style: TextStyle(
+                            style: GoogleFonts.poppins(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF4A90E2),
+                              color: darkAqua,
                             ),
                           ),
                           Icon(
                             _showRates ? Icons.expand_less : Icons.expand_more,
                             size: 16,
-                            color: const Color(0xFF4A90E2),
+                            color: darkAqua,
                           ),
                         ],
                       ),
@@ -1141,10 +1168,10 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey[200]!, width: 1),
+                        border: Border.all(color: Color(0xFFE0F7FA), width: 1),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black12.withOpacity(0.05),
+                            color: primaryColor.withOpacity(0.05),
                             blurRadius: 6,
                             offset: const Offset(0, 2),
                           ),
@@ -1174,11 +1201,11 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     sizeCurve: Curves.easeInOut,
                   ),
                   const SizedBox(height: 12),
-                  const Text(
+                  Text(
                     'Ensure timely payment to maintain uninterrupted water supply.',
-                    style: TextStyle(
+                    style: GoogleFonts.poppins(
                       fontSize: 9,
-                      color: Colors.grey,
+                      color: accentColor,
                       fontStyle: FontStyle.italic,
                     ),
                     textAlign: TextAlign.center,
@@ -1199,21 +1226,25 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black12.withOpacity(0.05),
+                    color: primaryColor.withOpacity(0.05),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
                 ],
+                border: Border.all(
+                  color: Color(0xFFE0F7FA),
+                  width: 1,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'PAYMENT OPTIONS',
-                    style: TextStyle(
+                    style: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF4A90E2),
+                      color: primaryColor,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -1244,7 +1275,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                               children: [
                                 Text(
                                   _getStatusText(_paymentStatus!),
-                                  style: TextStyle(
+                                  style: GoogleFonts.poppins(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
                                     color: _getStatusColor(_paymentStatus!),
@@ -1252,9 +1283,9 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                                 ),
                                 Text(
                                   _getStatusDescription(_paymentStatus!),
-                                  style: const TextStyle(
+                                  style: GoogleFonts.poppins(
                                     fontSize: 9,
-                                    color: Colors.grey,
+                                    color: accentColor,
                                   ),
                                 ),
                               ],
@@ -1287,7 +1318,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                               Expanded(
                                 child: Text(
                                   'Payment Rejected',
-                                  style: TextStyle(
+                                  style: GoogleFonts.poppins(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.red,
@@ -1299,19 +1330,20 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                           const SizedBox(height: 8),
                           Text(
                             'Please check the notification for details and resubmit your payment.',
-                            style: const TextStyle(
+                            style: GoogleFonts.poppins(
                               fontSize: 9,
-                              color: Colors.grey,
+                              color: accentColor,
                             ),
                           ),
                           const SizedBox(height: 8),
                           TextButton.icon(
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text(
                                       'Please upload a new receipt below.'),
                                   duration: Duration(seconds: 2),
+                                  backgroundColor: primaryColor,
                                 ),
                               );
                             },
@@ -1319,7 +1351,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                                 size: 14, color: Colors.red),
                             label: Text(
                               'View notification for details',
-                              style: TextStyle(
+                              style: GoogleFonts.poppins(
                                 fontSize: 10,
                                 color: Colors.red,
                               ),
@@ -1334,54 +1366,55 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                     Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.green.withOpacity(0.05),
+                        color: Color(0xFFE0F7FA),
                         borderRadius: BorderRadius.circular(8),
                         border:
-                            Border.all(color: Colors.green.withOpacity(0.3)),
+                            Border.all(color: primaryColor.withOpacity(0.3)),
                       ),
                       child: Row(
                         children: [
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: Colors.green.withOpacity(0.1),
+                              color: primaryColor.withOpacity(0.1),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.phone_android,
-                                color: Colors.green, size: 16),
+                            child: Icon(Icons.phone_android,
+                                color: primaryColor, size: 16),
                           ),
                           const SizedBox(width: 8),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
                                   'GCash Payment',
-                                  style: TextStyle(
+                                  style: GoogleFonts.poppins(
                                     fontSize: 10,
-                                    color: Colors.grey,
+                                    color: accentColor,
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
                                 Text(
                                   '09853886411',
-                                  style: TextStyle(
+                                  style: GoogleFonts.poppins(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.black,
+                                    color: darkAqua,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.content_copy,
-                                color: Color(0xFF4A90E2), size: 16),
+                            icon: Icon(Icons.content_copy,
+                                color: primaryColor, size: 16),
                             onPressed: () {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text('GCash number copied!'),
                                   duration: Duration(seconds: 2),
+                                  backgroundColor: primaryColor,
                                 ),
                               );
                             },
@@ -1395,11 +1428,13 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                       duration: const Duration(milliseconds: 250),
                       child: ElevatedButton.icon(
                         onPressed: _pickReceiptImage,
-                        icon: const Icon(Icons.upload_file, size: 16),
-                        label: const Text('Select Receipt',
-                            style: TextStyle(fontSize: 12)),
+                        icon: Icon(Icons.upload_file,
+                            size: 16, color: Colors.white),
+                        label: Text('Select Receipt',
+                            style: GoogleFonts.poppins(
+                                fontSize: 12, color: Colors.white)),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4A90E2),
+                          backgroundColor: primaryColor,
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -1424,11 +1459,11 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                       const SizedBox(height: 8),
                       TextButton.icon(
                         onPressed: () => setState(() => _receiptImage = null),
-                        icon: const Icon(Icons.delete,
-                            color: Colors.red, size: 14),
-                        label: const Text(
+                        icon: Icon(Icons.delete, color: Colors.red, size: 14),
+                        label: Text(
                           'Remove',
-                          style: TextStyle(color: Colors.red, fontSize: 10),
+                          style: GoogleFonts.poppins(
+                              color: Colors.red, fontSize: 10),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -1437,11 +1472,12 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                         duration: const Duration(milliseconds: 250),
                         child: ElevatedButton.icon(
                           onPressed: _uploadReceipt,
-                          icon: const Icon(Icons.send, size: 16),
-                          label: const Text('Submit Payment',
-                              style: TextStyle(fontSize: 12)),
+                          icon: Icon(Icons.send, size: 16, color: Colors.white),
+                          label: Text('Submit Payment',
+                              style: GoogleFonts.poppins(
+                                  fontSize: 12, color: Colors.white)),
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
+                            backgroundColor: primaryColor,
                             foregroundColor: Colors.white,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),
@@ -1470,38 +1506,44 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black12.withOpacity(0.05),
+                    color: primaryColor.withOpacity(0.05),
                     blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
                 ],
+                border: Border.all(
+                  color: Color(0xFFE0F7FA),
+                  width: 1,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'REPORT ISSUE',
-                    style: TextStyle(
+                    style: GoogleFonts.poppins(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFF4A90E2),
+                      color: primaryColor,
                       letterSpacing: 0.5,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     'Found an issue with your bill?',
-                    style: TextStyle(
+                    style: GoogleFonts.poppins(
                       fontSize: 12,
-                      color: Colors.grey.shade600,
+                      color: accentColor,
                     ),
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: _showReportBillDialog,
-                    icon: const Icon(Icons.report_problem, size: 16),
-                    label: const Text('Report Bill Issue',
-                        style: TextStyle(fontSize: 12)),
+                    icon: Icon(Icons.report_problem,
+                        size: 16, color: Colors.orange.shade700),
+                    label: Text('Report Bill Issue',
+                        style: GoogleFonts.poppins(
+                            fontSize: 12, color: Colors.orange.shade700)),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.orange.shade700,
                       side: BorderSide(color: Colors.orange.shade300),
@@ -1515,9 +1557,9 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
                   const SizedBox(height: 8),
                   Text(
                     'Report for issues like: incorrect readings, wrong calculations, etc.',
-                    style: TextStyle(
+                    style: GoogleFonts.poppins(
                       fontSize: 10,
-                      color: Colors.grey.shade500,
+                      color: accentColor,
                       fontStyle: FontStyle.italic,
                     ),
                   ),
@@ -1538,7 +1580,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
             (i) => Expanded(
               child: Container(
                 height: 1,
-                color: i.isEven ? Colors.grey[200] : Colors.transparent,
+                color: i.isEven ? Color(0xFFE0F7FA) : Colors.transparent,
               ),
             ),
           ),
@@ -1554,22 +1596,20 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
             Expanded(
               child: Text(
                 label,
-                style: const TextStyle(
-                  fontFamily: 'monospace',
+                style: GoogleFonts.poppins(
                   fontWeight: FontWeight.w600,
                   fontSize: 11,
-                  color: Colors.black,
+                  color: darkAqua,
                 ),
               ),
             ),
             Expanded(
               child: Text(
                 value,
-                style: TextStyle(
-                  fontFamily: 'monospace',
+                style: GoogleFonts.poppins(
                   fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
                   fontSize: fontSize,
-                  color: valueColor ?? Colors.grey[700],
+                  color: valueColor ?? accentColor,
                 ),
                 textAlign: TextAlign.right,
                 overflow: label == 'Address' ? TextOverflow.ellipsis : null,
@@ -1585,19 +1625,19 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
         children: [
           Text(
             category,
-            style: const TextStyle(
+            style: GoogleFonts.poppins(
               fontWeight: FontWeight.w600,
               fontSize: 10,
-              color: Colors.black,
+              color: darkAqua,
             ),
           ),
           const SizedBox(width: 4),
           Expanded(
             child: Text(
               details,
-              style: const TextStyle(
+              style: GoogleFonts.poppins(
                 fontSize: 9,
-                color: Colors.grey,
+                color: accentColor,
               ),
             ),
           ),
@@ -1607,7 +1647,7 @@ class _ViewBillingPageState extends State<ViewBillingPage> {
   Color _getStatusColor(String status) {
     switch (status) {
       case 'approved':
-        return Colors.green;
+        return primaryColor;
       case 'rejected':
         return Colors.red;
       default:
