@@ -2,6 +2,7 @@
 
 import 'dart:convert';
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -2030,8 +2031,14 @@ class _IllegalTappingReportPageState extends State<IllegalTappingReportPage> {
           final base64Data = dataUrl.substring(commaIndex + 1);
           base64Images.add(base64Data);
         } else {
-          // For mobile: use File
-          final bytes = await imageFile.readAsBytes();
+          // For mobile: handle XFile
+          Uint8List bytes;
+          if (imageFile is XFile) {
+            bytes = await imageFile.readAsBytes();
+          } else {
+            // Fallback for File type if needed
+            bytes = await (imageFile as dynamic).readAsBytes();
+          }
           final base64Image = base64Encode(bytes);
           base64Images.add(base64Image);
         }
@@ -2147,14 +2154,50 @@ class _IllegalTappingReportPageState extends State<IllegalTappingReportPage> {
                     ),
                   );
                 } else {
-                  return ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.file(
-                      imageFile,
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
+                  // Handle XFile for mobile - read as bytes and use Image.memory
+                  if (imageFile is XFile) {
+                    return FutureBuilder<Uint8List?>(
+                      future: imageFile.readAsBytes(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Container(
+                            width: 100,
+                            height: 100,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade200,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        }
+                        if (snapshot.hasData && snapshot.data != null) {
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.memory(
+                              snapshot.data!,
+                              width: 100,
+                              height: 100,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  width: 100,
+                                  height: 100,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade200,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Icon(
+                                    Icons.broken_image,
+                                    color: Colors.grey,
+                                    size: 30,
+                                  ),
+                                );
+                              },
+                            ),
+                          );
+                        }
                         return Container(
                           width: 100,
                           height: 100,
@@ -2169,6 +2212,20 @@ class _IllegalTappingReportPageState extends State<IllegalTappingReportPage> {
                           ),
                         );
                       },
+                    );
+                  }
+                  // Fallback for other types
+                  return Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.broken_image,
+                      color: Colors.grey,
+                      size: 30,
                     ),
                   );
                 }
@@ -2242,11 +2299,8 @@ class _IllegalTappingReportPageState extends State<IllegalTappingReportPage> {
         );
 
         if (images != null && images.isNotEmpty) {
-          final newImages = images.take(10 - _imageFiles.length).toList();
-          final newFiles = images
-              .take(10 - _imageFiles.length)
-              .map((xfile) => XFile(xfile.path))
-              .toList();
+          // Keep XFile for mobile (don't convert to File)
+          final newFiles = images.take(10 - _imageFiles.length).toList();
           setState(() {
             _imageFiles.addAll(newFiles);
             _errorMessage = null;
@@ -2284,6 +2338,7 @@ class _IllegalTappingReportPageState extends State<IllegalTappingReportPage> {
         if (image != null) {
           setState(() {
             if (_imageFiles.length < 10) {
+              // Keep XFile for mobile
               _imageFiles.add(image);
             } else {
               _errorMessage = 'Maximum 10 images allowed';

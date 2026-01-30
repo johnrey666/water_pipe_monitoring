@@ -1,11 +1,13 @@
 // lib/admin/admin_pages/admin_view_illegal_tapping_reports.dart
 // ignore_for_file: unused_local_variable
 
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:carousel_slider/carousel_slider.dart';
 import '../components/admin_layout.dart';
 
 class ViewIllegalTappingReportsPage extends StatefulWidget {
@@ -255,7 +257,7 @@ class _ViewIllegalTappingReportsPageState
                       // Priority Banner
                       Container(
                         padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 16),
+                        margin: const EdgeInsets.only(bottom: 12),
                         decoration: BoxDecoration(
                           color: Colors.red.shade100,
                           borderRadius: BorderRadius.circular(10),
@@ -274,6 +276,57 @@ class _ViewIllegalTappingReportsPageState
                                   fontWeight: FontWeight.w600,
                                   color: Colors.red.shade800,
                                 ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Status Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: status == 'Fixed'
+                              ? Colors.green.shade100
+                              : status == 'Monitoring'
+                                  ? Colors.orange.shade100
+                                  : Colors.red.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: status == 'Fixed'
+                                ? Colors.green.shade300
+                                : status == 'Monitoring'
+                                    ? Colors.orange.shade300
+                                    : Colors.red.shade300,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              status == 'Fixed'
+                                  ? Icons.check_circle
+                                  : status == 'Monitoring'
+                                      ? Icons.track_changes
+                                      : Icons.warning,
+                              size: 18,
+                              color: status == 'Fixed'
+                                  ? Colors.green.shade800
+                                  : status == 'Monitoring'
+                                      ? Colors.orange.shade800
+                                      : Colors.red.shade800,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Status: $status',
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: status == 'Fixed'
+                                    ? Colors.green.shade800
+                                    : status == 'Monitoring'
+                                        ? Colors.orange.shade800
+                                        : Colors.red.shade800,
                               ),
                             ),
                           ],
@@ -603,14 +656,8 @@ class _ViewIllegalTappingReportsPageState
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Report contains ${evidenceImages.length} evidence image${evidenceImages.length == 1 ? '' : 's'}.',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  color: Colors.blueGrey.shade700,
-                                ),
-                              ),
+                              const SizedBox(height: 12),
+                              _buildEvidenceImagesCarousel(evidenceImages),
                             ],
                           ),
                         ),
@@ -644,6 +691,250 @@ class _ViewIllegalTappingReportsPageState
                   ],
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Build evidence images carousel
+  Widget _buildEvidenceImagesCarousel(List<String> base64Images) {
+    if (base64Images.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    if (base64Images.length == 1) {
+      return GestureDetector(
+        onTap: () => _showFullScreenImage(context, base64Images[0], 0, base64Images),
+        child: Container(
+          height: 200,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.blueGrey.shade300),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.memory(
+              base64Decode(base64Images[0]),
+              fit: BoxFit.cover,
+              width: double.infinity,
+              errorBuilder: (context, error, stackTrace) {
+                return Container(
+                  color: Colors.grey.shade200,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.broken_image, size: 40, color: Colors.grey),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Failed to load image',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        CarouselSlider.builder(
+          itemCount: base64Images.length,
+          options: CarouselOptions(
+            height: 200,
+            aspectRatio: 16 / 9,
+            viewportFraction: 0.8,
+            initialPage: 0,
+            enableInfiniteScroll: base64Images.length > 1,
+            reverse: false,
+            autoPlay: false,
+            enlargeCenterPage: true,
+            enlargeFactor: 0.3,
+            scrollDirection: Axis.horizontal,
+            onPageChanged: (index, reason) {
+              // Optional: track current image
+            },
+          ),
+          itemBuilder: (context, index, realIndex) {
+            return GestureDetector(
+              onTap: () => _showFullScreenImage(context, base64Images[index], index, base64Images),
+              child: Container(
+                margin: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.blueGrey.shade300),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 6,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(
+                    base64Decode(base64Images[index]),
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey.shade200,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(Icons.broken_image, size: 40, color: Colors.grey),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Image ${index + 1}',
+                                style: GoogleFonts.poppins(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+        if (base64Images.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.touch_app, size: 16, color: Colors.blueGrey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  'Tap to view full screen • ${base64Images.length} images',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.blueGrey.shade600,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  // Show full screen image viewer
+  void _showFullScreenImage(BuildContext context, String base64Image, int initialIndex, List<String> allImages) {
+    int currentIndex = initialIndex;
+    final PageController pageController = PageController(initialPage: initialIndex);
+    
+    showDialog(
+      context: context,
+      barrierColor: Colors.black.withOpacity(0.95),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: EdgeInsets.zero,
+          child: Stack(
+            children: [
+              // Image viewer with swipe support
+              PageView.builder(
+                controller: pageController,
+                itemCount: allImages.length,
+                onPageChanged: (index) {
+                  setState(() {
+                    currentIndex = index;
+                  });
+                },
+                itemBuilder: (context, index) {
+                  return InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: Center(
+                      child: Image.memory(
+                        base64Decode(allImages[index]),
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.broken_image, size: 60, color: Colors.white),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Failed to load image',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 16,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+              // Close button
+              Positioned(
+                top: 40,
+                right: 20,
+                child: IconButton(
+                  icon: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, color: Colors.white, size: 24),
+                  ),
+                  onPressed: () {
+                    pageController.dispose();
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
+              // Image counter
+              if (allImages.length > 1)
+                Positioned(
+                  bottom: 40,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${currentIndex + 1} / ${allImages.length}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 14,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
