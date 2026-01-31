@@ -313,10 +313,9 @@ class _ViewReportsPageState extends State<ViewReportsPage>
                 ['Unfixed Reports', 'Monitoring'],
                 _monitoringPage,
                 (page) => setState(() => _monitoringPage = page),
-                showIllegalTapping:
-                    false, // Don't show illegal tapping in monitoring tab
+                showIllegalTapping: false,
               ),
-              // UPDATED: Show only illegal tapping reports assigned to this plumber
+              // UPDATED: Show illegal tapping reports assigned to this plumber
               _buildIllegalTappingList(
                 user.uid,
                 _illegalTappingPage,
@@ -646,17 +645,14 @@ class _ViewReportsPageState extends State<ViewReportsPage>
     );
   }
 
-  // UPDATED: Show only illegal tapping reports assigned to this plumber
+  // FIXED: Now correctly shows illegal tapping reports assigned to this plumber
   Widget _buildIllegalTappingList(
       String userId, int currentPage, Function(int) onPageChange) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
           .collection('reports')
           .where('isIllegalTapping', isEqualTo: true)
-          .where('assignedPlumber',
-              isEqualTo: userId) // Only show assigned to this plumber
-          .where('status',
-              isNotEqualTo: 'Fixed') // Don't show fixed illegal tapping reports
+          .where('status', isNotEqualTo: 'Fixed')
           .orderBy('createdAt', descending: true)
           .snapshots(),
       builder: (context, snapshot) {
@@ -681,7 +677,23 @@ class _ViewReportsPageState extends State<ViewReportsPage>
           );
         }
 
-        List<QueryDocumentSnapshot> reports = snapshot.data!.docs;
+        List<QueryDocumentSnapshot> allReports = snapshot.data!.docs;
+
+        // FIX: Filter reports to show only those assigned to this plumber
+        // Check both assignedPlumber (single) and assignedPlumbers (array) fields
+        List<QueryDocumentSnapshot> reports = allReports.where((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          
+          // Check if assigned via singular field
+          final assignedPlumber = data['assignedPlumber']?.toString();
+          
+          // Check if assigned via array field
+          final assignedPlumbers = data['assignedPlumbers'] as List<dynamic>?;
+          
+          // Return true if assigned via either method
+          return assignedPlumber == userId || 
+                 (assignedPlumbers != null && assignedPlumbers.contains(userId));
+        }).toList();
 
         if (reports.isEmpty) {
           return Center(
@@ -1037,7 +1049,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
     super.dispose();
   }
 
-  // UPDATED: Save assessment separately (without marking as Fixed)
+  // Save assessment separately (without marking as Fixed)
   Future<void> _saveAssessment() async {
     if (_isUpdating) return;
 
@@ -1102,7 +1114,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
     }
   }
 
-  // UPDATED: Update status to Fixed (with assessment and images)
+  // Update status to Fixed (with assessment and images)
   Future<void> _updateStatus(String newStatus) async {
     if (_isUpdating) return;
 
@@ -1232,7 +1244,7 @@ class _ReportDetailsModalState extends State<ReportDetailsModal> {
     }
   }
 
-  // UPDATED: Show assessment dialog with save button
+  // Show assessment dialog with save button
   void _showAssessmentInputDialog() {
     showDialog(
       context: context,
