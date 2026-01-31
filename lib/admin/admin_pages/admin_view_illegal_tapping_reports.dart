@@ -3,7 +3,6 @@
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -11,8 +10,9 @@ import 'package:intl/intl.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import '../components/admin_layout.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:html' as html;
 
 class ViewIllegalTappingReportsPage extends StatefulWidget {
   const ViewIllegalTappingReportsPage({super.key});
@@ -930,7 +930,7 @@ class _ViewIllegalTappingReportsPageState
                         child: const Icon(Icons.download, color: Colors.white, size: 24),
                       ),
                       onPressed: () async {
-                        await _saveImageToGallery(allImages[currentIndex]);
+                        await _saveImage(allImages[currentIndex]);
                       },
                     ),
                   ],
@@ -1020,48 +1020,88 @@ class _ViewIllegalTappingReportsPageState
     );
   }
 
-  // Save image to gallery function
-  Future<void> _saveImageToGallery(String base64Image) async {
+  // Save image function - works on all platforms
+  Future<void> _saveImage(String base64Image) async {
     try {
-      // Request storage permission if needed
-      if (Platform.isAndroid || Platform.isIOS) {
-        final status = await Permission.storage.request();
-        if (!status.isGranted) {
-          _showSnackBar('Storage permission denied');
-          return;
-        }
-      }
-
       // Decode base64 image
       final bytes = base64Decode(base64Image);
       
-      // Save to gallery
-      final result = await ImageGallerySaver.saveImage(
-        Uint8List.fromList(bytes),
-        quality: 100,
-        name: 'illegal_tapping_evidence_${DateTime.now().millisecondsSinceEpoch}',
-      );
-
-      if (result != null && result['isSuccess']) {
-        _showSnackBar('Image saved to gallery successfully!');
+      // Check if we're on web
+      bool isWeb = false;
+      try {
+        // Check if we're on web by trying to access html.window
+        // ignore: unnecessary_null_comparison
+        if (html.window != null) {
+          isWeb = true;
+        }
+      } catch (e) {
+        isWeb = false;
+      }
+      
+      if (isWeb) {
+        // Web download approach
+        final blob = html.Blob([bytes], 'image/jpeg');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: url)
+          ..download = 'illegal_tapping_${DateTime.now().millisecondsSinceEpoch}.jpg'
+          ..style.display = 'none';
+        
+        html.document.body?.append(anchor);
+        anchor.click();
+        anchor.remove(); // Fixed: use remove() instead of removeChild()
+        html.Url.revokeObjectUrl(url);
+        
+        _showSnackBar('Image downloaded successfully!', isError: false);
       } else {
-        _showSnackBar('Failed to save image: ${result?['errorMessage']}');
+        // Mobile/desktop approach using share_plus
+        // Create a temporary file
+        final tempDir = await getTemporaryDirectory();
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final fileName = 'illegal_tapping_$timestamp.jpg';
+        final filePath = '${tempDir.path}/$fileName';
+        final file = File(filePath);
+        await file.writeAsBytes(bytes);
+        
+        // Share the file - user can choose to save it
+        await Share.shareXFiles(
+          [XFile(filePath)],
+          subject: 'Illegal Tapping Evidence',
+          text: 'Illegal tapping evidence image - saved on ${DateFormat('MMM dd, yyyy').format(DateTime.now())}',
+        );
+        
+        _showSnackBar('Image shared - you can save it from the share dialog!', isError: false);
+        
+        // Clean up after a delay
+        Future.delayed(const Duration(seconds: 5), () async {
+          try {
+            if (await file.exists()) {
+              await file.delete();
+            }
+          } catch (e) {
+            print('Error cleaning up temp file: $e');
+          }
+        });
       }
     } catch (e) {
       print('Error saving image: $e');
-      _showSnackBar('Error saving image: $e');
+      _showSnackBar('Error saving image: ${e.toString().split('\n').first}', isError: true);
     }
   }
 
   // Helper function to show snackbar
-  void _showSnackBar(String message) {
+  void _showSnackBar(String message, {bool isError = false}) {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(message),
-          duration: const Duration(seconds: 2),
+          duration: const Duration(seconds: 3),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.green,
+          backgroundColor: isError ? Colors.red : Colors.green,
+          action: SnackBarAction(
+            label: 'OK',
+            textColor: Colors.white,
+            onPressed: () {},
+          ),
         ),
       );
     }
