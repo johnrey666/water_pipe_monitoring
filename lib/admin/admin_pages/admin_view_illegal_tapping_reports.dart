@@ -2,6 +2,7 @@
 // ignore_for_file: unused_local_variable
 
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -28,6 +29,11 @@ class _ViewIllegalTappingReportsPageState
   DocumentSnapshot? _lastDocument;
   int _totalPages = 1;
   bool _isLoading = false;
+  
+  // NEW: Pending illegal tapping reports count
+  int _pendingIllegalReportsCount = 0;
+  StreamSubscription? _illegalReportsSubscription;
+  List<DocumentSnapshot> _allIllegalReports = [];
 
   Future<void> _fetchPlumbers() async {
     try {
@@ -71,6 +77,70 @@ class _ViewIllegalTappingReportsPageState
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  // NEW: Function to count pending illegal tapping reports (Illegal Tapping + Monitoring)
+  void _updatePendingIllegalReportsCount() {
+    int count = 0;
+    for (final report in _allIllegalReports) {
+      final data = report.data() as Map<String, dynamic>;
+      final status = data['status'] ?? 'Illegal Tapping';
+      
+      // Count reports with status "Illegal Tapping" or "Monitoring"
+      if (status == 'Illegal Tapping' || status == 'Monitoring') {
+        count++;
+      }
+    }
+    
+    setState(() {
+      _pendingIllegalReportsCount = count;
+    });
+  }
+
+  // NEW: Fetch all illegal tapping reports
+  Future<void> _fetchAllIllegalReports() async {
+    try {
+      Query query = FirebaseFirestore.instance
+          .collection('reports')
+          .where('isIllegalTapping', isEqualTo: true)
+          .orderBy('createdAt', descending: true);
+
+      final snapshot = await query.get();
+      
+      setState(() {
+        _allIllegalReports = snapshot.docs;
+        _updatePendingIllegalReportsCount();
+      });
+      
+      // Set up real-time listener for illegal tapping reports updates
+      _setupIllegalReportsListener();
+    } catch (e) {
+      print('Error fetching illegal reports: $e');
+    }
+  }
+
+  // NEW: Set up real-time listener for illegal tapping reports
+  void _setupIllegalReportsListener() {
+    // Cancel existing subscription if any
+    _illegalReportsSubscription?.cancel();
+    
+    _illegalReportsSubscription = FirebaseFirestore.instance
+        .collection('reports')
+        .where('isIllegalTapping', isEqualTo: true)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+      // Update illegal reports list
+      setState(() {
+        _allIllegalReports = snapshot.docs;
+        _updatePendingIllegalReportsCount();
+      });
+      
+      // Update total pages
+      _fetchTotalPages();
+    }, onError: (error) {
+      print('Error listening to illegal reports: $error');
+    });
   }
 
   Stream<QuerySnapshot> _getIllegalTappingReportsStream() {
@@ -168,6 +238,41 @@ class _ViewIllegalTappingReportsPageState
         }
       }
     }
+  }
+
+  // NEW: Build notification badge for pending illegal tapping reports
+  Widget _buildPendingIllegalNotificationBadge() {
+    if (_pendingIllegalReportsCount <= 0) {
+      return const SizedBox.shrink();
+    }
+    
+    return Container(
+      width: 22,
+      height: 22,
+      margin: const EdgeInsets.only(left: 8),
+      decoration: BoxDecoration(
+        color: Colors.red,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: Colors.white, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.red.withOpacity(0.3),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          _pendingIllegalReportsCount > 99 ? '99+' : _pendingIllegalReportsCount.toString(),
+          style: GoogleFonts.poppins(
+            fontSize: _pendingIllegalReportsCount > 99 ? 8 : 10,
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
   }
 
   void _showReportDetails(Map<String, dynamic> reportData, String reportId) {
@@ -998,6 +1103,14 @@ class _ViewIllegalTappingReportsPageState
     super.initState();
     _fetchPlumbers();
     _fetchTotalPages();
+    _fetchAllIllegalReports(); // NEW: Fetch illegal reports on init
+  }
+
+  @override
+  void dispose() {
+    // Cancel the subscription when the widget is disposed
+    _illegalReportsSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -1012,20 +1125,84 @@ class _ViewIllegalTappingReportsPageState
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Filter buttons
+                // Filter buttons with notification
                 Row(
                   children: [
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _buildFilterButton('All'),
-                        _buildFilterButton('Illegal Tapping'),
-                        _buildFilterButton('Monitoring'),
-                        _buildFilterButton('Fixed'),
-                      ],
+                    Expanded(
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          // NEW: Add notification badge to Illegal Tapping button
+                          Stack(
+                            children: [
+                              _buildFilterButton('Illegal Tapping'),
+                              // Show badge only on Illegal Tapping button when selected
+                              if (_selectedStatus == 'Illegal Tapping' && _pendingIllegalReportsCount > 0)
+                                Positioned(
+                                  top: -4,
+                                  right: -4,
+                                  child: Container(
+                                    width: 18,
+                                    height: 18,
+                                    decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      borderRadius: BorderRadius.circular(9),
+                                      border: Border.all(color: const Color(0xFF4FC3F7), width: 1.5),
+                                    ),
+                                    child: Center(
+                                      child: Text(
+                                        _pendingIllegalReportsCount > 99 ? '99+' : _pendingIllegalReportsCount.toString(),
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 8,
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          _buildFilterButton('All'),
+                          _buildFilterButton('Monitoring'),
+                          _buildFilterButton('Fixed'),
+                          
+                          // NEW: Pending illegal reports indicator (separate badge)
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.warning,
+                                  size: 16,
+                                  color: Colors.red.shade700,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Pending:',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.red.shade800,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                // Show notification badge with count
+                                _buildPendingIllegalNotificationBadge(),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const Spacer(),
                     Container(
                       width: 300,
                       child: DropdownButtonFormField<String>(

@@ -1,3 +1,4 @@
+// Complete Updated BillsPage.dart
 // ignore_for_file: unused_field, unused_local_variable
 
 import 'dart:math';
@@ -23,6 +24,659 @@ class _BillsPageState extends State<BillsPage> {
   int _totalPages = 1;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  // Water rates state
+  Map<String, Map<String, dynamic>> _waterRates = {
+    'RESIDENTIAL': {
+      'baseRate': 30.00,
+      'ratePerCubicMeter': 5.00,
+      'minCubicMeter': 10,
+      'purok': 'RESIDENTIAL'
+    },
+    'COMMERCIAL': {
+      'baseRate': 75.00,
+      'ratePerCubicMeter': 10.00,
+      'minCubicMeter': 10,
+      'purok': 'COMMERCIAL'
+    },
+    'NON-RESIDENCE': {
+      'baseRate': 100.00,
+      'ratePerCubicMeter': 10.00,
+      'minCubicMeter': 10,
+      'purok': 'NON-RESIDENCE'
+    },
+    'INDUSTRIAL': {
+      'baseRate': 100.00,
+      'ratePerCubicMeter': 15.00,
+      'minCubicMeter': 10,
+      'purok': 'INDUSTRIAL'
+    },
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTotalPages();
+    _loadWaterRates();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text.trim();
+        _currentPage = 0;
+        _lastDocuments = [null];
+        _fetchTotalPages();
+      });
+    });
+  }
+
+  // Load water rates from Firestore
+  Future<void> _loadWaterRates() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('water_rates')
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        setState(() {
+          for (var doc in snapshot.docs) {
+            final data = doc.data();
+            final purok = data['purok']?.toString().toUpperCase() ?? '';
+            if (_waterRates.containsKey(purok)) {
+              _waterRates[purok] = {
+                'baseRate': (data['baseRate'] ?? 0.0).toDouble(),
+                'ratePerCubicMeter': (data['ratePerCubicMeter'] ?? 0.0).toDouble(),
+                'minCubicMeter': (data['minCubicMeter'] ?? 10).toInt(),
+                'purok': purok,
+              };
+            }
+          }
+        });
+      }
+    } catch (e) {
+      print('Error loading water rates: $e');
+    }
+  }
+
+  // Save water rates to Firestore
+  Future<void> _saveWaterRates() async {
+    try {
+      for (var entry in _waterRates.entries) {
+        await FirebaseFirestore.instance
+            .collection('water_rates')
+            .doc(entry.key)
+            .set(entry.value);
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Water rates updated successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      print('Error saving water rates: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error saving rates: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  // Helper method to get color based on category
+  Color _getCategoryColor(String category) {
+    switch (category) {
+      case 'RESIDENTIAL':
+        return Colors.blue.shade700;
+      case 'COMMERCIAL':
+        return Colors.green.shade700;
+      case 'NON-RESIDENCE':
+        return Colors.orange.shade700;
+      case 'INDUSTRIAL':
+        return Colors.red.shade700;
+      default:
+        return Colors.blue.shade700;
+    }
+  }
+
+  // Show rate information modal - UPDATED VERSION
+  void _showRateInformationModal(BuildContext context) {
+    String selectedCategory = 'RESIDENTIAL';
+    
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return Dialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            insetPadding: const EdgeInsets.all(20),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(context).size.height * 0.8,
+                maxWidth: 500,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Header
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.shade700,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(20),
+                        topRight: Radius.circular(20),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.attach_money, color: Colors.white, size: 24),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Water Rate Information',
+                              style: GoogleFonts.poppins(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.close, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Category Dropdown
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.grey.shade300),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: selectedCategory,
+                          isExpanded: true,
+                          icon: Icon(Icons.arrow_drop_down, color: Colors.blue.shade700),
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black,
+                          ),
+                          onChanged: (String? newValue) {
+                            if (newValue != null) {
+                              setState(() {
+                                selectedCategory = newValue;
+                              });
+                            }
+                          },
+                          items: [
+                            'RESIDENTIAL',
+                            'COMMERCIAL', 
+                            'NON-RESIDENCE',
+                            'INDUSTRIAL',
+                          ].map<DropdownMenuItem<String>>((String value) {
+                            return DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 20),
+                  
+                  // Scrollable Rate Input Section
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // Rate Card
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade200),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Category Header
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: _getCategoryColor(selectedCategory),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      selectedCategory,
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                
+                                const SizedBox(height: 16),
+                                
+                                // Rate Formula Info
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blue.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.blue.shade100),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Rate Formula:',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.blue.shade800,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Total = Base Rate + (Excess m³ × Rate per m³)',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Excess = Consumption - Minimum m³',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                
+                                const SizedBox(height: 16),
+                                
+                                // Base Rate Input
+                                _buildRateInputField(
+                                  label: 'Base Rate',
+                                  value: _waterRates[selectedCategory]!['baseRate']!,
+                                  prefix: '₱',
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _waterRates[selectedCategory]!['baseRate'] = value;
+                                    });
+                                  },
+                                  description: 'Flat rate for first ${_waterRates[selectedCategory]!['minCubicMeter']!} m³',
+                                ),
+                                
+                                const SizedBox(height: 12),
+                                
+                                // Rate per Cubic Meter Input
+                                _buildRateInputField(
+                                  label: 'Rate per Cubic Meter',
+                                  value: _waterRates[selectedCategory]!['ratePerCubicMeter']!,
+                                  prefix: '₱',
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _waterRates[selectedCategory]!['ratePerCubicMeter'] = value;
+                                    });
+                                  },
+                                  description: 'Additional rate for each m³ beyond minimum',
+                                ),
+                                
+                                const SizedBox(height: 12),
+                                
+                                // Minimum Cubic Meter Input
+                                _buildRateInputField(
+                                  label: 'Minimum Cubic Meter',
+                                  value: _waterRates[selectedCategory]!['minCubicMeter']!.toDouble(),
+                                  suffix: 'm³',
+                                  onChanged: (value) {
+                                    setState(() {
+                                      _waterRates[selectedCategory]!['minCubicMeter'] = value.toInt();
+                                    });
+                                  },
+                                  description: 'Inclusive volume for base rate',
+                                ),
+                                
+                                const SizedBox(height: 16),
+                                
+                                // Example Calculation
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade50,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.green.shade100),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Example Calculation:',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.green.shade800,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'If consumption is ${_waterRates[selectedCategory]!['minCubicMeter']! + 5} m³:',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade700,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '₱${_waterRates[selectedCategory]!['baseRate']!.toStringAsFixed(2)} + (5 m³ × ₱${_waterRates[selectedCategory]!['ratePerCubicMeter']!.toStringAsFixed(2)}) = ₱${(_waterRates[selectedCategory]!['baseRate']! + (5 * _waterRates[selectedCategory]!['ratePerCubicMeter']!)).toStringAsFixed(2)}',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.green.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 20),
+                          
+                          // Current Rates Summary (for all categories)
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade200),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'All Rate Categories:',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade800,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  children: _waterRates.entries.map((entry) {
+                                    final category = entry.key;
+                                    final rate = entry.value;
+                                    return GestureDetector(
+                                      onTap: () {
+                                        setState(() {
+                                          selectedCategory = category;
+                                        });
+                                      },
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: _getCategoryColor(category).withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(20),
+                                          border: Border.all(
+                                            color: _getCategoryColor(category).withOpacity(selectedCategory == category ? 1 : 0.3),
+                                            width: selectedCategory == category ? 2 : 1,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '$category: ₱${rate['baseRate']!.toStringAsFixed(2)} + ₱${rate['ratePerCubicMeter']!.toStringAsFixed(2)}/m³',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 10,
+                                            color: Colors.grey.shade700,
+                                            fontWeight: selectedCategory == category ? FontWeight.w600 : FontWeight.normal,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }).toList(),
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                  
+                  // Buttons Section
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                      color: Colors.white,
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(20),
+                        bottomRight: Radius.circular(20),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: Text(
+                              'Cancel',
+                              style: GoogleFonts.poppins(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              await _saveWaterRates();
+                              Navigator.pop(context);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue.shade700,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 2,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.save, size: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  'Save Rates',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // Helper method to build rate input field
+  Widget _buildRateInputField({
+    required String label,
+    required double value,
+    String? prefix,
+    String? suffix,
+    required Function(double) onChanged,
+    String description = '',
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey.shade800,
+                ),
+              ),
+            ),
+            if (description.isNotEmpty)
+              Text(
+                description,
+                style: GoogleFonts.poppins(
+                  fontSize: 10,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Container(
+          height: 45,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Row(
+            children: [
+              if (prefix != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(8),
+                      bottomLeft: Radius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    prefix,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+              Expanded(
+                child: TextField(
+                  controller: TextEditingController(
+                    text: value.toStringAsFixed(2),
+                  ),
+                  keyboardType: TextInputType.numberWithOptions(decimal: true),
+                  textAlign: TextAlign.right,
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.black,
+                  ),
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    isDense: true,
+                  ),
+                  onChanged: (text) {
+                    final newValue = double.tryParse(text) ?? value;
+                    onChanged(newValue);
+                  },
+                ),
+              ),
+              if (suffix != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(8),
+                      bottomRight: Radius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    suffix,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 
   Stream<QuerySnapshot> _getResidentsStream() {
     Query query = FirebaseFirestore.instance
@@ -145,20 +799,6 @@ class _BillsPageState extends State<BillsPage> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    _fetchTotalPages();
-    _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text.trim();
-        _currentPage = 0;
-        _lastDocuments = [null];
-        _fetchTotalPages();
-      });
-    });
-  }
-
-  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -174,7 +814,7 @@ class _BillsPageState extends State<BillsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Search Bar and Reported Bills Button in one row
+            // Search Bar, Rate Information Button, and Reported Bills Button in one row
             Row(
               children: [
                 // Search Bar - takes most of the space
@@ -185,8 +825,7 @@ class _BillsPageState extends State<BillsPage> {
                       controller: _searchController,
                       decoration: InputDecoration(
                         hintText: 'Search residents by name...',
-                        prefixIcon:
-                            const Icon(Icons.search, color: Color(0xFF718096)),
+                        prefixIcon: const Icon(Icons.search, color: Color(0xFF718096)),
                         filled: true,
                         fillColor: Colors.grey.shade50,
                         border: OutlineInputBorder(
@@ -215,6 +854,33 @@ class _BillsPageState extends State<BillsPage> {
                     ),
                   ),
                 ),
+                // Rate Information Button
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16.0, right: 8.0),
+                  child: ElevatedButton.icon(
+                    onPressed: () {
+                      _showRateInformationModal(context);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade700,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      elevation: 2,
+                    ),
+                    icon: const Icon(Icons.attach_money, size: 18),
+                    label: Text(
+                      'Rate Info',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
                 // Reported Bills Button
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16.0),
@@ -234,7 +900,7 @@ class _BillsPageState extends State<BillsPage> {
                     ),
                     icon: const Icon(Icons.report_problem, size: 18),
                     label: Text(
-                      'Reported Bills',
+                      'Reported',
                       style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
@@ -346,6 +1012,8 @@ class _BillsPageState extends State<BillsPage> {
   }
 }
 
+// The rest of the classes remain exactly the same...
+
 class ReportedBillsModal extends StatefulWidget {
   @override
   State<ReportedBillsModal> createState() => _ReportedBillsModalState();
@@ -452,6 +1120,68 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
     }
   }
 
+  // Helper function to calculate bill based on rates from Firestore
+  Future<double> _calculateBill(double cubicMeterUsed, String purok) async {
+    try {
+      // Get rates from Firestore
+      final rateDoc = await FirebaseFirestore.instance
+          .collection('water_rates')
+          .doc(purok.toUpperCase())
+          .get();
+      
+      if (rateDoc.exists) {
+        final rateData = rateDoc.data()!;
+        final baseRate = (rateData['baseRate'] ?? 30.0).toDouble();
+        final ratePerCubicMeter = (rateData['ratePerCubicMeter'] ?? 5.0).toDouble();
+        final minCubicMeter = (rateData['minCubicMeter'] ?? 10).toInt();
+        
+        final excess = cubicMeterUsed > minCubicMeter ? cubicMeterUsed - minCubicMeter : 0;
+        return baseRate + (excess * ratePerCubicMeter);
+      } else {
+        // Fallback to default rates
+        double baseRate = 30.00;
+        double ratePerCubicMeter = 5.00;
+        switch (purok.toUpperCase()) {
+          case 'COMMERCIAL':
+            baseRate = 75.00;
+            ratePerCubicMeter = 10.00;
+            break;
+          case 'NON-RESIDENCE':
+            baseRate = 100.00;
+            ratePerCubicMeter = 10.00;
+            break;
+          case 'INDUSTRIAL':
+            baseRate = 100.00;
+            ratePerCubicMeter = 15.00;
+            break;
+        }
+        final excess = cubicMeterUsed > 10 ? cubicMeterUsed - 10 : 0;
+        return baseRate + (excess * ratePerCubicMeter);
+      }
+    } catch (e) {
+      print('Error calculating bill: $e');
+      // Fallback calculation
+      double baseRate = 30.00;
+      double ratePerCubicMeter = 5.00;
+      switch (purok.toUpperCase()) {
+        case 'COMMERCIAL':
+          baseRate = 75.00;
+          ratePerCubicMeter = 10.00;
+          break;
+        case 'NON-RESIDENCE':
+          baseRate = 100.00;
+          ratePerCubicMeter = 10.00;
+          break;
+        case 'INDUSTRIAL':
+          baseRate = 100.00;
+          ratePerCubicMeter = 15.00;
+          break;
+      }
+      final excess = cubicMeterUsed > 10 ? cubicMeterUsed - 10 : 0;
+      return baseRate + (excess * ratePerCubicMeter);
+    }
+  }
+
   Future<void> _updateBillAndResolveReport(String reportId,
       Map<String, dynamic> report, double newReading, String notes) async {
     try {
@@ -477,31 +1207,14 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
       final billData = billDoc.data()!;
       final previousReading =
           billData['previousConsumedWaterMeter']?.toDouble() ?? 0.0;
-      final purok = billData['purok'] ?? 'PUROK 1';
+      final purok = billData['purok'] ?? 'RESIDENTIAL';
 
       // Calculate new values
       final cubicMeterUsed =
           newReading > previousReading ? newReading - previousReading : 0.0;
 
-      // Recalculate bill based on purok
-      double baseRate = 30.00;
-      double ratePerCubicMeter = 5.00;
-      switch (purok) {
-        case 'COMMERCIAL':
-          baseRate = 75.00;
-          ratePerCubicMeter = 10.00;
-          break;
-        case 'NON-RESIDENCE':
-          baseRate = 100.00;
-          ratePerCubicMeter = 10.00;
-          break;
-        case 'INDUSTRIAL':
-          baseRate = 100.00;
-          ratePerCubicMeter = 15.00;
-          break;
-      }
-      final excess = cubicMeterUsed > 10 ? cubicMeterUsed - 10 : 0;
-      final newBillAmount = baseRate + (excess * ratePerCubicMeter);
+      // Calculate bill using the helper function
+      final newBillAmount = await _calculateBill(cubicMeterUsed, purok);
 
       // Run transaction to update all related documents
       await FirebaseFirestore.instance.runTransaction((transaction) async {
@@ -848,7 +1561,7 @@ class _ReportedBillsModalState extends State<ReportedBillsModal> {
     final address = billData['address'] ?? 'N/A';
     final contactNumber = billData['contactNumber'] ?? 'N/A';
     final meterNumber = billData['meterNumber'] ?? 'N/A';
-    final purok = billData['purok'] ?? 'PUROK 1';
+    final purok = billData['purok'] ?? 'RESIDENTIAL';
     final periodStart = billData['periodStart'] as Timestamp?;
     final periodDue = billData['periodDue'] as Timestamp?;
     final issueDate = billData['issueDate'] as Timestamp?;
@@ -1551,7 +2264,7 @@ class _ResidentCardState extends State<_ResidentCard> {
     final isOverdue = periodDue != null && DateTime.now().isAfter(periodDue.toDate());
     final dueColor = isOverdue ? Colors.red : Colors.black;
     final recordedByName = bill['recordedByName'] ?? 'Meter Reader';
-    final purok = bill['purok'] ?? 'PUROK 1';
+    final purok = bill['purok'] ?? 'RESIDENTIAL';
 
     showDialog(
       context: context,

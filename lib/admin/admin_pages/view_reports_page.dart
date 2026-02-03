@@ -51,6 +51,10 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
   List<DocumentSnapshot> _allReports = [];
   bool _isInitialLoad = true;
 
+  // NEW: Pending reports count
+  int _pendingReportsCount = 0;
+  StreamSubscription? _reportsSubscription;
+
   Color _getStatusColor(String status) {
     switch (status) {
       case 'Monitoring':
@@ -62,6 +66,26 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
       default:
         return Colors.grey;
     }
+  }
+
+  // NEW: Function to count pending reports (Unfixed + Monitoring)
+  void _updatePendingReportsCount() {
+    int count = 0;
+    for (final report in _allReports) {
+      final data = report.data() as Map<String, dynamic>;
+      final status = data['status'] ?? 'Unfixed Reports';
+      final isIllegal = data['isIllegalTapping'] ?? false;
+
+      // Only count non-illegal tapping reports that are pending
+      if (!isIllegal &&
+          (status == 'Unfixed Reports' || status == 'Monitoring')) {
+        count++;
+      }
+    }
+
+    setState(() {
+      _pendingReportsCount = count;
+    });
   }
 
   Future<void> _fetchPlumbers() async {
@@ -102,6 +126,12 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
 
       // Update total pages for each status
       _updateTotalPages();
+
+      // NEW: Update pending reports count
+      _updatePendingReportsCount();
+
+      // NEW: Set up real-time listener for reports updates
+      _setupReportsListener();
     } catch (e) {
       print('Error fetching reports: $e');
     } finally {
@@ -110,6 +140,37 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
         _isInitialLoad = false;
       });
     }
+  }
+
+  // NEW: Set up real-time listener for reports collection
+  void _setupReportsListener() {
+    // Cancel existing subscription if any
+    _reportsSubscription?.cancel();
+
+    _reportsSubscription = FirebaseFirestore.instance
+        .collection('reports')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .listen((snapshot) {
+      // Update reports list
+      _allReports = snapshot.docs.where((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        final isIllegal = data['isIllegalTapping'] ?? false;
+        return !isIllegal;
+      }).toList();
+
+      // Update pending count
+      _updatePendingReportsCount();
+
+      // Update pagination
+      _updateTotalPages();
+
+      if (mounted) {
+        setState(() {});
+      }
+    }, onError: (error) {
+      print('Error listening to reports: $error');
+    });
   }
 
   void _updateTotalPages() {
@@ -285,7 +346,42 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
     );
   }
 
-  // NEW FUNCTION: Show assessment/fix details for illegal tapping reports
+  // NEW: Build notification badge for pending reports
+  Widget _buildPendingNotificationBadge() {
+    if (_pendingReportsCount <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: 22,
+      height: 22,
+      margin: const EdgeInsets.only(left: 8),
+      decoration: BoxDecoration(
+        color: Colors.red,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(color: Colors.white, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.red.withOpacity(0.3),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          _pendingReportsCount > 99 ? '99+' : _pendingReportsCount.toString(),
+          style: GoogleFonts.poppins(
+            fontSize: _pendingReportsCount > 99 ? 8 : 10,
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Show assessment/fix details for illegal tapping reports
   void _showAssessmentDetails(BuildContext context, DocumentSnapshot report) {
     final data = report.data() as Map<String, dynamic>;
     final assessment = data['assessment']?.toString();
@@ -651,14 +747,14 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
     );
   }
 
-  // NEW: Show illegal tapping report modal
+  // Show illegal tapping report modal
   void _showIllegalTappingReportModal() {
     setState(() {
       _showIllegalTappingModal = true;
     });
   }
 
-  // NEW: Close illegal tapping report modal
+  // Close illegal tapping report modal
   void _closeIllegalTappingModal() {
     setState(() {
       _showIllegalTappingModal = false;
@@ -670,6 +766,13 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
     super.initState();
     _fetchPlumbers();
     _fetchAllReports();
+  }
+
+  @override
+  void dispose() {
+    // Cancel the subscription when the widget is disposed
+    _reportsSubscription?.cancel();
+    super.dispose();
   }
 
   @override
@@ -692,10 +795,45 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
+                          // CHANGED: Removed the Stack with badge and moved Unfixed Reports to be last
                           _buildFilterButton('All'),
                           _buildFilterButton('Monitoring'),
-                          _buildFilterButton('Unfixed Reports'),
                           _buildFilterButton('Fixed'),
+                          _buildFilterButton('Unfixed Reports'), // MOVED TO LAST
+
+                          // NEW: Pending reports indicator (separate badge)
+                          Container(
+                            margin: const EdgeInsets.only(left: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.orange.shade200),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.notifications_active,
+                                  size: 16,
+                                  color: Colors.orange.shade700,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Pending:',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.orange.shade800,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                // Show notification badge with count
+                                _buildPendingNotificationBadge(),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1062,7 +1200,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                             ? Colors.green
                                             : const Color(0xFF4FC3F7),
                                         fontWeight: FontWeight.w600,
-                                      ),
+                                    ),
                                     ),
                                   ),
                                 ),
@@ -1109,7 +1247,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
   }
 }
 
-// NEW: Illegal Tapping Report Modal Widget
+// Illegal Tapping Report Modal Widget (existing code remains the same)
 class IllegalTappingReportModal extends StatefulWidget {
   final VoidCallback onClose;
 

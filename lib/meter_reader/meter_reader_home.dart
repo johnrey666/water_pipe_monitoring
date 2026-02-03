@@ -28,6 +28,30 @@ class _MeterReaderHomePageState extends State<MeterReaderHomePage> {
   List<Map<String, dynamic>> _allResidents = [];
   List<Map<String, dynamic>> _filteredResidents = [];
   String _meterReaderName = 'Meter Reader';
+  
+  // Water rates from Firestore
+  Map<String, Map<String, dynamic>> _waterRates = {
+    'RESIDENTIAL': {
+      'baseRate': 30.00,
+      'ratePerCubicMeter': 5.00,
+      'minCubicMeter': 10,
+    },
+    'COMMERCIAL': {
+      'baseRate': 75.00,
+      'ratePerCubicMeter': 10.00,
+      'minCubicMeter': 10,
+    },
+    'NON-RESIDENCE': {
+      'baseRate': 100.00,
+      'ratePerCubicMeter': 10.00,
+      'minCubicMeter': 10,
+    },
+    'INDUSTRIAL': {
+      'baseRate': 100.00,
+      'ratePerCubicMeter': 15.00,
+      'minCubicMeter': 10,
+    },
+  };
 
   // Purok Filter
   String? _selectedPurok;
@@ -53,8 +77,36 @@ class _MeterReaderHomePageState extends State<MeterReaderHomePage> {
     super.initState();
     _selectedPurok = _purokOptions[0]; // Default to "All Puroks"
     _fetchMeterReaderName();
+    _loadWaterRates(); // Load water rates from Firestore
     _loadAllResidents();
     _searchController.addListener(_onSearchChanged);
+  }
+
+  // Load water rates from Firestore
+  Future<void> _loadWaterRates() async {
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('water_rates')
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        setState(() {
+          for (var doc in snapshot.docs) {
+            final data = doc.data();
+            final purok = data['purok']?.toString().toUpperCase() ?? '';
+            if (_waterRates.containsKey(purok)) {
+              _waterRates[purok] = {
+                'baseRate': (data['baseRate'] ?? 30.0).toDouble(),
+                'ratePerCubicMeter': (data['ratePerCubicMeter'] ?? 5.0).toDouble(),
+                'minCubicMeter': (data['minCubicMeter'] ?? 10).toInt(),
+              };
+            }
+          }
+        });
+      }
+    } catch (e) {
+      print('Error loading water rates: $e');
+    }
   }
 
   Future<void> _fetchMeterReaderName() async {
@@ -211,6 +263,7 @@ class _MeterReaderHomePageState extends State<MeterReaderHomePage> {
   Future<void> _refreshData() async {
     setState(() => _isLoading = true);
     await _loadAllResidents();
+    await _loadWaterRates(); // Refresh rates too
   }
 
   void _logout() {
@@ -776,6 +829,7 @@ class _MeterReaderHomePageState extends State<MeterReaderHomePage> {
       ),
       builder: (context) => WaterBillForm(
         resident: resident,
+        waterRates: _waterRates, // Pass the rates to the form
         onBillCreated: _refreshData,
       ),
     );
@@ -987,11 +1041,13 @@ class _ResidentCardState extends State<ResidentCard> {
 
 class WaterBillForm extends StatefulWidget {
   final Map<String, dynamic> resident;
+  final Map<String, Map<String, dynamic>> waterRates;
   final VoidCallback onBillCreated;
 
   const WaterBillForm({
     super.key,
     required this.resident,
+    required this.waterRates,
     required this.onBillCreated,
   });
 
@@ -1066,26 +1122,20 @@ class _WaterBillFormState extends State<WaterBillForm> {
   }
 
   double _calculateBill() {
-    final double baseRate;
-    final double ratePerCubicMeter;
-    switch (_selectedPurok) {
-      case 'COMMERCIAL':
-        baseRate = 75.00;
-        ratePerCubicMeter = 10.00;
-        break;
-      case 'NON-RESIDENCE':
-        baseRate = 100.00;
-        ratePerCubicMeter = 10.00;
-        break;
-      case 'INDUSTRIAL':
-        baseRate = 100.00;
-        ratePerCubicMeter = 15.00;
-        break;
-      default:
-        baseRate = 30.00;
-        ratePerCubicMeter = 5.00;
+    // Get the correct purok key (convert to uppercase to match keys)
+    String purokKey = _selectedPurok.toUpperCase();
+    
+    // Default to RESIDENTIAL if not found
+    if (!widget.waterRates.containsKey(purokKey)) {
+      purokKey = 'RESIDENTIAL';
     }
-    final excess = _cubicMeterUsed > 10 ? _cubicMeterUsed - 10 : 0;
+    
+    final rate = widget.waterRates[purokKey]!;
+    final baseRate = rate['baseRate']!;
+    final ratePerCubicMeter = rate['ratePerCubicMeter']!;
+    final minCubicMeter = rate['minCubicMeter']!.toDouble();
+    
+    final excess = _cubicMeterUsed > minCubicMeter ? _cubicMeterUsed - minCubicMeter : 0;
     return baseRate + (excess * ratePerCubicMeter);
   }
 
@@ -1328,6 +1378,17 @@ class _WaterBillFormState extends State<WaterBillForm> {
         double.tryParse(_currentReadingController.text) ?? 0.0;
     final isOverdue = DateTime.now().isAfter(_periodDue);
     final dueColor = isOverdue ? Colors.red : Colors.black;
+    
+    // Get current rate info for display
+    String purokKey = _selectedPurok.toUpperCase();
+    if (!widget.waterRates.containsKey(purokKey)) {
+      purokKey = 'RESIDENTIAL';
+    }
+    final rateInfo = widget.waterRates[purokKey]!;
+    final baseRate = rateInfo['baseRate']!;
+    final ratePerCubicMeter = rateInfo['ratePerCubicMeter']!;
+    final minCubicMeter = rateInfo['minCubicMeter']!.toInt();
+    
     return SizedBox(
       height: MediaQuery.of(context).size.height * 0.85,
       child: Form(
@@ -1760,7 +1821,7 @@ class _WaterBillFormState extends State<WaterBillForm> {
                                         const SizedBox(width: 6),
                                         Expanded(
                                           child: Text(
-                                            '⚠️ Warning: Current reading (${currentReading.toStringAsFixed(2)} m³) is lower than previous reading (${_previousReading.toStringAsFixed(2)} m³).',
+                                            '⚠️ Warning: Please input a reading that is greater than you previous reading:(${_previousReading.toStringAsFixed(2)} m³).',
                                             style: GoogleFonts.inter(
                                               fontSize: 10,
                                               color: Colors.orange.shade900,
@@ -1776,7 +1837,7 @@ class _WaterBillFormState extends State<WaterBillForm> {
                               _receiptRow(
                                   'Cubic Meter Used',
                                   currentReading < _previousReading
-                                      ? '0.00 m³ (Invalid: Current < Previous)'
+                                      ? '0.00 m³'
                                       : '${_cubicMeterUsed.toStringAsFixed(2)} m³',
                                   isBold: true,
                                   valueColor: currentReading < _previousReading
@@ -1859,17 +1920,41 @@ class _WaterBillFormState extends State<WaterBillForm> {
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
                                     children: [
+                                      // Display rates from Firestore
                                       _rateRow('Residential',
-                                          'Min 10 m³ = 30.00 PHP\nExceed = 5.00 PHP/m³'),
+                                          'Min ${widget.waterRates['RESIDENTIAL']!['minCubicMeter']} m³ = ₱${widget.waterRates['RESIDENTIAL']!['baseRate']!.toStringAsFixed(2)}\nExceed = ₱${widget.waterRates['RESIDENTIAL']!['ratePerCubicMeter']!.toStringAsFixed(2)}/m³'),
                                       const SizedBox(height: 4),
                                       _rateRow('Commercial',
-                                          'Min 10 m³ = 75.00 PHP\nExceed = 10.00 PHP/m³'),
+                                          'Min ${widget.waterRates['COMMERCIAL']!['minCubicMeter']} m³ = ₱${widget.waterRates['COMMERCIAL']!['baseRate']!.toStringAsFixed(2)}\nExceed = ₱${widget.waterRates['COMMERCIAL']!['ratePerCubicMeter']!.toStringAsFixed(2)}/m³'),
                                       const SizedBox(height: 4),
                                       _rateRow('Non Residence',
-                                          'Min 10 m³ = 100.00 PHP\nExceed = 10.00 PHP/m³'),
+                                          'Min ${widget.waterRates['NON-RESIDENCE']!['minCubicMeter']} m³ = ₱${widget.waterRates['NON-RESIDENCE']!['baseRate']!.toStringAsFixed(2)}\nExceed = ₱${widget.waterRates['NON-RESIDENCE']!['ratePerCubicMeter']!.toStringAsFixed(2)}/m³'),
                                       const SizedBox(height: 4),
                                       _rateRow('Industrial',
-                                          'Min 10 m³ = 100.00 PHP\nExceed = 15.00 PHP/m³'),
+                                          'Min ${widget.waterRates['INDUSTRIAL']!['minCubicMeter']} m³ = ₱${widget.waterRates['INDUSTRIAL']!['baseRate']!.toStringAsFixed(2)}\nExceed = ₱${widget.waterRates['INDUSTRIAL']!['ratePerCubicMeter']!.toStringAsFixed(2)}/m³'),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Current Rate for $_selectedPurok:',
+                                        style: const TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.green,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Base: ₱${baseRate.toStringAsFixed(2)} for first $minCubicMeter m³',
+                                        style: const TextStyle(
+                                          fontSize: 9,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                      Text(
+                                        'Additional: ₱${ratePerCubicMeter.toStringAsFixed(2)} per m³ beyond $minCubicMeter m³',
+                                        style: const TextStyle(
+                                          fontSize: 9,
+                                          color: Colors.grey,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -1975,6 +2060,7 @@ class _WaterBillFormState extends State<WaterBillForm> {
     );
   }
 }
+
 
 // NEW: Illegal Tapping Report Page (replaces the modal dialog)
 class IllegalTappingReportPage extends StatefulWidget {
