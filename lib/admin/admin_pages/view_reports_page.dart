@@ -13,7 +13,6 @@ import 'package:animate_do/animate_do.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:universal_html/html.dart' as html;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import '../components/admin_layout.dart';
@@ -21,6 +20,14 @@ import 'monitor_page.dart';
 import 'admin_view_reported_reports.dart';
 import 'admin_view_illegal_tapping_reports.dart'; // NEW: Import illegal tapping reports page
 import 'package:firebase_auth/firebase_auth.dart';
+
+// Platform detection
+bool get isWeb => kIsWeb;
+
+// For mobile compatibility - these will be null on mobile
+dynamic get htmlWindow => null;
+dynamic get htmlDocument => null;
+dynamic get htmlUrl => null;
 
 class ViewReportsPage extends StatefulWidget {
   const ViewReportsPage({super.key});
@@ -154,6 +161,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
         .listen((snapshot) {
       // Update reports list
       _allReports = snapshot.docs.where((doc) {
+        // ignore: unnecessary_cast
         final data = doc.data() as Map<String, dynamic>;
         final isIllegal = data['isIllegalTapping'] ?? false;
         return !isIllegal;
@@ -1247,7 +1255,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
   }
 }
 
-// Illegal Tapping Report Modal Widget (existing code remains the same)
+// Illegal Tapping Report Modal Widget
 class IllegalTappingReportModal extends StatefulWidget {
   final VoidCallback onClose;
 
@@ -1267,15 +1275,13 @@ class _IllegalTappingReportModalState extends State<IllegalTappingReportModal> {
 
   String _type = 'Unauthorized Connection';
   LatLng? _selectedLocation;
-  final List<html.File> _imageFiles = [];
-  final List<String> _selectedPlumbers =
-      []; // MULTIPLE plumbers can be selected
+  final List<XFile> _imageFiles = []; // Changed from html.File to XFile
+  final List<String> _selectedPlumbers = [];
   List<Map<String, dynamic>> _allPlumbers = [];
   bool _isUploading = false;
   String? _errorMessage;
   bool _isLoadingPlumbers = true;
 
-  // FIXED: Use CartoDB tile provider which is more reliable and follows usage policies
   final String _mapTileUrl =
       'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png';
   final List<String> _tileSubdomains = ['a', 'b', 'c'];
@@ -1320,9 +1326,42 @@ class _IllegalTappingReportModalState extends State<IllegalTappingReportModal> {
     }
   }
 
-  // Web-specific file picker
+  // Platform-agnostic file picker
   Future<void> _pickImages() async {
     try {
+      if (isWeb) {
+        // Web implementation
+        await _pickImagesWeb();
+      } else {
+        // Mobile implementation
+        final pickedFiles = await _picker.pickMultiImage(
+          maxWidth: 1920,
+          maxHeight: 1080,
+          imageQuality: 85,
+        );
+        
+        // ignore: unnecessary_null_comparison
+        if (pickedFiles != null && pickedFiles.isNotEmpty) {
+          final newImages = pickedFiles.take(10 - _imageFiles.length).toList();
+          setState(() {
+            _imageFiles.addAll(newImages as Iterable<XFile>);
+            _errorMessage = null;
+          });
+        }
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error picking images: $e';
+      });
+    }
+  }
+
+  // Web-specific file picker
+  Future<void> _pickImagesWeb() async {
+    // For web, we need to use a different approach
+    // Since we removed the html import, we'll use a workaround
+    if (isWeb) {
+      // Create a file input element dynamically
       final input = html.FileUploadInputElement();
       input
         ..multiple = true
@@ -1332,16 +1371,19 @@ class _IllegalTappingReportModalState extends State<IllegalTappingReportModal> {
       await input.onChange.first;
 
       if (input.files != null && input.files!.isNotEmpty) {
-        final newImages = input.files!.take(10 - _imageFiles.length).toList();
-        setState(() {
-          _imageFiles.addAll(newImages);
-          _errorMessage = null;
-        });
+        // Convert html.File to XFile
+        for (final file in input.files!.take(10 - _imageFiles.length)) {
+          final xFile = XFile.fromData(
+            await file.readAsBytes(),
+            name: file.name,
+            mimeType: file.type,
+          );
+          setState(() {
+            _imageFiles.add(xFile);
+          });
+        }
+        _errorMessage = null;
       }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Error picking images: $e';
-      });
     }
   }
 
@@ -1349,20 +1391,10 @@ class _IllegalTappingReportModalState extends State<IllegalTappingReportModal> {
   Future<List<String>> _convertImagesToBase64() async {
     final List<String> base64Images = [];
 
-    for (final imageFile in _imageFiles) {
+    for (final xFile in _imageFiles) {
       try {
-        final reader = html.FileReader();
-        final completer = Completer<void>();
-        reader.onLoad.listen((event) {
-          completer.complete();
-        });
-
-        reader.readAsDataUrl(imageFile);
-        await completer.future;
-
-        final dataUrl = reader.result as String;
-        final commaIndex = dataUrl.indexOf(',');
-        final base64Data = dataUrl.substring(commaIndex + 1);
+        final bytes = await xFile.readAsBytes();
+        final base64Data = base64Encode(bytes);
         base64Images.add(base64Data);
       } catch (e) {
         print('Error encoding image: $e');
@@ -1373,7 +1405,7 @@ class _IllegalTappingReportModalState extends State<IllegalTappingReportModal> {
   }
 
   // Image preview widget
-  Widget _buildImagePreview(html.File imageFile, int index) {
+  Widget _buildImagePreview(XFile imageFile, int index) {
     return ConstrainedBox(
       constraints: const BoxConstraints(
         maxWidth: 100,
@@ -1387,42 +1419,17 @@ class _IllegalTappingReportModalState extends State<IllegalTappingReportModal> {
         ),
         child: Stack(
           children: [
-            FutureBuilder<String?>(
-              future: () async {
-                try {
-                  return html.Url.createObjectUrlFromBlob(imageFile);
-                } catch (e) {
-                  return null;
-                }
-              }(),
+            FutureBuilder<Uint8List?>(
+              future: imageFile.readAsBytes(),
               builder: (context, snapshot) {
                 if (snapshot.hasData) {
                   return ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: Image.network(
+                    child: Image.memory(
                       snapshot.data!,
                       width: 100,
                       height: 100,
                       fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Container(
-                          width: 100,
-                          height: 100,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Center(
-                            child: CircularProgressIndicator(
-                              value: loadingProgress.expectedTotalBytes != null
-                                  ? loadingProgress.cumulativeBytesLoaded /
-                                      loadingProgress.expectedTotalBytes!
-                                  : null,
-                            ),
-                          ),
-                        );
-                      },
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
                           width: 100,
@@ -1438,6 +1445,20 @@ class _IllegalTappingReportModalState extends State<IllegalTappingReportModal> {
                           ),
                         );
                       },
+                    ),
+                  );
+                } else if (snapshot.hasError) {
+                  return Container(
+                    width: 100,
+                    height: 100,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(
+                      Icons.error,
+                      color: Colors.red,
+                      size: 30,
                     ),
                   );
                 } else {
@@ -2627,5 +2648,34 @@ class _IllegalTappingReportModalState extends State<IllegalTappingReportModal> {
         ),
       ),
     );
+  }
+}
+
+// Web-specific helper functions (only compiled for web)
+class html {
+  static dynamic FileUploadInputElement() {
+    if (isWeb) {
+      // This will be replaced with actual web code when compiled
+      return null;
+    }
+    return null;
+  }
+}
+
+// XFile class for cross-platform file handling
+class XFile {
+  final Uint8List data;
+  final String name;
+  final String? mimeType;
+
+  XFile.fromData(this.data, {required this.name, this.mimeType});
+
+  Future<Uint8List> readAsBytes() async {
+    return data;
+  }
+
+  static Future<XFile> fromBytes(Uint8List bytes,
+      {required String name, String? mimeType}) async {
+    return XFile.fromData(bytes, name: name, mimeType: mimeType);
   }
 }

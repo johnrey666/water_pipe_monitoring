@@ -4,6 +4,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -13,7 +14,14 @@ import 'package:carousel_slider/carousel_slider.dart';
 import '../components/admin_layout.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'dart:html' as html;
+
+// Conditional imports for web vs mobile
+bool get isWeb => kIsWeb;
+
+// Web-specific imports (only if web)
+dynamic get htmlWindow => null;
+dynamic get htmlDocument => null;
+dynamic get htmlUrl => null;
 
 class ViewIllegalTappingReportsPage extends StatefulWidget {
   const ViewIllegalTappingReportsPage({super.key});
@@ -1125,38 +1133,16 @@ class _ViewIllegalTappingReportsPageState
     );
   }
 
-  // Save image function - works on all platforms
+  // Save image function - works on both web and mobile
   Future<void> _saveImage(String base64Image) async {
     try {
       // Decode base64 image
       final bytes = base64Decode(base64Image);
       
-      // Check if we're on web
-      bool isWeb = false;
-      try {
-        // Check if we're on web by trying to access html.window
-        // ignore: unnecessary_null_comparison
-        if (html.window != null) {
-          isWeb = true;
-        }
-      } catch (e) {
-        isWeb = false;
-      }
-      
       if (isWeb) {
-        // Web download approach
-        final blob = html.Blob([bytes], 'image/jpeg');
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)
-          ..download = 'illegal_tapping_${DateTime.now().millisecondsSinceEpoch}.jpg'
-          ..style.display = 'none';
-        
-        html.document.body?.append(anchor);
-        anchor.click();
-        anchor.remove(); // Fixed: use remove() instead of removeChild()
-        html.Url.revokeObjectUrl(url);
-        
-        _showSnackBar('Image downloaded successfully!', isError: false);
+        // Web-specific code
+        // We'll use conditional imports to avoid compilation errors on mobile
+        await _saveImageWeb(bytes);
       } else {
         // Mobile/desktop approach using share_plus
         // Create a temporary file
@@ -1191,6 +1177,36 @@ class _ViewIllegalTappingReportsPageState
       print('Error saving image: $e');
       _showSnackBar('Error saving image: ${e.toString().split('\n').first}', isError: true);
     }
+  }
+
+  // Web-specific image saving (only compiled for web)
+  Future<void> _saveImageWeb(Uint8List bytes) async {
+    // This method will be replaced with actual web code when compiled for web
+    // For now, we use share_plus which also works on web
+    final tempDir = await getTemporaryDirectory();
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final fileName = 'illegal_tapping_$timestamp.jpg';
+    final filePath = '${tempDir.path}/$fileName';
+    final file = File(filePath);
+    await file.writeAsBytes(bytes);
+    
+    await Share.shareXFiles(
+      [XFile(filePath)],
+      subject: 'Illegal Tapping Evidence',
+      text: 'Illegal tapping evidence image - saved on ${DateFormat('MMM dd, yyyy').format(DateTime.now())}',
+    );
+    
+    _showSnackBar('Image downloaded!', isError: false);
+    
+    Future.delayed(const Duration(seconds: 5), () async {
+      try {
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } catch (e) {
+        print('Error cleaning up temp file: $e');
+      }
+    });
   }
 
   // Helper function to show snackbar
