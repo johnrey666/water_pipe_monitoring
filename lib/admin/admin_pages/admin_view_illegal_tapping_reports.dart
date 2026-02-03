@@ -2,7 +2,6 @@
 // ignore_for_file: unused_local_variable
 
 import 'dart:convert';
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -10,6 +9,9 @@ import 'package:intl/intl.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import '../components/admin_layout.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:html' as html;
 
 class ViewIllegalTappingReportsPage extends StatefulWidget {
   const ViewIllegalTappingReportsPage({super.key});
@@ -942,7 +944,7 @@ class _ViewIllegalTappingReportsPageState
     );
   }
 
-  // Show full screen image viewer
+  // Show full screen image viewer with save button
   void _showFullScreenImage(BuildContext context, String base64Image, int initialIndex, List<String> allImages) {
     int currentIndex = initialIndex;
     final PageController pageController = PageController(initialPage: initialIndex);
@@ -997,26 +999,47 @@ class _ViewIllegalTappingReportsPageState
                   );
                 },
               ),
-              // Close button
+              // Top controls
               Positioned(
                 top: 40,
+                left: 20,
                 right: 20,
-                child: IconButton(
-                  icon: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.5),
-                      shape: BoxShape.circle,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Close button
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.close, color: Colors.white, size: 24),
+                      ),
+                      onPressed: () {
+                        pageController.dispose();
+                        Navigator.pop(context);
+                      },
                     ),
-                    child: const Icon(Icons.close, color: Colors.white, size: 24),
-                  ),
-                  onPressed: () {
-                    pageController.dispose();
-                    Navigator.pop(context);
-                  },
+                    // Save image button (like Facebook)
+                    IconButton(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.5),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.download, color: Colors.white, size: 24),
+                      ),
+                      onPressed: () async {
+                        await _saveImage(allImages[currentIndex]);
+                      },
+                    ),
+                  ],
                 ),
               ),
-              // Image counter
+              // Bottom controls - Image counter
               if (allImages.length > 1)
                 Positioned(
                   bottom: 40,
@@ -1040,11 +1063,151 @@ class _ViewIllegalTappingReportsPageState
                     ),
                   ),
                 ),
+              // Navigation arrows for multiple images
+              if (allImages.length > 1) ...[
+                // Previous arrow
+                if (currentIndex > 0)
+                  Positioned(
+                    left: 10,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: IconButton(
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.chevron_left, color: Colors.white, size: 30),
+                        ),
+                        onPressed: () {
+                          pageController.previousPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                // Next arrow
+                if (currentIndex < allImages.length - 1)
+                  Positioned(
+                    right: 10,
+                    top: 0,
+                    bottom: 0,
+                    child: Center(
+                      child: IconButton(
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.chevron_right, color: Colors.white, size: 30),
+                        ),
+                        onPressed: () {
+                          pageController.nextPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+              ],
             ],
           ),
         ),
       ),
     );
+  }
+
+  // Save image function - works on all platforms
+  Future<void> _saveImage(String base64Image) async {
+    try {
+      // Decode base64 image
+      final bytes = base64Decode(base64Image);
+      
+      // Check if we're on web
+      bool isWeb = false;
+      try {
+        // Check if we're on web by trying to access html.window
+        // ignore: unnecessary_null_comparison
+        if (html.window != null) {
+          isWeb = true;
+        }
+      } catch (e) {
+        isWeb = false;
+      }
+      
+      if (isWeb) {
+        // Web download approach
+        final blob = html.Blob([bytes], 'image/jpeg');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: url)
+          ..download = 'illegal_tapping_${DateTime.now().millisecondsSinceEpoch}.jpg'
+          ..style.display = 'none';
+        
+        html.document.body?.append(anchor);
+        anchor.click();
+        anchor.remove(); // Fixed: use remove() instead of removeChild()
+        html.Url.revokeObjectUrl(url);
+        
+        _showSnackBar('Image downloaded successfully!', isError: false);
+      } else {
+        // Mobile/desktop approach using share_plus
+        // Create a temporary file
+        final tempDir = await getTemporaryDirectory();
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final fileName = 'illegal_tapping_$timestamp.jpg';
+        final filePath = '${tempDir.path}/$fileName';
+        final file = File(filePath);
+        await file.writeAsBytes(bytes);
+        
+        // Share the file - user can choose to save it
+        await Share.shareXFiles(
+          [XFile(filePath)],
+          subject: 'Illegal Tapping Evidence',
+          text: 'Illegal tapping evidence image - saved on ${DateFormat('MMM dd, yyyy').format(DateTime.now())}',
+        );
+        
+        _showSnackBar('Image shared - you can save it from the share dialog!', isError: false);
+        
+        // Clean up after a delay
+        Future.delayed(const Duration(seconds: 5), () async {
+          try {
+            if (await file.exists()) {
+              await file.delete();
+            }
+          } catch (e) {
+            print('Error cleaning up temp file: $e');
+          }
+        });
+      }
+    } catch (e) {
+      print('Error saving image: $e');
+      _showSnackBar('Error saving image: ${e.toString().split('\n').first}', isError: true);
+    }
+  }
+
+  // Helper function to show snackbar
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: isError ? Colors.red : Colors.green,
+          action: SnackBarAction(
+            label: 'OK',
+            textColor: Colors.white,
+            onPressed: () {},
+          ),
+        ),
+      );
+    }
   }
 
   Future<List<Map<String, dynamic>>> _getPlumberDetails(List<String> plumberIds) async {
