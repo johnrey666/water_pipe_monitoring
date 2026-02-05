@@ -4,7 +4,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -21,6 +20,7 @@ import 'monitor_page.dart';
 import 'admin_view_reported_reports.dart';
 import 'admin_view_illegal_tapping_reports.dart'; // NEW: Import illegal tapping reports page
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart'; // ADDED: For Provider
 
 class ViewReportsPage extends StatefulWidget {
   const ViewReportsPage({super.key});
@@ -343,41 +343,6 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
         ),
       ),
       child: Text(status),
-    );
-  }
-
-  // NEW: Build notification badge for pending reports
-  Widget _buildPendingNotificationBadge() {
-    if (_pendingReportsCount <= 0) {
-      return const SizedBox.shrink();
-    }
-
-    return Container(
-      width: 22,
-      height: 22,
-      margin: const EdgeInsets.only(left: 8),
-      decoration: BoxDecoration(
-        color: Colors.red,
-        borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: Colors.white, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.red.withOpacity(0.3),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Text(
-          _pendingReportsCount > 99 ? '99+' : _pendingReportsCount.toString(),
-          style: GoogleFonts.poppins(
-            fontSize: _pendingReportsCount > 99 ? 8 : 10,
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
     );
   }
 
@@ -766,6 +731,13 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
     super.initState();
     _fetchPlumbers();
     _fetchAllReports();
+
+    // NEW: Mark reports as visited when page loads
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final badgeProvider =
+          Provider.of<BadgeCountProvider>(context, listen: false);
+      badgeProvider.markReportsAsVisited();
+    });
   }
 
   @override
@@ -799,41 +771,8 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                           _buildFilterButton('All'),
                           _buildFilterButton('Monitoring'),
                           _buildFilterButton('Fixed'),
-                          _buildFilterButton('Unfixed Reports'), // MOVED TO LAST
-
-                          // NEW: Pending reports indicator (separate badge)
-                          Container(
-                            margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.orange.shade200),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.notifications_active,
-                                  size: 16,
-                                  color: Colors.orange.shade700,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Pending:',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.orange.shade800,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                // Show notification badge with count
-                                _buildPendingNotificationBadge(),
-                              ],
-                            ),
-                          ),
+                          _buildFilterButton(
+                              'Unfixed Reports'), // MOVED TO LAST
                         ],
                       ),
                     ),
@@ -1200,7 +1139,7 @@ class _ViewReportsPageState extends State<ViewReportsPage> {
                                             ? Colors.green
                                             : const Color(0xFF4FC3F7),
                                         fontWeight: FontWeight.w600,
-                                    ),
+                                      ),
                                     ),
                                   ),
                                 ),

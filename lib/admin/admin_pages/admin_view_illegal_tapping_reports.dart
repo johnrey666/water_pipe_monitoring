@@ -13,7 +13,10 @@ import 'package:carousel_slider/carousel_slider.dart';
 import '../components/admin_layout.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'dart:html' as html;
+import 'package:flutter/foundation.dart' show kIsWeb;
+
+// Conditional imports for web vs mobile
+import 'package:universal_html/html.dart' as html;
 
 class ViewIllegalTappingReportsPage extends StatefulWidget {
   const ViewIllegalTappingReportsPage({super.key});
@@ -244,41 +247,7 @@ class _ViewIllegalTappingReportsPageState
     }
   }
 
-  // NEW: Build notification badge for pending illegal tapping reports
-  Widget _buildPendingIllegalNotificationBadge() {
-    if (_pendingIllegalReportsCount <= 0) {
-      return const SizedBox.shrink();
-    }
-    
-    return Container(
-      width: 22,
-      height: 22,
-      margin: const EdgeInsets.only(left: 8),
-      decoration: BoxDecoration(
-        color: Colors.red,
-        borderRadius: BorderRadius.circular(11),
-        border: Border.all(color: Colors.white, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.red.withOpacity(0.3),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Center(
-        child: Text(
-          _pendingIllegalReportsCount > 99 ? '99+' : _pendingIllegalReportsCount.toString(),
-          style: GoogleFonts.poppins(
-            fontSize: _pendingIllegalReportsCount > 99 ? 8 : 10,
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-
+ 
   void _showReportDetails(Map<String, dynamic> reportData, String reportId) {
     final fullName = reportData['fullName'] ?? 'Unknown';
     final issueDescription = reportData['issueDescription'] ?? 'No description';
@@ -1131,35 +1100,31 @@ class _ViewIllegalTappingReportsPageState
       // Decode base64 image
       final bytes = base64Decode(base64Image);
       
-      // Check if we're on web
-      bool isWeb = false;
-      try {
-        // Check if we're on web by trying to access html.window
-        // ignore: unnecessary_null_comparison
-        if (html.window != null) {
-          isWeb = true;
-        }
-      } catch (e) {
-        isWeb = false;
-      }
-      
-      if (isWeb) {
+      if (kIsWeb) {
         // Web download approach
+        final timestamp = DateTime.now().millisecondsSinceEpoch;
+        final fileName = 'illegal_tapping_$timestamp.jpg';
+        
+        // Create blob from bytes
         final blob = html.Blob([bytes], 'image/jpeg');
         final url = html.Url.createObjectUrlFromBlob(blob);
+        
+        // Create anchor element for download
         final anchor = html.AnchorElement(href: url)
-          ..download = 'illegal_tapping_${DateTime.now().millisecondsSinceEpoch}.jpg'
+          ..setAttribute('download', fileName)
           ..style.display = 'none';
         
-        html.document.body?.append(anchor);
+        // Append to body, click, and remove
+        html.document.body?.children.add(anchor);
         anchor.click();
-        anchor.remove(); // Fixed: use remove() instead of removeChild()
-        html.Url.revokeObjectUrl(url);
+        Future.delayed(const Duration(milliseconds: 100), () {
+          anchor.remove();
+          html.Url.revokeObjectUrl(url);
+        });
         
         _showSnackBar('Image downloaded successfully!', isError: false);
       } else {
         // Mobile/desktop approach using share_plus
-        // Create a temporary file
         final tempDir = await getTemporaryDirectory();
         final timestamp = DateTime.now().millisecondsSinceEpoch;
         final fileName = 'illegal_tapping_$timestamp.jpg';
@@ -1171,7 +1136,7 @@ class _ViewIllegalTappingReportsPageState
         await Share.shareXFiles(
           [XFile(filePath)],
           subject: 'Illegal Tapping Evidence',
-          text: 'Illegal tapping evidence image - saved on ${DateFormat('MMM dd, yyyy').format(DateTime.now())}',
+          text: 'Illegal tapping evidence image',
         );
         
         _showSnackBar('Image shared - you can save it from the share dialog!', isError: false);
@@ -1333,38 +1298,7 @@ class _ViewIllegalTappingReportsPageState
                           _buildFilterButton('Monitoring'),
                           _buildFilterButton('Fixed'),
                           
-                          // NEW: Pending illegal reports indicator (separate badge)
-                          Container(
-                            margin: const EdgeInsets.only(left: 8),
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade50,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.red.shade200),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.warning,
-                                  size: 16,
-                                  color: Colors.red.shade700,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Pending:',
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.red.shade800,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                // Show notification badge with count
-                                _buildPendingIllegalNotificationBadge(),
-                              ],
-                            ),
-                          ),
+                  
                         ],
                       ),
                     ),
