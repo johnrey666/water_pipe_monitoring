@@ -14,7 +14,7 @@ import 'package:carousel_slider/carousel_slider.dart';
 import '../components/admin_layout.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'dart:html' as html;
+import 'package:universal_html/html.dart' as html;
 
 class ViewIllegalTappingReportsPage extends StatefulWidget {
   const ViewIllegalTappingReportsPage({super.key});
@@ -34,7 +34,7 @@ class _ViewIllegalTappingReportsPageState
   DocumentSnapshot? _lastDocument;
   int _totalPages = 1;
   bool _isLoading = false;
-  
+
   // NEW: Pending illegal tapping reports count
   int _pendingIllegalReportsCount = 0;
   StreamSubscription? _illegalReportsSubscription;
@@ -70,9 +70,10 @@ class _ViewIllegalTappingReportsPageState
         query = query.where('status', isEqualTo: _selectedStatus);
       }
       if (_selectedPlumberUid != null) {
-        query = query.where('assignedPlumbers', arrayContains: _selectedPlumberUid);
+        query =
+            query.where('assignedPlumbers', arrayContains: _selectedPlumberUid);
       }
-      
+
       final snapshot = await query.get();
       setState(() {
         _totalPages = (snapshot.docs.length / _pageSize).ceil();
@@ -90,13 +91,13 @@ class _ViewIllegalTappingReportsPageState
     for (final report in _allIllegalReports) {
       final data = report.data() as Map<String, dynamic>;
       final status = data['status'] ?? 'Illegal Tapping';
-      
+
       // Count reports with status "Illegal Tapping" or "Monitoring"
       if (status == 'Illegal Tapping' || status == 'Monitoring') {
         count++;
       }
     }
-    
+
     setState(() {
       _pendingIllegalReportsCount = count;
     });
@@ -111,12 +112,12 @@ class _ViewIllegalTappingReportsPageState
           .orderBy('createdAt', descending: true);
 
       final snapshot = await query.get();
-      
+
       setState(() {
         _allIllegalReports = snapshot.docs;
         _updatePendingIllegalReportsCount();
       });
-      
+
       // Set up real-time listener for illegal tapping reports updates
       _setupIllegalReportsListener();
     } catch (e) {
@@ -128,7 +129,7 @@ class _ViewIllegalTappingReportsPageState
   void _setupIllegalReportsListener() {
     // Cancel existing subscription if any
     _illegalReportsSubscription?.cancel();
-    
+
     _illegalReportsSubscription = FirebaseFirestore.instance
         .collection('reports')
         .where('isIllegalTapping', isEqualTo: true)
@@ -140,7 +141,7 @@ class _ViewIllegalTappingReportsPageState
         _allIllegalReports = snapshot.docs;
         _updatePendingIllegalReportsCount();
       });
-      
+
       // Update total pages
       _fetchTotalPages();
     }, onError: (error) {
@@ -159,7 +160,8 @@ class _ViewIllegalTappingReportsPageState
       query = query.where('status', isEqualTo: _selectedStatus);
     }
     if (_selectedPlumberUid != null) {
-      query = query.where('assignedPlumbers', arrayContains: _selectedPlumberUid);
+      query =
+          query.where('assignedPlumbers', arrayContains: _selectedPlumberUid);
     }
 
     if (_currentPage > 0 && _lastDocument != null) {
@@ -245,7 +247,6 @@ class _ViewIllegalTappingReportsPageState
     }
   }
 
- 
   void _showReportDetails(Map<String, dynamic> reportData, String reportId) {
     final fullName = reportData['fullName'] ?? 'Unknown';
     final issueDescription = reportData['issueDescription'] ?? 'No description';
@@ -255,7 +256,8 @@ class _ViewIllegalTappingReportsPageState
         ? DateFormat.yMMMd().add_jm().format(createdAt)
         : 'Unknown';
     final status = reportData['status'] ?? 'Illegal Tapping';
-    final illegalTappingType = reportData['illegalTappingType'] ?? 'Unknown Type';
+    final illegalTappingType =
+        reportData['illegalTappingType'] ?? 'Unknown Type';
     final evidenceNotes = reportData['evidenceNotes'] ?? '';
     final evidenceImages = reportData['evidenceImages'] != null
         ? List<String>.from(reportData['evidenceImages'])
@@ -317,8 +319,8 @@ class _ViewIllegalTappingReportsPageState
                       ],
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close,
-                          color: Colors.grey, size: 24),
+                      icon:
+                          const Icon(Icons.close, color: Colors.grey, size: 24),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -359,7 +361,8 @@ class _ViewIllegalTappingReportsPageState
                       ),
                       // Status Badge
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
                           color: status == 'Fixed'
@@ -430,7 +433,8 @@ class _ViewIllegalTappingReportsPageState
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         'Reported by',
@@ -683,7 +687,8 @@ class _ViewIllegalTappingReportsPageState
                                   return Column(
                                     children: plumbers.map((plumber) {
                                       return Padding(
-                                        padding: const EdgeInsets.only(bottom: 4),
+                                        padding:
+                                            const EdgeInsets.only(bottom: 4),
                                         child: Text(
                                           '• ${plumber['fullName']}',
                                           style: GoogleFonts.poppins(
@@ -782,7 +787,8 @@ class _ViewIllegalTappingReportsPageState
 
     if (base64Images.length == 1) {
       return GestureDetector(
-        onTap: () => _showFullScreenImage(context, base64Images[0], 0, base64Images),
+        onTap: () =>
+            _showFullScreenImage(context, base64Images[0], 0, base64Images),
         child: Container(
           height: 200,
           decoration: BoxDecoration(
@@ -802,7 +808,8 @@ class _ViewIllegalTappingReportsPageState
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(Icons.broken_image, size: 40, color: Colors.grey),
+                        const Icon(Icons.broken_image,
+                            size: 40, color: Colors.grey),
                         const SizedBox(height: 8),
                         Text(
                           'Failed to load image',
@@ -843,7 +850,8 @@ class _ViewIllegalTappingReportsPageState
           ),
           itemBuilder: (context, index, realIndex) {
             return GestureDetector(
-              onTap: () => _showFullScreenImage(context, base64Images[index], index, base64Images),
+              onTap: () => _showFullScreenImage(
+                  context, base64Images[index], index, base64Images),
               child: Container(
                 margin: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
@@ -870,7 +878,8 @@ class _ViewIllegalTappingReportsPageState
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(Icons.broken_image, size: 40, color: Colors.grey),
+                              const Icon(Icons.broken_image,
+                                  size: 40, color: Colors.grey),
                               const SizedBox(height: 8),
                               Text(
                                 'Image ${index + 1}',
@@ -896,7 +905,8 @@ class _ViewIllegalTappingReportsPageState
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.touch_app, size: 16, color: Colors.blueGrey.shade600),
+                Icon(Icons.touch_app,
+                    size: 16, color: Colors.blueGrey.shade600),
                 const SizedBox(width: 4),
                 Text(
                   'Tap to view full screen • ${base64Images.length} images',
@@ -914,10 +924,12 @@ class _ViewIllegalTappingReportsPageState
   }
 
   // Show full screen image viewer with save button
-  void _showFullScreenImage(BuildContext context, String base64Image, int initialIndex, List<String> allImages) {
+  void _showFullScreenImage(BuildContext context, String base64Image,
+      int initialIndex, List<String> allImages) {
     int currentIndex = initialIndex;
-    final PageController pageController = PageController(initialPage: initialIndex);
-    
+    final PageController pageController =
+        PageController(initialPage: initialIndex);
+
     showDialog(
       context: context,
       barrierColor: Colors.black.withOpacity(0.95),
@@ -950,7 +962,8 @@ class _ViewIllegalTappingReportsPageState
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.broken_image, size: 60, color: Colors.white),
+                                const Icon(Icons.broken_image,
+                                    size: 60, color: Colors.white),
                                 const SizedBox(height: 16),
                                 Text(
                                   'Failed to load image',
@@ -984,7 +997,8 @@ class _ViewIllegalTappingReportsPageState
                           color: Colors.black.withOpacity(0.5),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.close, color: Colors.white, size: 24),
+                        child: const Icon(Icons.close,
+                            color: Colors.white, size: 24),
                       ),
                       onPressed: () {
                         pageController.dispose();
@@ -999,7 +1013,8 @@ class _ViewIllegalTappingReportsPageState
                           color: Colors.black.withOpacity(0.5),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.download, color: Colors.white, size: 24),
+                        child: const Icon(Icons.download,
+                            color: Colors.white, size: 24),
                       ),
                       onPressed: () async {
                         await _saveImage(allImages[currentIndex]);
@@ -1016,7 +1031,8 @@ class _ViewIllegalTappingReportsPageState
                   right: 0,
                   child: Center(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
                         color: Colors.black.withOpacity(0.5),
                         borderRadius: BorderRadius.circular(20),
@@ -1048,7 +1064,8 @@ class _ViewIllegalTappingReportsPageState
                             color: Colors.black.withOpacity(0.5),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.chevron_left, color: Colors.white, size: 30),
+                          child: const Icon(Icons.chevron_left,
+                              color: Colors.white, size: 30),
                         ),
                         onPressed: () {
                           pageController.previousPage(
@@ -1073,7 +1090,8 @@ class _ViewIllegalTappingReportsPageState
                             color: Colors.black.withOpacity(0.5),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.chevron_right, color: Colors.white, size: 30),
+                          child: const Icon(Icons.chevron_right,
+                              color: Colors.white, size: 30),
                         ),
                         onPressed: () {
                           pageController.nextPage(
@@ -1097,33 +1115,13 @@ class _ViewIllegalTappingReportsPageState
     try {
       // Decode base64 image
       final bytes = base64Decode(base64Image);
-      
+
       // Check if we're on web
-      bool isWeb = false;
-      try {
-        // Check if we're on web by trying to access html.window
-        // ignore: unnecessary_null_comparison
-        if (html.window != null) {
-          isWeb = true;
-        }
-      } catch (e) {
-        isWeb = false;
-      }
-      
+      bool isWeb = kIsWeb;
+
       if (isWeb) {
         // Web download approach
-        final blob = html.Blob([bytes], 'image/jpeg');
-        final url = html.Url.createObjectUrlFromBlob(blob);
-        final anchor = html.AnchorElement(href: url)
-          ..download = 'illegal_tapping_${DateTime.now().millisecondsSinceEpoch}.jpg'
-          ..style.display = 'none';
-        
-        html.document.body?.append(anchor);
-        anchor.click();
-        anchor.remove(); // Fixed: use remove() instead of removeChild()
-        html.Url.revokeObjectUrl(url);
-        
-        _showSnackBar('Image downloaded successfully!', isError: false);
+        _saveImageWeb(bytes);
       } else {
         // Mobile/desktop approach using share_plus
         final tempDir = await getTemporaryDirectory();
@@ -1132,16 +1130,17 @@ class _ViewIllegalTappingReportsPageState
         final filePath = '${tempDir.path}/$fileName';
         final file = File(filePath);
         await file.writeAsBytes(bytes);
-        
+
         // Share the file - user can choose to save it
         await Share.shareXFiles(
           [XFile(filePath)],
           subject: 'Illegal Tapping Evidence',
           text: 'Illegal tapping evidence image',
         );
-        
-        _showSnackBar('Image shared - you can save it from the share dialog!', isError: false);
-        
+
+        _showSnackBar('Image shared - you can save it from the share dialog!',
+            isError: false);
+
         // Clean up after a delay
         Future.delayed(const Duration(seconds: 5), () async {
           try {
@@ -1155,38 +1154,32 @@ class _ViewIllegalTappingReportsPageState
       }
     } catch (e) {
       print('Error saving image: $e');
-      _showSnackBar('Error saving image: ${e.toString().split('\n').first}', isError: true);
+      _showSnackBar('Error saving image: ${e.toString().split('\n').first}',
+          isError: true);
     }
   }
 
-  // Web-specific image saving (only compiled for web)
-  Future<void> _saveImageWeb(Uint8List bytes) async {
-    // This method will be replaced with actual web code when compiled for web
-    // For now, we use share_plus which also works on web
-    final tempDir = await getTemporaryDirectory();
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final fileName = 'illegal_tapping_$timestamp.jpg';
-    final filePath = '${tempDir.path}/$fileName';
-    final file = File(filePath);
-    await file.writeAsBytes(bytes);
-    
-    await Share.shareXFiles(
-      [XFile(filePath)],
-      subject: 'Illegal Tapping Evidence',
-      text: 'Illegal tapping evidence image - saved on ${DateFormat('MMM dd, yyyy').format(DateTime.now())}',
-    );
-    
-    _showSnackBar('Image downloaded!', isError: false);
-    
-    Future.delayed(const Duration(seconds: 5), () async {
-      try {
-        if (await file.exists()) {
-          await file.delete();
-        }
-      } catch (e) {
-        print('Error cleaning up temp file: $e');
-      }
-    });
+  // Web-specific image saving
+  void _saveImageWeb(Uint8List bytes) {
+    // Create a Blob from the bytes
+    final blob = html.Blob([bytes], 'image/jpeg');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+
+    // Create a temporary anchor element to trigger download
+    final anchor = html.AnchorElement(href: url)
+      ..download =
+          'illegal_tapping_${DateTime.now().millisecondsSinceEpoch}.jpg'
+      ..style.display = 'none';
+
+    // Add to document, trigger click, and remove
+    html.document.body?.append(anchor);
+    anchor.click();
+    anchor.remove();
+
+    // Clean up URL object
+    html.Url.revokeObjectUrl(url);
+
+    _showSnackBar('Image downloaded successfully!', isError: false);
   }
 
   // Helper function to show snackbar
@@ -1208,14 +1201,13 @@ class _ViewIllegalTappingReportsPageState
     }
   }
 
-  Future<List<Map<String, dynamic>>> _getPlumberDetails(List<String> plumberIds) async {
+  Future<List<Map<String, dynamic>>> _getPlumberDetails(
+      List<String> plumberIds) async {
     final plumbers = <Map<String, dynamic>>[];
     for (final id in plumberIds) {
       try {
-        final doc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(id)
-            .get();
+        final doc =
+            await FirebaseFirestore.instance.collection('users').doc(id).get();
         if (doc.exists) {
           plumbers.add({
             'uid': id,
@@ -1299,7 +1291,8 @@ class _ViewIllegalTappingReportsPageState
                             children: [
                               _buildFilterButton('Illegal Tapping'),
                               // Show badge only on Illegal Tapping button when selected
-                              if (_selectedStatus == 'Illegal Tapping' && _pendingIllegalReportsCount > 0)
+                              if (_selectedStatus == 'Illegal Tapping' &&
+                                  _pendingIllegalReportsCount > 0)
                                 Positioned(
                                   top: -4,
                                   right: -4,
@@ -1309,11 +1302,16 @@ class _ViewIllegalTappingReportsPageState
                                     decoration: BoxDecoration(
                                       color: Colors.red,
                                       borderRadius: BorderRadius.circular(9),
-                                      border: Border.all(color: const Color(0xFF4FC3F7), width: 1.5),
+                                      border: Border.all(
+                                          color: const Color(0xFF4FC3F7),
+                                          width: 1.5),
                                     ),
                                     child: Center(
                                       child: Text(
-                                        _pendingIllegalReportsCount > 99 ? '99+' : _pendingIllegalReportsCount.toString(),
+                                        _pendingIllegalReportsCount > 99
+                                            ? '99+'
+                                            : _pendingIllegalReportsCount
+                                                .toString(),
                                         style: GoogleFonts.poppins(
                                           fontSize: 8,
                                           color: Colors.white,
@@ -1328,8 +1326,6 @@ class _ViewIllegalTappingReportsPageState
                           _buildFilterButton('All'),
                           _buildFilterButton('Monitoring'),
                           _buildFilterButton('Fixed'),
-                          
-                  
                         ],
                       ),
                     ),
@@ -1476,15 +1472,18 @@ class _ViewIllegalTappingReportsPageState
                                 final formattedDate = createdAt != null
                                     ? DateFormat.yMMMd().format(createdAt)
                                     : 'Unknown date';
-                                final status = data['status'] ?? 'Illegal Tapping';
+                                final status =
+                                    data['status'] ?? 'Illegal Tapping';
                                 final illegalTappingType =
-                                    data['illegalTappingType'] ?? 'Unknown Type';
+                                    data['illegalTappingType'] ??
+                                        'Unknown Type';
                                 final assignedPlumbers =
                                     data['assignedPlumbers'] != null
                                         ? List<String>.from(
                                             data['assignedPlumbers'])
                                         : <String>[];
-                                final hasEvidence = data['hasEvidence'] ?? false;
+                                final hasEvidence =
+                                    data['hasEvidence'] ?? false;
                                 final evidenceCount = data['imageCount'] ?? 0;
 
                                 return FadeInUp(
@@ -1538,13 +1537,11 @@ class _ViewIllegalTappingReportsPageState
                                                     ),
                                                     if (hasEvidence)
                                                       Container(
-                                                        margin:
-                                                            const EdgeInsets
-                                                                    .only(
-                                                                left: 4),
+                                                        margin: const EdgeInsets
+                                                            .only(left: 4),
                                                         padding:
                                                             const EdgeInsets
-                                                                    .symmetric(
+                                                                .symmetric(
                                                                 horizontal: 4,
                                                                 vertical: 2),
                                                         decoration:
@@ -1610,20 +1607,18 @@ class _ViewIllegalTappingReportsPageState
                                                       style:
                                                           GoogleFonts.poppins(
                                                         fontSize: 12,
-                                                        color:
-                                                            Colors.grey.shade600,
+                                                        color: Colors
+                                                            .grey.shade600,
                                                       ),
                                                     ),
                                                     if (assignedPlumbers
                                                         .isNotEmpty)
                                                       Container(
-                                                        margin:
-                                                            const EdgeInsets
-                                                                    .only(
-                                                                left: 8),
+                                                        margin: const EdgeInsets
+                                                            .only(left: 8),
                                                         padding:
                                                             const EdgeInsets
-                                                                    .symmetric(
+                                                                .symmetric(
                                                                 horizontal: 6,
                                                                 vertical: 2),
                                                         decoration:

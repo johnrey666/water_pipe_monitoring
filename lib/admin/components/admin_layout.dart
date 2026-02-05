@@ -29,7 +29,12 @@ class BadgeCountProvider extends ChangeNotifier {
 
   // Initialize real-time listeners
   void initializeListeners() {
-    _loadLastVisitedTimes();
+    _loadLastVisitedTimesAndSetupListeners();
+  }
+
+  // Load times and setup listeners in correct order
+  Future<void> _loadLastVisitedTimesAndSetupListeners() async {
+    await _loadLastVisitedTimes();
     _setupReportsListener();
     _setupUsersListener();
     _setupLogsListener();
