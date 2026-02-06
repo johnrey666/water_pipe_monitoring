@@ -284,6 +284,15 @@ class BadgeCountProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Reset all counts to 0
+  void resetAllCounts() {
+    _newReportsCount = 0;
+    _newUsersCount = 0;
+    _newLogsCount = 0;
+    _newPaymentsCount = 0;
+    notifyListeners();
+  }
+
   @override
   void dispose() {
     _reportsSubscription?.cancel();
@@ -317,27 +326,20 @@ class _AdminLayoutState extends State<AdminLayout> {
   void initState() {
     super.initState();
     _badgeCountProvider = BadgeCountProvider();
-    // Initialize real-time listeners
-    _badgeCountProvider.initializeListeners();
+    // Initialize real-time listeners and fetch counts asynchronously
+    _initializeBadges();
+  }
 
-    // Initial fetch of badge counts
-    _badgeCountProvider.updateAllCounts();
+  // Initialize badges with proper async handling
+  Future<void> _initializeBadges() async {
+    _badgeCountProvider.initializeListeners();
   }
 
   @override
   void didUpdateWidget(AdminLayout oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // Mark as visited when navigating to specific pages
-    if (widget.selectedRoute == '/reports') {
-      _badgeCountProvider.markReportsAsVisited();
-    } else if (widget.selectedRoute == '/users') {
-      _badgeCountProvider.markUsersAsVisited();
-    } else if (widget.selectedRoute == '/logs') {
-      _badgeCountProvider.markLogsAsVisited();
-    } else if (widget.selectedRoute == '/bills') {
-      _badgeCountProvider.markBillsAsVisited();
-    }
+    // Just reset all counts - the sidebar onTap already marked as visited
+    _badgeCountProvider.resetAllCounts();
   }
 
   @override
